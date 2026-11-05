@@ -1,14 +1,19 @@
 @echo off
-title JMCL Staff Flow Pro - ZKTeco Local Sync Gateway
+title JMCL Staff Flow Pro - ZKTeco Cloud Sync Gateway
 cls
 echo ====================================================
-echo JMCL STAFF FLOW PRO - ZKTeco Local Sync Gateway
+echo JMCL STAFF FLOW PRO - ZKTeco Cloud Sync Gateway
 echo ====================================================
-echo Connecting local ZKTeco uFace 800 (192.168.0.201:4370)
-echo to Server: %SERVER_URL%
+echo Relaying ZKTeco Biometric Punches to Live Render Cloud:
+echo https://jmcl-staff-flow-pro-plus.onrender.com
 echo ====================================================
 echo.
-if "%SERVER_URL%"=="" set SERVER_URL=http://localhost:3000
-node scripts/zkteco-gateway.js --device-ip 192.168.0.201 --device-port 4370 --server-url %SERVER_URL%
+if "%SERVER_URL%"=="" set SERVER_URL=https://jmcl-staff-flow-pro-plus.onrender.com
+if "%PROXY_PORT%"=="" set PROXY_PORT=8080
+if exist scripts\zkteco-gateway.js (
+    node scripts\zkteco-gateway.js --proxy-port %PROXY_PORT% --server-url %SERVER_URL%
+) else if exist attendance-payroll\scripts\zkteco-gateway.js (
+    node attendance-payroll\scripts\zkteco-gateway.js --proxy-port %PROXY_PORT% --server-url %SERVER_URL%
+)
 pause
 
