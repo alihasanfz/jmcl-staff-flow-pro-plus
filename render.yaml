@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: jmcl-staff-flow-pro
+    runtime: node
+    rootDir: attendance-payroll
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    region: singapore
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TZ_DEFAULT
+        value: Asia/Dhaka
+      - key: SEED_DEMO
+        value: "false"
+      - key: ADMIN_EMAIL
+        value: admin@company.test
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jmcl-postgres
+          property: connectionString
+
+databases:
+  - name: jmcl-postgres
+    databaseName: jmcl_db
+    user: jmcl_user
+    plan: free
+    region: singapore
+
