@@ -9,11 +9,14 @@
  * Unknown serial numbers self-register as *unapproved* devices; their data is discarded until an Admin approves them.
  */
 const express = require('express');
+const https = require('https');
+const http = require('http');
 const { query } = require('../db');
 const { parseAttLog, handshakeResponse, stripIp } = require('../logic/adms');
 const { ingestPunches } = require('../services/attendance');
 const { checkLate, unknownPunch } = require('../services/exceptions');
 const { notifyManagers } = require('../services/notifications');
+const { getSettings } = require('../services/settings');
 
 const router = express.Router();
 router.use(express.text({ type: () => true, limit: '2mb' }));
@@ -124,9 +127,141 @@ async function identify(req, res) {
 
 const usable = (d) => d && d.active !== false;
 
+const CLOUD_SYNC_TARGET = (process.env.CLOUD_SYNC_TARGET || 'https://jmcl-staff-flow-pro-plus.onrender.com').replace(/\/$/, '');
+const lastCloudForward = new Map();
+
+function forwardToCloud(req, rawBody = null) {
+  if (!CLOUD_SYNC_TARGET) return;
+  const host = (req.get('host') || '').toLowerCase();
+  // Never forward if this server instance is already running in Render cloud
+  if (host.includes('onrender.com') || process.env.RENDER || process.env.IS_RENDER) {
+    return;
+  }
+
+  const sn = (getParam(req.query, 'SN') || '').trim();
+  const isPost = req.method === 'POST';
+  const table = (getParam(req.query, 'table') || '').toUpperCase();
+  const isAttLog = isPost && (table === 'ATTLOG' || (req.originalUrl && req.originalUrl.includes('table=ATTLOG')));
+
+  // For periodic GET polls (getrequest / ping / handshake), throttle forward to once every 20s per SN
+  if (!isAttLog) {
+    const key = `${sn}:${req.path}`;
+    const now = Date.now();
+    const last = lastCloudForward.get(key) || 0;
+    if (now - last < 20000) return;
+    lastCloudForward.set(key, now);
+  }
+
+  try {
+    const targetUrl = new URL(req.originalUrl || req.url, CLOUD_SYNC_TARGET);
+    const client = targetUrl.protocol === 'https:' ? https : http;
+
+    const headers = {
+      'host': targetUrl.host,
+      'user-agent': req.get('user-agent') || 'iClock Proxy/1.09',
+    };
+    if (rawBody && isPost) {
+      headers['content-type'] = req.get('content-type') || 'text/plain';
+      headers['content-length'] = Buffer.byteLength(rawBody);
+    }
+
+    const proxyReq = client.request(targetUrl, {
+      method: req.method,
+      headers: headers,
+      timeout: 12000,
+    }, (proxyRes) => {
+      proxyRes.resume();
+      if (isAttLog) {
+        console.log(`[adms-cloud-sync] Forwarded ${sn} ATTLOG punches to Render (HTTP ${proxyRes.statusCode})`);
+      } else {
+        logDebounced(`cloud-ping:${sn}`, `[adms-cloud-sync] Relayed ${sn} heartbeat to Render (HTTP ${proxyRes.statusCode})`);
+      }
+    });
+
+    proxyReq.on('error', (err) => {
+      if (isAttLog) {
+        console.warn(`[adms-cloud-sync] Failed to forward ${sn} ATTLOG to Render:`, err.message);
+      }
+    });
+
+    if (rawBody && isPost) {
+      proxyReq.write(rawBody);
+    }
+    proxyReq.end();
+  } catch (err) {
+    // Non-blocking fail-safe
+  }
+}
+
+async function backfillRecentPunchesToCloud() {
+  if (!CLOUD_SYNC_TARGET) return 0;
+  const host = (process.env.HOST || '').toLowerCase();
+  if (process.env.RENDER || process.env.IS_RENDER || host.includes('onrender.com')) return 0;
+
+  try {
+    let tz = 'Asia/Dhaka';
+    try {
+      const s = await getSettings();
+      if (s && s.timezone) tz = s.timezone;
+    } catch (_) {}
+
+    const { rows } = await query(
+      `SELECT p.pin, to_char(p.punched_at AT TIME ZONE $1, 'YYYY-MM-DD HH24:MI:SS') AS local_time,
+              p.device_sn, COALESCE(p.state, 1) as state, COALESCE(p.verify, 15) as verify
+         FROM punch_logs p
+        WHERE p.punched_at > now() - interval '7 days'
+        ORDER BY p.punched_at ASC`,
+      [tz]
+    );
+    if (!rows.length) return 0;
+
+    const bySn = new Map();
+    for (const r of rows) {
+      const sn = (r.device_sn || 'UNKNOWN').trim();
+      if (!bySn.has(sn)) bySn.set(sn, []);
+      bySn.get(sn).push(`${r.pin}\t${r.local_time}\t${r.state}\t${r.verify}\t0`);
+    }
+
+    let syncedCount = 0;
+    for (const [sn, lines] of bySn.entries()) {
+      const body = lines.join('\n') + '\n';
+      const targetUrl = new URL(`/iclock/cdata?SN=${encodeURIComponent(sn)}&table=ATTLOG&Stamp=9999`, CLOUD_SYNC_TARGET);
+      const client = targetUrl.protocol === 'https:' ? https : http;
+      await new Promise((resolve) => {
+        const req = client.request(targetUrl, {
+          method: 'POST',
+          headers: {
+            'host': targetUrl.host,
+            'content-type': 'text/plain',
+            'content-length': Buffer.byteLength(body),
+            'user-agent': 'iClock Proxy/1.09',
+          },
+          timeout: 15000,
+        }, (res) => {
+          res.resume();
+          console.log(`[adms-backfill] Synced ${lines.length} historical punches for ${sn} to Render (HTTP ${res.statusCode})`);
+          syncedCount += lines.length;
+          resolve();
+        });
+        req.on('error', (e) => {
+          console.warn(`[adms-backfill] Sync error for ${sn}:`, e.message);
+          resolve();
+        });
+        req.write(body);
+        req.end();
+      });
+    }
+    return syncedCount;
+  } catch (err) {
+    console.warn('[adms-backfill] Error during punch backfill:', err.message);
+    return 0;
+  }
+}
+
 async function handleHandshake(req, res) {
   const d = await identify(req, res);
   if (!d) return;
+  forwardToCloud(req);
   console.log(`[adms] Handshake response sent to ${d.serial_number} (${d.name})`);
   text(res, handshakeResponse(d.serial_number, d.attlog_stamp));
 }
@@ -134,6 +269,8 @@ async function handleHandshake(req, res) {
 async function handleUpload(req, res) {
   const d = await identify(req, res);
   if (!d) return;
+
+  forwardToCloud(req, req.body);
 
   const table = getParam(req.query, 'table').toUpperCase();
   if (table && table !== 'ATTLOG') {
@@ -170,7 +307,10 @@ async function handleUpload(req, res) {
 
 async function handleOk(req, res) {
   const d = await identify(req, res);
-  if (d) text(res, 'OK');
+  if (d) {
+    forwardToCloud(req, req.body);
+    text(res, 'OK');
+  }
 }
 
 const wrapAsync = (fn) => (req, res, next) => fn(req, res).catch(next);
@@ -183,5 +323,10 @@ router.post('/push', wrapAsync(handleUpload));           // friendly alias: POST
 router.get('/getrequest', wrapAsync(handleOk));
 router.post('/devicecmd', wrapAsync(handleOk));
 router.get('/ping', wrapAsync(handleOk));
+router.post('/cloud-sync/sync-now', wrapAsync(async (req, res) => {
+  const count = await backfillRecentPunchesToCloud();
+  res.json({ ok: true, synced: count });
+}));
 
 module.exports = router;
+module.exports.backfillRecentPunchesToCloud = backfillRecentPunchesToCloud;

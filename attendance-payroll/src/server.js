@@ -7,6 +7,7 @@ const { setSecret } = require('./middleware/auth');
 const { initPush } = require('./services/notifications');
 const scheduler = require('./services/scheduler');
 const { createApp } = require('./app');
+const { backfillRecentPunchesToCloud } = require('./routes/adms');
 
 async function main() {
   await waitForDb();
@@ -18,7 +19,12 @@ async function main() {
   await firstRun();
 
   const app = createApp();
-  const server = app.listen(config.port, () => console.log(`[server] listening on :${config.port} (${config.env})`));
+  const server = app.listen(config.port, () => {
+    console.log(`[server] listening on :${config.port} (${config.env})`);
+    setTimeout(() => {
+      backfillRecentPunchesToCloud().catch(() => {});
+    }, 2000);
+  });
   if (config.schedulerEnabled) scheduler.start();
 
   const shutdown = (sig) => {
