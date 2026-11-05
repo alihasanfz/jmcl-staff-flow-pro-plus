@@ -5,10 +5,10 @@
   "main": "src/server.js",
   "private": true,
   "engines": {
-    "node": ">=20"
+    "node": ">=20 <23"
   },
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node --max-old-space-size=256 src/server.js",
     "dev": "node --watch src/server.js",
     "simulate": "node scripts/simulate-punch.js",
     "gateway": "node scripts/zkteco-gateway.js",

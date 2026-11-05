@@ -9,6 +9,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=256"
       - key: TZ_DEFAULT
         value: Asia/Dhaka
       - key: SEED_DEMO
