@@ -327,6 +327,13 @@ router.post('/cloud-sync/sync-now', wrapAsync(async (req, res) => {
   const count = await backfillRecentPunchesToCloud();
   res.json({ ok: true, synced: count });
 }));
+router.get('/debug-data', wrapAsync(async (req, res) => {
+  const devices = (await query('SELECT id, name, serial_number, model, online, last_seen, last_punch_at, last_ip FROM devices')).rows;
+  const punches = (await query('SELECT id, device_id, device_sn, pin, user_id, punched_at, source FROM punch_logs ORDER BY punched_at DESC LIMIT 20')).rows;
+  const attendance = (await query('SELECT * FROM attendance ORDER BY work_date DESC, id DESC LIMIT 20')).rows;
+  const users = (await query('SELECT id, employee_code, device_pin, name, role FROM users ORDER BY id ASC LIMIT 20')).rows;
+  res.json({ devices, punches, attendance, users });
+}));
 
 module.exports = router;
 module.exports.backfillRecentPunchesToCloud = backfillRecentPunchesToCloud;
