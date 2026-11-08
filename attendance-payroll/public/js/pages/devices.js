@@ -229,6 +229,9 @@ export async function render(view, state) {
                               <button class="btn sm" data-test-punch="${d.id}" title="Send Biometric Test Punch" style="padding:4px 8px; font-size:11.5px; display:inline-flex; align-items:center; gap:3px;">
                                 ${icon('clock')} Test
                               </button>
+                              <button class="btn sm" data-sync-time="${d.id}" data-name="${d.name}" title="Sync Machine Clock with Exact Bangladesh Time" style="padding:4px 8px; font-size:11.5px; display:inline-flex; align-items:center; gap:3px; background:#f0fdf4; color:#15803d; border-color:#bbf7d0;">
+                                ${icon('refresh')} Sync Time
+                              </button>
                               <button class="action-btn" data-edit="${d.id}" title="Edit Device Details" style="padding:4px 6px;">
                                 ${icon('edit')}
                               </button>
@@ -328,6 +331,22 @@ export async function render(view, state) {
         b.addEventListener('click', () => {
           const dev = devices.find((d) => String(d.id) === b.dataset.testPunch);
           openTestPunchModal(dev);
+        });
+      });
+
+      $$('[data-sync-time]', container).forEach((b) => {
+        b.addEventListener('click', async () => {
+          try {
+            b.disabled = true;
+            b.textContent = 'Syncing...';
+            const res = await post(`/devices/${b.dataset.syncTime}/sync-time`);
+            toast(res.message || 'Time synchronization command sent to device!');
+          } catch (e) {
+            toast(e.message || 'Failed to sync time', 'bad');
+          } finally {
+            b.disabled = false;
+            b.innerHTML = `${icon('refresh')} Sync Time`;
+          }
         });
       });
 

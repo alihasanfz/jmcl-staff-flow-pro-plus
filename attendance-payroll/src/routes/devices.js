@@ -312,6 +312,18 @@ router.post('/:id/test', wrap(async (req, res) => {
   res.json(await probeDevice(d));
 }));
 
+router.post('/:id/sync-time', wrap(async (req, res) => {
+  const { rows: [d] } = await query('SELECT * FROM devices WHERE id = $1', [parse(id, req.params.id)]);
+  if (!d) throw notFound('Device not found');
+  const { queueTimeSync } = require('./adms');
+  const result = queueTimeSync(d.serial_number);
+  res.json({
+    ok: true,
+    message: `Time sync command queued for ${d.name} (${d.serial_number}). The device will set its clock to exact Bangladesh Time (${result.time}) on its next poll (within seconds).`,
+    ...result,
+  });
+}));
+
 router.post('/:id/poll', wrap(async (req, res) => {
   const { rows: [d] } = await query('SELECT * FROM devices WHERE id = $1', [parse(id, req.params.id)]);
   if (!d) throw notFound('Device not found');

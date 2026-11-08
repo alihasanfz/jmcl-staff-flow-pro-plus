@@ -66,6 +66,8 @@ function handshakeResponse(serial, attlogStamp) {
     'TransFlag=TransData AttLog\tOpLog',
     'Realtime=1',
     'Encrypt=None',
+    'ServerVer=2.2.14',
+    'TimeZone=6',
     '',
   ].join('\n');
 }

@@ -305,6 +305,68 @@ async function handleUpload(req, res) {
   text(res, 'OK');
 }
 
+const commandQueue = new Map();
+const lastTimeSync = new Map();
+let nextCmdId = 100;
+
+function queueDeviceCommand(sn, cmd) {
+  const key = String(sn || '').trim().toUpperCase();
+  if (!commandQueue.has(key)) commandQueue.set(key, []);
+  const id = nextCmdId++;
+  commandQueue.get(key).push({ id, cmd });
+  console.log(`[adms-cmd] Queued command #${id} for ${key}: ${cmd}`);
+  return id;
+}
+
+function queueTimeSync(sn) {
+  const dhakaTime = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Dhaka' }).replace('T', ' ');
+  const key = String(sn || '').trim().toUpperCase();
+  lastTimeSync.set(key, Date.now());
+  const id = queueDeviceCommand(sn, `SET OPTIONS DateTime=${dhakaTime}`);
+  console.log(`[adms-time-sync] Queued Dhaka time sync (${dhakaTime}) for device ${key} (cmd #${id})`);
+  return { id, time: dhakaTime };
+}
+
+async function handleGetRequest(req, res) {
+  const d = await identify(req, res);
+  if (!d) return;
+  forwardToCloud(req);
+
+  const snKey = d.serial_number.toUpperCase();
+  const queue = commandQueue.get(snKey);
+
+  // If there are explicit queued commands (e.g. manual sync or setting changes), dispatch first
+  if (queue && queue.length > 0) {
+    const nextCmd = queue.shift();
+    console.log(`[adms-cmd] Dispatching command to ${d.serial_number}: C:${nextCmd.id}:${nextCmd.cmd}`);
+    return res.status(200).type('text/plain').send(`C:${nextCmd.id}:${nextCmd.cmd}\n`);
+  }
+
+  // Auto-sync device clock once every 60 minutes so it never drifts or auto-changes
+  const now = Date.now();
+  const lastSync = lastTimeSync.get(snKey) || 0;
+  if (now - lastSync >= 3600000) { // 1 hour
+    const { id, time } = queueTimeSync(d.serial_number);
+    const queued = commandQueue.get(snKey);
+    if (queued && queued.length > 0) {
+      const nextCmd = queued.shift();
+      console.log(`[adms-cmd] Auto-syncing time to ${d.serial_number}: C:${nextCmd.id}:${nextCmd.cmd}`);
+      return res.status(200).type('text/plain').send(`C:${nextCmd.id}:${nextCmd.cmd}\n`);
+    }
+  }
+
+  text(res, 'OK');
+}
+
+async function handleDeviceCmd(req, res) {
+  const d = await identify(req, res);
+  if (d) {
+    forwardToCloud(req, req.body);
+    console.log(`[adms-cmd] ${d.serial_number}: Received command execution response: ${req.body || '(empty)'}`);
+    text(res, 'OK');
+  }
+}
+
 async function handleOk(req, res) {
   const d = await identify(req, res);
   if (d) {
@@ -320,9 +382,15 @@ for (const base of ['/cdata', '/cdata.aspx']) {
   router.post(base, wrapAsync(handleUpload));
 }
 router.post('/push', wrapAsync(handleUpload));           // friendly alias: POST /api/adms/push?SN=…
-router.get('/getrequest', wrapAsync(handleOk));
-router.post('/devicecmd', wrapAsync(handleOk));
+router.get('/getrequest', wrapAsync(handleGetRequest));
+router.post('/devicecmd', wrapAsync(handleDeviceCmd));
 router.get('/ping', wrapAsync(handleOk));
+router.post('/sync-time', wrapAsync(async (req, res) => {
+  const sn = (getParam(req.query, 'SN') || req.body?.sn || req.body?.serial_number || '').trim();
+  if (!sn) return res.status(400).json({ error: 'Missing device serial number (SN)' });
+  const result = queueTimeSync(sn);
+  res.json({ ok: true, message: `Time synchronization queued for ${sn}`, ...result });
+}));
 router.post('/cloud-sync/sync-now', wrapAsync(async (req, res) => {
   const count = await backfillRecentPunchesToCloud();
   res.json({ ok: true, synced: count });
@@ -337,3 +405,5 @@ router.get('/debug-data', wrapAsync(async (req, res) => {
 
 module.exports = router;
 module.exports.backfillRecentPunchesToCloud = backfillRecentPunchesToCloud;
+module.exports.queueTimeSync = queueTimeSync;
+module.exports.queueDeviceCommand = queueDeviceCommand;
