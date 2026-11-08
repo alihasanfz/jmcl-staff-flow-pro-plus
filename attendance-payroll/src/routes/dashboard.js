@@ -11,11 +11,16 @@ router.get('/mine', wrap(async (req, res) => res.json(await dash.mine(req.user.i
 router.use(requireRole('admin', 'hr'));
 
 router.get(['/', '/overview'], wrap(async (req, res) => {
-  const [today, trend, departments, punches, devices] = await Promise.all([
-    dash.today(), dash.trend(Math.min(Math.max(toInt(req.query.days, 14), 7), 60)), dash.departments(),
-    dash.recentPunches(10), dash.deviceStatus(),
+  const [today, trend, departments, punches, devices, hourly, terminals] = await Promise.all([
+    dash.today(),
+    dash.trend(Math.min(Math.max(toInt(req.query.days, 14), 7), 60)),
+    dash.departments(),
+    dash.recentPunches(15),
+    dash.deviceStatus(),
+    dash.hourlyFlow(),
+    dash.terminalMetrics(),
   ]);
-  res.json({ today, trend, departments, punches, devices });
+  res.json({ today, trend, departments, punches, devices, hourly, terminals });
 }));
 
 module.exports = router;

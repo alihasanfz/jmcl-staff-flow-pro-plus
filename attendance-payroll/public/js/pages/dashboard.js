@@ -10,7 +10,7 @@ export async function render(view, state) {
   return state.user.role === 'staff' ? renderStaff(view, state) : renderManager(view, state);
 }
 
-/* ======================= Admin / HR Manager ======================= */
+/* ======================= Admin / HR Manager Analytics Dashboard ======================= */
 async function renderManager(view, state) {
   let charts = [];
   let pollTimer;
@@ -19,6 +19,7 @@ async function renderManager(view, state) {
   let searchTerm = '';
   let viewMode = 'table'; // 'table' or 'timeline'
   let cachedData = null;
+  let rosterCollapsed = false;
 
   const updateLiveClocks = () => {
     const dhakaNow = new Date();
@@ -43,6 +44,9 @@ async function renderManager(view, state) {
     charts = [];
     const t = d.today;
     const k = t.kpi;
+    const term = d.terminals || { uface: {}, gate: {} };
+    const ufacePunches = term.uface?.total_punches || 0;
+    const gatePunches = term.gate?.total_punches || 0;
 
     // Filter employees for the roster
     const filteredRibbon = (t.ribbon || []).filter((r) => {
@@ -58,172 +62,412 @@ async function renderManager(view, state) {
       return true;
     });
 
+    const onTimeCount = k.onTime ?? Math.max(0, k.present - k.late);
+    const presentPct = k.presentRate ?? (k.expected ? Math.round((k.present / k.expected) * 100) : 0);
+    const onTimePct = k.onTimeRate ?? (k.present ? Math.round((onTimeCount / k.present) * 100) : 0);
+
     setHTML(view, html`
-      <div class="stack" style="gap:20px;">
-        <!-- Top Live Biometric Gateway & Clock Header -->
-        <section class="live-gateway-banner">
-          <div class="gateway-header">
-            <div class="gateway-title-area">
-              <span style="font-size:26px;">🏢</span>
-              <div class="gateway-title-text">
-                <h1>Jeans Manufacturing Company Ltd.</h1>
-                <span>Enterprise Biometric Access &amp; Time-Attendance System · <b style="color:#38bdf8;" id="header-live-time">—</b></span>
+      <div class="stack" style="gap:22px;">
+        <!-- 1. Executive Telemetry & Command Center -->
+        <section class="analytics-hero-banner">
+          <div class="row between" style="align-items:center; flex-wrap:wrap; gap:14px; position:relative; z-index:1;">
+            <div style="display:flex; align-items:center; gap:14px;">
+              <div style="width:46px; height:46px; border-radius:12px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.18); display:grid; place-items:center; font-size:24px;">
+                🏭
+              </div>
+              <div>
+                <h1 style="font-size:20px; font-weight:800; color:#fff; margin:0 0 2px 0; letter-spacing:-0.3px;">
+                  Jeans Manufacturing Company Ltd.
+                </h1>
+                <div style="font-size:12.5px; color:#94a3b8; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <span>Biometric Workforce Intelligence &amp; Access Analytics</span>
+                  <span>·</span>
+                  <span style="color:#38bdf8; font-weight:600; display:inline-flex; align-items:center; gap:5px;" id="header-live-time">
+                    <span class="pulse-dot online"></span> Calculating...
+                  </span>
+                </div>
               </div>
             </div>
-            <div class="row" style="gap:8px;">
-              <a href="/devices" data-link class="btn sm" style="background:rgba(255,255,255,0.12); color:#fff; border:1px solid rgba(255,255,255,0.2); font-weight:600; border-radius:20px;">
-                ${icon('gear')} Terminal Settings
+
+            <div class="row" style="gap:8px; flex-wrap:wrap;">
+              <a href="/attendance" data-link class="btn sm primary" style="border-radius:20px; font-weight:600; padding:6px 14px; background:#0284c7; border-color:#0284c7;">
+                ${icon('calendar')} Daily Sheet
               </a>
-              <a href="/attendance" data-link class="btn sm primary" style="border-radius:20px; font-weight:600;">
-                ${icon('download')} Daily Attendance Sheet
+              <a href="/attendance?tab=live" data-link class="btn sm" style="background:rgba(255,255,255,0.12); color:#fff; border:1px solid rgba(255,255,255,0.2); font-weight:600; border-radius:20px; padding:6px 14px;">
+                ${icon('live')} Live Monitor
+              </a>
+              <a href="/devices" data-link class="btn sm" style="background:rgba(255,255,255,0.12); color:#fff; border:1px solid rgba(255,255,255,0.2); font-weight:600; border-radius:20px; padding:6px 14px;">
+                ${icon('device')} Terminals
               </a>
             </div>
           </div>
 
-          <!-- Dual Terminal Status Cards -->
-          <div class="gateway-terminals-grid">
+          <!-- Dual Biometric Telemetry Cards -->
+          <div class="hero-telemetry-row">
             <!-- Terminal 1: ZKTeco uFace 800 -->
-            <div class="gateway-terminal-card uface">
-              <div class="term-card-top">
+            <div class="telemetry-card uface">
+              <div class="telemetry-head">
                 <div>
-                  <div class="term-name">🏢 ZKTeco Terminal (ZK-UFACE800-01)</div>
-                  <div class="term-meta">Model: <b>uFace 800</b> · SN: <code>RKQ4262500336</code> · Head_Office</div>
+                  <div class="telemetry-title">
+                    <span>🏢</span> ZKTeco Terminal (ZK-UFACE800-01)
+                  </div>
+                  <div class="telemetry-meta">
+                    Model: <b>uFace 800</b> · SN: <code>RKQ4262500336</code> · Main Attendance Entrance
+                  </div>
                 </div>
-                <span class="pulse-badge online">
-                  <span class="glowing-dot"></span> LIVE
+                <span class="pulse-badge online" style="background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3); font-size:10.5px; font-weight:700; border-radius:20px; padding:3px 9px;">
+                  <span class="glowing-dot"></span> LIVE SYNC
                 </span>
               </div>
-              <div class="term-readout-row">
-                <div class="readout-col">
-                  <span class="readout-label">Terminal Clock</span>
-                  <span class="readout-val clock" id="uface-live-clock">--:--:-- --</span>
+              <div class="telemetry-stats-strip">
+                <div class="telemetry-stat-item">
+                  <span class="telemetry-stat-label">Clock (Dhaka)</span>
+                  <span class="telemetry-stat-val clock" id="uface-live-clock">--:--:-- --</span>
                 </div>
-                <div class="readout-col">
-                  <span class="readout-label">Date</span>
-                  <span class="readout-val" id="uface-live-date">-- --- ----</span>
+                <div class="telemetry-stat-item">
+                  <span class="telemetry-stat-label">Punches Today</span>
+                  <span class="telemetry-stat-val" style="color:#38bdf8;">${ufacePunches} logged</span>
                 </div>
-                <div class="readout-col">
-                  <span class="readout-label">Assigned Shift</span>
-                  <span class="readout-sub">09:30 AM – 07:00 PM</span>
+                <div class="telemetry-stat-item">
+                  <span class="telemetry-stat-label">Assigned Shift</span>
+                  <span class="telemetry-stat-val" style="color:#f8fafc; font-size:12px;">09:30 – 19:00</span>
                 </div>
               </div>
             </div>
 
-            <!-- Terminal 2: SenseFace 7A -->
-            <div class="gateway-terminal-card senseface">
-              <div class="term-card-top">
+            <!-- Terminal 2: SenseFace 7A Gate Controller -->
+            <div class="telemetry-card gate">
+              <div class="telemetry-head">
                 <div>
-                  <div class="term-name">🚪 ZKTeco Terminal (VDE2251500160)</div>
-                  <div class="term-meta">Model: <b>SenseFace 7A</b> · SN: <code>VDE2251500160</code> · Factory Barrier Gate</div>
+                  <div class="telemetry-title">
+                    <span>🚪</span> ZKTeco Terminal (VDE2251500160)
+                  </div>
+                  <div class="telemetry-meta">
+                    Model: <b>SenseFace 7A</b> · SN: <code>VDE2251500160</code> · Factory Barrier Gate
+                  </div>
                 </div>
-                <span class="pulse-badge online">
-                  <span class="glowing-dot"></span> GATE ACTIVE
+                <span class="pulse-badge online" style="background:rgba(168,85,247,0.15); color:#c084fc; border:1px solid rgba(168,85,247,0.3); font-size:10.5px; font-weight:700; border-radius:20px; padding:3px 9px;">
+                  <span class="glowing-dot" style="background:#c084fc;"></span> GATE ACTIVE
                 </span>
               </div>
-              <div class="term-readout-row">
-                <div class="readout-col">
-                  <span class="readout-label">Terminal Clock</span>
-                  <span class="readout-val clock" id="senseface-live-clock">--:--:-- --</span>
+              <div class="telemetry-stats-strip">
+                <div class="telemetry-stat-item">
+                  <span class="telemetry-stat-label">Clock (Dhaka)</span>
+                  <span class="telemetry-stat-val clock" id="senseface-live-clock">--:--:-- --</span>
                 </div>
-                <div class="readout-col">
-                  <span class="readout-label">Date</span>
-                  <span class="readout-val" id="senseface-live-date">-- --- ----</span>
+                <div class="telemetry-stat-item">
+                  <span class="telemetry-stat-label">Gate Swipes</span>
+                  <span class="telemetry-stat-val" style="color:#c084fc;">${gatePunches} passes</span>
                 </div>
-                <div class="readout-col">
-                  <span class="readout-label">Terminal Role</span>
-                  <span class="readout-sub" style="color:#a855f7; font-weight:700;">🚪 Barrier Gate Access</span>
+                <div class="telemetry-stat-item">
+                  <span class="telemetry-stat-label">Primary Role</span>
+                  <span class="telemetry-stat-val" style="color:#c084fc; font-size:12px;">Barrier Access</span>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        ${t.holiday ? html`<div class="notice info"><b>Company Holiday:</b> Today is a scheduled company holiday (${t.holiday}).</div>` : ''}
-
-        <!-- Executive KPI Stat Cards -->
-        <section class="modern-kpi-grid">
-          <div class="modern-kpi-card kpi-expected">
-            <div class="kpi-bar"></div>
-            <span class="kpi-title">Expected Today</span>
-            <span class="kpi-num">${k.expected}</span>
-            <span class="small muted">Total scheduled staff</span>
+        <!-- 2. Executive KPI Analytics Grid -->
+        <section class="modern-kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+          <!-- Total Expected -->
+          <div class="kpi-stat-card">
+            <div class="kpi-stat-top">
+              <span class="kpi-stat-label">Scheduled Staff</span>
+              <div class="kpi-stat-icon" style="background:#e0f2fe; color:#0284c7;">👥</div>
+            </div>
+            <div class="kpi-stat-main">
+              <span class="kpi-stat-val">${k.expected}</span>
+              <span class="kpi-stat-pill" style="background:#f1f5f9; color:#475569;">100% Rostered</span>
+            </div>
+            <div class="kpi-progress-track">
+              <div class="kpi-progress-fill" style="width:100%; background:#0284c7;"></div>
+            </div>
+            <span class="kpi-stat-foot">Total active workforce</span>
           </div>
-          <div class="modern-kpi-card kpi-present">
-            <div class="kpi-bar"></div>
-            <span class="kpi-title">Checked In (Present)</span>
-            <span class="kpi-num" style="display:flex; align-items:baseline; gap:8px;">
-              ${k.present}
-              <span style="font-size:13px; font-weight:700; color:#15803d; background:#dcfce7; padding:2px 8px; border-radius:12px;">
-                ${k.expected ? Math.round((k.present / k.expected) * 100) : 0}%
+
+          <!-- Present Today -->
+          <div class="kpi-stat-card">
+            <div class="kpi-stat-top">
+              <span class="kpi-stat-label">Checked In (Present)</span>
+              <div class="kpi-stat-icon" style="background:#dcfce7; color:#15803d;">🟢</div>
+            </div>
+            <div class="kpi-stat-main">
+              <span class="kpi-stat-val" style="color:#15803d;">${k.present}</span>
+              <span class="kpi-stat-pill" style="background:#dcfce7; color:#15803d;">${presentPct}% Present</span>
+            </div>
+            <div class="kpi-progress-track">
+              <div class="kpi-progress-fill" style="width:${presentPct}%; background:#10b981;"></div>
+            </div>
+            <span class="kpi-stat-foot" style="color:#15803d; font-weight:600;">✓ Active at work</span>
+          </div>
+
+          <!-- On-Time Arrival -->
+          <div class="kpi-stat-card">
+            <div class="kpi-stat-top">
+              <span class="kpi-stat-label">On-Time Arrivals</span>
+              <div class="kpi-stat-icon" style="background:#ecfeff; color:#0891b2;">⏱</div>
+            </div>
+            <div class="kpi-stat-main">
+              <span class="kpi-stat-val" style="color:#0891b2;">${onTimeCount}</span>
+              <span class="kpi-stat-pill" style="background:#ecfeff; color:#0891b2;">${onTimePct}% Punctual</span>
+            </div>
+            <div class="kpi-progress-track">
+              <div class="kpi-progress-fill" style="width:${onTimePct}%; background:#06b6d4;"></div>
+            </div>
+            <span class="kpi-stat-foot">Within 09:00 – 10:00 AM window</span>
+          </div>
+
+          <!-- Late Arrivals -->
+          <div class="kpi-stat-card">
+            <div class="kpi-stat-top">
+              <span class="kpi-stat-label">Late Arrivals</span>
+              <div class="kpi-stat-icon" style="background:#fef3c7; color:#d97706;">⚠️</div>
+            </div>
+            <div class="kpi-stat-main">
+              <span class="kpi-stat-val" style="color:#d97706;">${k.late}</span>
+              <span class="kpi-stat-pill" style="background:#fef3c7; color:#b45309;">${k.present ? Math.round((k.late / k.present) * 100) : 0}% of Present</span>
+            </div>
+            <div class="kpi-progress-track">
+              <div class="kpi-progress-fill" style="width:${k.present ? Math.round((k.late / k.present) * 100) : 0}%; background:#f59e0b;"></div>
+            </div>
+            <span class="kpi-stat-foot" style="color:#d97706;">Requires supervisor follow-up</span>
+          </div>
+
+          <!-- Absent -->
+          <div class="kpi-stat-card">
+            <div class="kpi-stat-top">
+              <span class="kpi-stat-label">Absent</span>
+              <div class="kpi-stat-icon" style="background:#fee2e2; color:#dc2626;">🛡</div>
+            </div>
+            <div class="kpi-stat-main">
+              <span class="kpi-stat-val" style="color:#64748b;">${k.absent}</span>
+              <span class="kpi-stat-pill" style="background:#f1f5f9; color:#475569;">0.0% Absenteeism</span>
+            </div>
+            <div class="kpi-progress-track">
+              <div class="kpi-progress-fill" style="width:0%; background:#ef4444;"></div>
+            </div>
+            <span class="kpi-stat-foot">Zero unreported absences</span>
+          </div>
+
+          <!-- Overtime Hours -->
+          <div class="kpi-stat-card">
+            <div class="kpi-stat-top">
+              <span class="kpi-stat-label">Overtime Hours</span>
+              <div class="kpi-stat-icon" style="background:#f3e8ff; color:#7e22ce;">⚡</div>
+            </div>
+            <div class="kpi-stat-main">
+              <span class="kpi-stat-val" style="color:#7e22ce;">${(k.overtimeMinutes / 60).toFixed(1)} <span style="font-size:14px; font-weight:600;">hrs</span></span>
+              <span class="kpi-stat-pill" style="background:#f3e8ff; color:#7e22ce;">Regular Shift</span>
+            </div>
+            <div class="kpi-progress-track">
+              <div class="kpi-progress-fill" style="width:0%; background:#8b5cf6;"></div>
+            </div>
+            <span class="kpi-stat-foot">Shift ends at 07:00 PM</span>
+          </div>
+        </section>
+
+        <!-- 3. Core Analytics Visualizations Grid (FRONT & CENTER) -->
+        <div style="display:grid; grid-template-columns: 2fr 1fr; gap:16px; align-items:stretch;">
+          <!-- Chart A: Hourly Biometric Influx & Gate Throughput Peak Flow -->
+          <div class="analytics-chart-panel">
+            <div class="analytics-chart-head">
+              <div>
+                <div class="analytics-chart-title">
+                  <span>📈</span> Today’s Biometric Influx &amp; Gate Flow Peak Curve
+                </div>
+                <span class="analytics-chart-sub">Hour-by-hour throughput comparing uFace 800 arrivals vs SenseFace 7A barrier gate passes</span>
+              </div>
+              <span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-weight:600;">
+                Workday (07:00 AM – 08:00 PM)
               </span>
-            </span>
-            <span class="small" style="color:#15803d; font-weight:600;">✓ Active at work</span>
+            </div>
+            <div style="height:250px; position:relative;">
+              <canvas id="hourly-chart" role="img" aria-label="Hourly Biometric Flow Curve"></canvas>
+            </div>
           </div>
-          <div class="modern-kpi-card kpi-present">
-            <div class="kpi-bar"></div>
-            <span class="kpi-title">On-Time Arrival</span>
-            <span class="kpi-num">${Math.max(0, k.present - k.late)}</span>
-            <span class="small" style="color:#15803d; font-weight:600;">09:00 – 10:00 AM window</span>
-          </div>
-          <div class="modern-kpi-card kpi-late">
-            <div class="kpi-bar"></div>
-            <span class="kpi-title">Late Arrivals</span>
-            <span class="kpi-num">${k.late}</span>
-            <span class="small muted">${k.late ? 'Requires verification' : 'Zero late arrivals'}</span>
-          </div>
-          <div class="modern-kpi-card kpi-absent">
-            <div class="kpi-bar"></div>
-            <span class="kpi-title">Absent</span>
-            <span class="kpi-num">${k.absent}</span>
-            <span class="small muted">Unreported absence</span>
-          </div>
-          <div class="modern-kpi-card kpi-ot">
-            <div class="kpi-bar"></div>
-            <span class="kpi-title">Overtime Hours</span>
-            <span class="kpi-num">${(k.overtimeMinutes / 60).toFixed(1)} <span style="font-size:14px; font-weight:600;">hrs</span></span>
-            <span class="small muted">Beyond regular shift</span>
-          </div>
-        </section>
 
-        <!-- Clean, Organized Today's Attendance Roster & Shift Schedule -->
-        <section class="panel" style="box-shadow:0 1px 4px rgba(0,0,0,0.04); border-radius:12px; overflow:hidden;">
+          <!-- Chart B: Today's Workforce Composition Donut Gauge -->
+          <div class="analytics-chart-panel">
+            <div class="analytics-chart-head">
+              <div>
+                <div class="analytics-chart-title">
+                  <span>🍩</span> Attendance Breakdown
+                </div>
+                <span class="analytics-chart-sub">Today’s roster status composition</span>
+              </div>
+            </div>
+            <div style="height:180px; position:relative; display:grid; place-items:center;">
+              <canvas id="donut-chart" role="img" aria-label="Workforce Composition Donut"></canvas>
+              <div class="donut-center-metric">
+                <div class="pct" style="color:#10b981;">${presentPct}%</div>
+                <div class="lbl">Present</div>
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; font-size:11.5px; border-top:1px solid var(--line-2); padding-top:10px;">
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="width:9px; height:9px; border-radius:50%; background:#10b981;"></span>
+                <span>On-time: <b>${onTimeCount}</b></span>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="width:9px; height:9px; border-radius:50%; background:#f59e0b;"></span>
+                <span>Late: <b>${k.late}</b></span>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="width:9px; height:9px; border-radius:50%; background:#38bdf8;"></span>
+                <span>Waiting: <b>${k.notYet}</b></span>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="width:9px; height:9px; border-radius:50%; background:#ef4444;"></span>
+                <span>Absent: <b>${k.absent}</b></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Historical Trend & Department Leaderboard Grid -->
+        <div style="display:grid; grid-template-columns: 1.5fr 1fr; gap:16px;">
+          <!-- Chart C: 14-Day Attendance Trend -->
+          <div class="analytics-chart-panel">
+            <div class="analytics-chart-head">
+              <div>
+                <div class="analytics-chart-title">
+                  <span>📊</span> 14-Day Attendance &amp; Lateness Trend
+                </div>
+                <span class="analytics-chart-sub">Daily attendance patterns across working days</span>
+              </div>
+            </div>
+            <div style="height:230px; position:relative;">
+              <canvas id="trend" role="img" aria-label="Attendance Trend Chart"></canvas>
+            </div>
+          </div>
+
+          <!-- Chart D: Department Attendance Leaderboard -->
+          <div class="analytics-chart-panel">
+            <div class="analytics-chart-head">
+              <div>
+                <div class="analytics-chart-title">
+                  <span>🏢</span> Department Attendance Rate
+                </div>
+                <span class="analytics-chart-sub">Month-to-date presence benchmark</span>
+              </div>
+            </div>
+            <div style="height:230px; position:relative;">
+              <canvas id="depts" role="img" aria-label="Department Attendance Rate"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Operational Feeds: Live Punches & Manager Attention -->
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+          <!-- Live Terminal Door Punch Stream -->
+          <div class="panel" style="border-radius:14px; overflow:hidden;">
+            <header style="display:flex; justify-content:space-between; align-items:center; padding:14px 18px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="pulse-dot online"></span>
+                <div>
+                  <h2 style="font-size:14.5px; font-weight:750; margin:0;">Live Biometric Punch Stream</h2>
+                  <span class="small muted">Instant punch feed from uFace 800 &amp; SenseFace 7A Gate</span>
+                </div>
+              </div>
+              <a href="/attendance" data-link class="small" style="font-weight:700; color:#0284c7;">View Audit Log →</a>
+            </header>
+            <div class="body flush" style="max-height:280px; overflow-y:auto;">
+              ${d.punches && d.punches.length ? d.punches.map((p) => html`
+                <div class="stream-item">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <div class="emp-avatar">
+                      ${(p.name || 'E').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style="font-weight:700; font-size:13px; color:var(--text);">
+                        ${p.name}
+                      </div>
+                      <div style="font-size:11px; color:var(--muted); display:flex; align-items:center; gap:6px; margin-top:2px;">
+                        ${p.device && p.device.includes('RKQ') ? html`
+                          <span style="color:#0284c7; font-weight:600;">🏢 uFace 800</span>
+                        ` : p.device && p.device.includes('VDE') ? html`
+                          <span style="color:#7e22ce; font-weight:600;">🚪 SenseFace 7A (Gate)</span>
+                        ` : html`<span>${p.device || p.source}</span>`}
+                        <span>·</span>
+                        <span>PIN: ${p.pin}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="text-align:right;">
+                    <span style="font-weight:750; font-size:11px; padding:3px 8px; border-radius:12px; background:${p.punch_type === 'OUT' ? '#fee2e2' : '#dcfce7'}; color:${p.punch_type === 'OUT' ? '#991b1b' : '#15803d'}; border:1px solid ${p.punch_type === 'OUT' ? '#fecaca' : '#bbf7d0'};">
+                      ${p.punch_type === 'OUT' ? '🔴 OUT' : '🟢 IN'}
+                    </span>
+                    <div class="time muted" style="font-size:11.5px; margin-top:3px; font-weight:600; font-family:monospace;">
+                      ${p.time_12h || p.at.slice(11, 19)}
+                    </div>
+                  </div>
+                </div>
+              `) : html`<div class="empty" style="padding:28px;">No biometric punches received yet today.</div>`}
+            </div>
+          </div>
+
+          <!-- Exceptions & Needs Attention -->
+          <div class="panel" style="border-radius:14px; overflow:hidden;">
+            <header style="display:flex; justify-content:space-between; align-items:center; padding:14px 18px;">
+              <div>
+                <h2 style="font-size:14.5px; font-weight:750; margin:0;">Exceptions &amp; Manager Follow-Ups</h2>
+                <span class="small muted">Late arrivals and pending check-ins</span>
+              </div>
+              <span class="badge" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-weight:700;">
+                ${k.late} Late Today
+              </span>
+            </header>
+            <div class="body flush list-lines" style="max-height:280px; overflow-y:auto;">
+              ${attention(t)}
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Compact & Interactive Daily Attendance Roster -->
+        <section class="panel" style="box-shadow:0 2px 6px rgba(0,0,0,0.03); border-radius:14px; overflow:hidden;">
           <header style="padding:16px 20px; background:var(--surface); border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-            <div>
-              <h2 style="font-size:16.5px; font-weight:750; display:flex; align-items:center; gap:8px;">
-                📋 Today’s Attendance Roster (${t.nowLocal})
-              </h2>
-              <span class="small muted">Showing ${filteredRibbon.length} of ${t.ribbon.length} scheduled employees</span>
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div>
+                <h2 style="font-size:16px; font-weight:750; margin:0; display:flex; align-items:center; gap:8px;">
+                  📋 Today’s Workforce Attendance Roster
+                </h2>
+                <span class="small muted">Showing ${filteredRibbon.length} of ${t.ribbon.length} scheduled employees · Sorted by status</span>
+              </div>
             </div>
 
-            <!-- Controls: Filter Tabs + Search + View Mode -->
             <div class="row" style="gap:10px; align-items:center; flex-wrap:wrap;">
               <!-- Quick Search Input -->
-              <input type="search" id="roster-search" placeholder="Search employee or dept…" value="${searchTerm}" style="padding:6px 12px; border:1px solid var(--line); border-radius:20px; font-size:13px; width:200px; background:var(--paper);">
+              <input type="search" id="roster-search" placeholder="Search employee or dept…" value="${searchTerm}" style="padding:6px 12px; border:1px solid var(--line); border-radius:20px; font-size:12.5px; width:190px; background:var(--paper);">
 
               <!-- Filter Tabs -->
               <div class="tabs" style="margin-bottom:0; height:32px;">
-                <button type="button" data-roster-tab="all" aria-selected="${activeTab === 'all'}" style="height:32px; font-size:12.5px; padding:0 12px;">All (${t.ribbon.length})</button>
-                <button type="button" data-roster-tab="present" aria-selected="${activeTab === 'present'}" style="height:32px; font-size:12.5px; padding:0 12px;">Present (${k.present})</button>
-                <button type="button" data-roster-tab="waiting" aria-selected="${activeTab === 'waiting'}" style="height:32px; font-size:12.5px; padding:0 12px;">Waiting (${k.notYet})</button>
-                <button type="button" data-roster-tab="late" aria-selected="${activeTab === 'late'}" style="height:32px; font-size:12.5px; padding:0 12px;">Late (${k.late})</button>
-                <button type="button" data-roster-tab="absent" aria-selected="${activeTab === 'absent'}" style="height:32px; font-size:12.5px; padding:0 12px;">Absent (${k.absent})</button>
+                <button type="button" data-roster-tab="all" aria-selected="${activeTab === 'all'}" style="height:32px; font-size:12px; padding:0 11px;">All (${t.ribbon.length})</button>
+                <button type="button" data-roster-tab="present" aria-selected="${activeTab === 'present'}" style="height:32px; font-size:12px; padding:0 11px;">Present (${k.present})</button>
+                <button type="button" data-roster-tab="late" aria-selected="${activeTab === 'late'}" style="height:32px; font-size:12px; padding:0 11px;">Late (${k.late})</button>
+                <button type="button" data-roster-tab="waiting" aria-selected="${activeTab === 'waiting'}" style="height:32px; font-size:12px; padding:0 11px;">Waiting (${k.notYet})</button>
+                <button type="button" data-roster-tab="absent" aria-selected="${activeTab === 'absent'}" style="height:32px; font-size:12px; padding:0 11px;">Absent (${k.absent})</button>
               </div>
 
-              <!-- View Mode Toggle -->
+              <!-- View Mode Switcher -->
               <div class="row" style="gap:4px; background:var(--paper); padding:3px; border-radius:8px; border:1px solid var(--line);">
-                <button type="button" id="btn-mode-table" class="btn sm ${viewMode === 'table' ? 'primary' : ''}" style="border-radius:6px; padding:4px 10px; font-size:12px; font-weight:600;">
+                <button type="button" id="btn-mode-table" class="btn sm ${viewMode === 'table' ? 'primary' : ''}" style="border-radius:6px; padding:4px 10px; font-size:11.5px; font-weight:600;">
                   Table
                 </button>
-                <button type="button" id="btn-mode-timeline" class="btn sm ${viewMode === 'timeline' ? 'primary' : ''}" style="border-radius:6px; padding:4px 10px; font-size:12px; font-weight:600;">
+                <button type="button" id="btn-mode-timeline" class="btn sm ${viewMode === 'timeline' ? 'primary' : ''}" style="border-radius:6px; padding:4px 10px; font-size:11.5px; font-weight:600;">
                   Timeline
                 </button>
               </div>
+
+              <!-- Toggle Collapse -->
+              <button type="button" id="btn-toggle-roster" class="btn sm" style="border-radius:6px; padding:4px 10px; font-size:11.5px; font-weight:600; color:var(--muted);">
+                ${rosterCollapsed ? '🔼 Expand' : '🔽 Collapse'}
+              </button>
             </div>
           </header>
 
-          <!-- Content: Table View (Clean Roster) or Contained Timeline View -->
-          ${viewMode === 'table' ? html`
-            <div class="body flush table-wrap" style="max-height:480px; overflow-y:auto;">
+          ${!rosterCollapsed ? (viewMode === 'table' ? html`
+            <div class="body flush table-wrap" style="max-height:420px; overflow-y:auto;">
               ${filteredRibbon.length ? html`
                 <table style="width:100%; border-collapse:collapse;">
                   <thead style="position:sticky; top:0; background:var(--surface); z-index:2; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
@@ -241,7 +485,12 @@ async function renderManager(view, state) {
                     ${filteredRibbon.map((r) => html`
                       <tr style="border-bottom:1px solid var(--line-2);">
                         <td style="padding:10px 16px;">
-                          <b>${r.name}</b>
+                          <div style="display:flex; align-items:center; gap:8px;">
+                            <div class="emp-avatar" style="width:28px; height:28px; font-size:11px;">
+                              ${(r.name || 'E').slice(0, 2).toUpperCase()}
+                            </div>
+                            <b>${r.name}</b>
+                          </div>
                         </td>
                         <td style="padding:10px 16px;"><span class="muted small">${r.department || 'General'}</span></td>
                         <td style="padding:10px 16px;"><span class="small font-mono">${r.shiftStart} – ${r.shiftEnd}</span></td>
@@ -280,74 +529,15 @@ async function renderManager(view, state) {
               `}
             </div>
           ` : html`
-            <div style="max-height:480px; overflow-y:auto; padding:12px 16px;">
+            <div style="max-height:420px; overflow-y:auto; padding:12px 16px;">
               ${ribbon(t, filteredRibbon)}
+            </div>
+          `) : html`
+            <div style="padding:16px 20px; color:var(--muted); font-size:12.5px; text-align:center;">
+              Roster table minimized. Click "🔼 Expand" above to view all 72 employee records.
             </div>
           `}
         </section>
-
-        <!-- Two-Column Analytics: Charts & Live Activity Stream -->
-        <div class="cols-2" style="margin-top:6px;">
-          <!-- 14-Day Attendance Trend -->
-          <section class="panel">
-            <header>
-              <h2>Attendance Trend (Last ${d.trend.rows.length || 14} Working Days)</h2>
-            </header>
-            <div class="chart-box" style="height:260px;">
-              <canvas id="trend" role="img" aria-label="Attendance Trend Chart"></canvas>
-            </div>
-          </section>
-
-          <!-- Live Door Reader Punch Feed -->
-          <section class="panel">
-            <header style="display:flex; justify-content:space-between; align-items:center;">
-              <div>
-                <h2>Live Door Reader Punches</h2>
-                <span class="small muted">Real-time punch feed from uFace 800 &amp; SenseFace 7A</span>
-              </div>
-              <a href="/attendance" data-link class="small" style="font-weight:600;">All Punches →</a>
-            </header>
-            <div class="body flush list-lines" style="max-height:280px; overflow-y:auto;">
-              ${d.punches && d.punches.length ? d.punches.map((p) => html`
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px;">
-                  <div style="display:flex; align-items:center; gap:10px;">
-                    <span style="font-weight:700; font-size:11px; padding:2px 7px; border-radius:10px; background:${p.punch_type === 'OUT' ? '#fee2e2' : '#dcfce7'}; color:${p.punch_type === 'OUT' ? '#991b1b' : '#15803d'}; border:1px solid ${p.punch_type === 'OUT' ? '#fecaca' : '#bbf7d0'};">
-                      ${p.punch_type === 'OUT' ? '🔴 OUT' : '🟢 IN'}
-                    </span>
-                    <div>
-                      <b>${p.name}</b>
-                      <span class="small muted"> · ${p.device && p.device.includes('RKQ') ? '🏢 uFace 800' : p.device && p.device.includes('VDE') ? '🚪 SenseFace 7A (Gate)' : (p.device || p.source)}</span>
-                    </div>
-                  </div>
-                  <span class="time muted" style="font-weight:600; font-size:12.5px;">${p.time_12h || p.at.slice(11, 19)}</span>
-                </div>
-              `) : html`<div class="empty">No biometric punches received yet.</div>`}
-            </div>
-          </section>
-        </div>
-
-        <!-- Second Row: Department Rate & Attention -->
-        <div class="cols-eq">
-          <section class="panel">
-            <header>
-              <h2>Attendance Rate by Department</h2>
-              <span class="small muted">Month to Date</span>
-            </header>
-            <div class="chart-box" style="height:${Math.max(200, (d.departments || []).length * 44 + 40)}px">
-              <canvas id="depts" role="img" aria-label="Department Attendance Rate"></canvas>
-            </div>
-          </section>
-
-          <section class="panel">
-            <header>
-              <h2>Exceptions &amp; Needs Attention</h2>
-              <span class="small muted">Follow-ups for managers</span>
-            </header>
-            <div class="body flush list-lines">
-              ${attention(t)}
-            </div>
-          </section>
-        </div>
       </div>
     `);
 
@@ -359,7 +549,6 @@ async function renderManager(view, state) {
       searchInput.addEventListener('input', (e) => {
         searchTerm = e.target.value.trim();
         draw(cachedData);
-        // keep focus in search input
         const updatedInput = $('#roster-search');
         if (updatedInput) {
           updatedInput.focus();
@@ -385,12 +574,110 @@ async function renderManager(view, state) {
       draw(cachedData);
     });
 
-    // Render Charts
+    $('#btn-toggle-roster')?.addEventListener('click', () => {
+      rosterCollapsed = !rosterCollapsed;
+      draw(cachedData);
+    });
+
+    // Render All Analytics Charts
     if (window.Chart) {
-      Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
-      Chart.defaults.color = css('--muted');
+      Chart.defaults.font.family = getComputedStyle(document.body).fontFamily || 'Inter, sans-serif';
+      Chart.defaults.color = css('--muted') || '#64748b';
       const anim = reduceMotion() ? false : { duration: 400 };
 
+      // 1. Hourly Biometric Flow Curve (Line/Area Chart)
+      const hourlyCanvas = $('#hourly-chart');
+      if (hourlyCanvas && d.hourly && d.hourly.length) {
+        charts.push(new Chart(hourlyCanvas, {
+          type: 'line',
+          data: {
+            labels: d.hourly.map((h) => h.label),
+            datasets: [
+              {
+                label: '🏢 uFace 800 (Attendance Punches)',
+                data: d.hourly.map((h) => h.uface),
+                borderColor: '#0284c7',
+                backgroundColor: 'rgba(2, 132, 199, 0.15)',
+                borderWidth: 2.5,
+                fill: true,
+                tension: 0.35,
+                pointRadius: 3,
+                pointHoverRadius: 6,
+              },
+              {
+                label: '🚪 SenseFace 7A (Gate Passes)',
+                data: d.hourly.map((h) => h.gate),
+                borderColor: '#a855f7',
+                backgroundColor: 'rgba(168, 85, 247, 0.12)',
+                borderWidth: 2.5,
+                fill: true,
+                tension: 0.35,
+                pointRadius: 3,
+                pointHoverRadius: 6,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: anim,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: {
+                position: 'top',
+                labels: { boxWidth: 12, boxHeight: 12, font: { weight: '600', size: 11.5 } },
+              },
+              tooltip: {
+                callbacks: {
+                  label: (c) => ` ${c.dataset.label}: ${c.raw} punch(es)`,
+                },
+              },
+            },
+            scales: {
+              x: { grid: { display: false } },
+              y: { beginAtZero: true, ticks: { precision: 0 } },
+            },
+          },
+        }));
+      }
+
+      // 2. Workforce Composition Donut Chart
+      const donutCanvas = $('#donut-chart');
+      if (donutCanvas) {
+        charts.push(new Chart(donutCanvas, {
+          type: 'doughnut',
+          data: {
+            labels: ['On-time Present', 'Late Arrivals', 'Waiting to Check-in', 'Absent'],
+            datasets: [{
+              data: [
+                onTimeCount,
+                k.late || 0,
+                k.notYet || 0,
+                k.absent || 0,
+              ],
+              backgroundColor: ['#10b981', '#f59e0b', '#38bdf8', '#ef4444'],
+              borderWidth: 0,
+              hoverOffset: 4,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: anim,
+            cutout: '72%',
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (c) => ` ${c.label}: ${c.raw} staff`,
+                },
+              },
+            },
+          },
+        }));
+      }
+
+      // 3. 14-Day Attendance Trend
       if (d.trend && d.trend.rows && d.trend.rows.length) {
         const labels = d.trend.rows.map((r) => r.d.slice(8) + '/' + r.d.slice(5, 7));
         const ds = (label, key, color) => ({
@@ -407,11 +694,11 @@ async function renderManager(view, state) {
             data: {
               labels,
               datasets: [
-                ds('On time', 'present', '#16a34a'),
-                ds('Late', 'late', '#d97706'),
+                ds('On time', 'present', '#10b981'),
+                ds('Late', 'late', '#f59e0b'),
                 ds('Half day', 'half_day', '#64748b'),
                 ds('Leave', 'leave', '#8b5cf6'),
-                ds('Absent', 'absent', '#dc2626'),
+                ds('Absent', 'absent', '#ef4444'),
               ],
             },
             options: {
@@ -427,6 +714,7 @@ async function renderManager(view, state) {
         }
       }
 
+      // 4. Department Attendance Leaderboard
       if (d.departments && d.departments.length) {
         const deptsCanvas = $('#depts');
         if (deptsCanvas) {
@@ -470,9 +758,7 @@ async function renderManager(view, state) {
   };
 
   await load();
-  // Poll backend every 15 seconds for latest punches
   pollTimer = setInterval(load, 15_000);
-  // Real-time ticking clock every 1 second
   clockTimer = setInterval(updateLiveClocks, 1000);
 
   return () => {

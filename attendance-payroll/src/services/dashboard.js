@@ -52,6 +52,13 @@ async function today() {
       lateMinutes: r?.late_minutes || 0, earlyOutMinutes: r?.early_out_minutes || 0, overtimeMinutes: r?.overtime_minutes || 0,
     });
   }
+  const onTime = Math.max(0, kpi.present - kpi.late);
+  kpi.onTime = onTime;
+  kpi.presentRate = kpi.expected ? Math.round((kpi.present / kpi.expected) * 100) : 0;
+  kpi.onTimeRate = kpi.present ? Math.round((onTime / kpi.present) * 100) : 0;
+  kpi.lateRate = kpi.present ? Math.round((kpi.late / kpi.present) * 100) : 0;
+  kpi.absentRate = kpi.expected ? Math.round((kpi.absent / kpi.expected) * 100) : 0;
+
   return { date, nowLocal: `${String(Math.floor(nowMin / 60)).padStart(2, '0')}:${String(nowMin % 60).padStart(2, '0')}`, holiday, kpi, ribbon };
 }
 
@@ -145,4 +152,55 @@ async function mine(userId) {
   return { date, today: todayRow.rows[0] || null, month: month.rows[0] };
 }
 
-module.exports = { today, trend, departments, recentPunches, deviceStatus, mine };
+/** Hourly punch distribution for today (Workday 07:00 to 20:00). */
+async function hourlyFlow() {
+  const { timezone: tz } = await getSettings();
+  const date = todayIn(tz);
+  const { rows } = await query(
+    `SELECT EXTRACT(HOUR FROM punched_at AT TIME ZONE $1)::int AS hr,
+            COUNT(*) FILTER (WHERE UPPER(device_sn) = 'RKQ4262500336')::int AS uface,
+            COUNT(*) FILTER (WHERE UPPER(device_sn) = 'VDE2251500160')::int AS gate,
+            COUNT(*)::int AS total
+       FROM punch_logs
+      WHERE to_char(punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = $2
+      GROUP BY hr
+      ORDER BY hr`, [tz, date]);
+
+  const map = new Map(rows.map((r) => [r.hr, r]));
+  const hours = [];
+  for (let h = 7; h <= 20; h++) {
+    const item = map.get(h) || { hr: h, uface: 0, gate: 0, total: 0 };
+    const label = h === 12 ? '12 PM' : h > 12 ? `${h - 12} PM` : `${h} AM`;
+    hours.push({
+      hour: h,
+      label,
+      uface: item.uface || 0,
+      gate: item.gate || 0,
+      total: item.total || 0,
+    });
+  }
+  return hours;
+}
+
+/** Hardware throughput & telemetry summary for today. */
+async function terminalMetrics() {
+  const { timezone: tz } = await getSettings();
+  const date = todayIn(tz);
+  const { rows } = await query(
+    `SELECT UPPER(device_sn) AS sn,
+            COUNT(*)::int AS total_punches,
+            COUNT(DISTINCT user_id)::int AS unique_users,
+            to_char(MIN(punched_at) AT TIME ZONE $1, 'HH12:MI AM') AS first_punch,
+            to_char(MAX(punched_at) AT TIME ZONE $1, 'HH12:MI AM') AS last_punch
+       FROM punch_logs
+      WHERE to_char(punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = $2
+      GROUP BY UPPER(device_sn)`, [tz, date]);
+
+  const stats = new Map(rows.map((r) => [r.sn, r]));
+  return {
+    uface: stats.get('RKQ4262500336') || { sn: 'RKQ4262500336', total_punches: 0, unique_users: 0, first_punch: '—', last_punch: '—' },
+    gate: stats.get('VDE2251500160') || { sn: 'VDE2251500160', total_punches: 0, unique_users: 0, first_punch: '—', last_punch: '—' },
+  };
+}
+
+module.exports = { today, trend, departments, recentPunches, deviceStatus, hourlyFlow, terminalMetrics, mine };
