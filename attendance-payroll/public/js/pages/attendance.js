@@ -262,23 +262,40 @@ export async function render(view, state) {
           setHTML(box, html`<p class="empty">No punches recorded for this terminal/filter.</p>`);
           return;
         }
+        const isGateFilter = f.deviceSn === 'VDE2251500160';
         setHTML(box, html`
+          ${isGateFilter ? html`
+            <div style="margin-bottom:12px; padding:10px 16px; background:rgba(147,51,234,0.08); border-radius:10px; border:1px solid rgba(147,51,234,0.2); display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-weight:700; color:#7e22ce; font-size:13px; display:flex; align-items:center; gap:8px;">
+                <span>🚪</span> SenseFace 7A Live Gate Passage Audit Trail (${rows.length} swipe records)
+              </div>
+              <span class="small muted">Showing who passed through the factory barrier gate and at what exact time.</span>
+            </div>
+          ` : ''}
           <table>
             <thead>
               <tr>
-                <th>Punch Time</th>
+                <th>${isGateFilter ? 'Gate Passage Time' : 'Punch Time'}</th>
                 <th>Employee</th>
                 <th>Device PIN</th>
                 <th>Terminal / Device</th>
                 <th>Source</th>
-                <th>Punch Type</th>
+                <th>${isGateFilter ? 'Gate Action' : 'Punch Type'}</th>
               </tr>
             </thead>
             <tbody>
               ${rows.map((r) => html`
                 <tr>
-                  <td class="time">${r.at}</td>
-                  <td>${r.name || html`<span class="badge absent">Unknown PIN (${r.pin})</span>`}</td>
+                  <td>
+                    <div class="time" style="font-weight:750; font-family:monospace; color:var(--text); font-size:13px;">
+                      ${r.time_12h || (r.at ? r.at.slice(11, 19) : '—')}
+                    </div>
+                    <div class="small muted">${r.work_date || (r.at ? r.at.slice(0, 10) : '')}</div>
+                  </td>
+                  <td>
+                    <div style="font-weight:700; color:var(--text);">${r.name || html`<span class="badge absent">Unknown PIN (${r.pin})</span>`}</div>
+                    <div class="small muted">${r.employee_code || `PIN: ${r.pin}`} ${r.department ? `· ${r.department}` : ''}</div>
+                  </td>
                   <td><span class="num">${r.pin}</span></td>
                   <td>
                     ${r.device_sn === 'RKQ4262500336' || (r.device && r.device.includes('RKQ')) ? html`
@@ -296,14 +313,20 @@ export async function render(view, state) {
                   <td><span class="badge ${r.source === 'device' ? 'online' : 'waiting'}">${r.source}</span></td>
                   <td>
                     ${(() => {
-            const timeStr = r.at ? r.at.split(' ')[1] || '' : '';
-            const hour = parseInt(timeStr.split(':')[0] || '12', 10);
-            const isOut = r.state === 1 && hour >= 16;
-            if (isOut) {
-              return html`<span class="badge" style="background:#fee2e2; color:#991b1b; font-weight:700;">🔴 Check-out (OUT)</span>`;
-            }
-            return html`<span class="badge" style="background:#dcfce7; color:#15803d; font-weight:700;">🟢 Check-in (IN)</span>`;
-          })()}
+                      const timeStr = r.at ? r.at.split(' ')[1] || '' : '';
+                      const hour = parseInt(timeStr.split(':')[0] || '12', 10);
+                      const isOut = r.state === 1 && hour >= 16;
+                      const isGate = r.device_sn === 'VDE2251500160' || (r.device && r.device.includes('VDE'));
+                      if (isGate) {
+                        return isOut
+                          ? html`<span class="badge" style="background:#fee2e2; color:#991b1b; font-weight:750; border:1px solid #fca5a5;">🚪 Gate Exit (OUT)</span>`
+                          : html`<span class="badge" style="background:#dcfce7; color:#15803d; font-weight:750; border:1px solid #86efac;">🚪 Gate Entry (IN)</span>`;
+                      }
+                      if (isOut) {
+                        return html`<span class="badge" style="background:#fee2e2; color:#991b1b; font-weight:700;">🔴 Check-out (OUT)</span>`;
+                      }
+                      return html`<span class="badge" style="background:#dcfce7; color:#15803d; font-weight:700;">🟢 Check-in (IN)</span>`;
+                    })()}
                   </td>
                 </tr>
               `)}
@@ -319,21 +342,30 @@ export async function render(view, state) {
         return;
       }
 
+      const isGate = f.deviceSn === 'VDE2251500160';
       setHTML(box, html`
+        ${isGate ? html`
+          <div style="margin-bottom:12px; padding:10px 16px; background:rgba(147,51,234,0.08); border-radius:10px; border:1px solid rgba(147,51,234,0.2); display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:700; color:#7e22ce; font-size:13px; display:flex; align-items:center; gap:8px;">
+              <span>🚪</span> SenseFace 7A Factory Barrier Gate Passages (${rows.length} employee records)
+            </div>
+            <span class="small muted">First gate entry time and last gate exit time recorded by SenseFace 7A.</span>
+          </div>
+        ` : ''}
         <table>
           <thead>
             <tr>
               <th>Date</th>
               ${isMgr ? html`<th>Employee</th>` : ''}
-              <th>Terminal</th>
+              <th>${isGate ? 'Gate Device' : 'Terminal'}</th>
               <th>Shift</th>
-              <th>In Time (IN)</th>
-              <th>Out Time (OUT)</th>
-              <th class="r">Worked</th>
+              <th>${isGate ? 'Gate Entry (IN)' : 'In Time (IN)'}</th>
+              <th>${isGate ? 'Gate Exit (OUT)' : 'Out Time (OUT)'}</th>
+              <th class="r">${isGate ? 'Duration' : 'Worked'}</th>
               <th class="r">Late</th>
               <th class="r">Early out</th>
               <th class="r">Overtime</th>
-              <th>Status</th>
+              <th>${isGate ? 'Gate Status' : 'Status'}</th>
               ${isMgr ? html`<th class="r">Actions</th>` : ''}
             </tr>
           </thead>

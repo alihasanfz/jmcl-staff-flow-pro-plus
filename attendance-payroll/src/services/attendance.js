@@ -141,6 +141,7 @@ async function ingestPunches({ device, records, source = 'device' }) {
   let inserted = 0;
   let unknownPins = new Set();
   const touched = new Map(); // `${userId}|${date}` -> {userId, date}
+  const insertedPunches = [];
 
   for (const r of records) {
     const res = await query(
@@ -181,12 +182,20 @@ async function ingestPunches({ device, records, source = 'device' }) {
       }
     }
 
+    insertedPunches.push({
+      userId: uid,
+      pin: r.pin,
+      local: r.local,
+      state: r.state,
+      verify: r.verify,
+    });
+
     if (uid) touched.set(`${uid}|${r.local.slice(0, 10)}`, { userId: uid, date: r.local.slice(0, 10) });
     else unknownPins.add(r.pin);
   }
 
   for (const { userId, date } of touched.values()) await rebuildRange(date, date, { userId });
-  return { inserted, duplicates: records.length - inserted, unknownPins: [...unknownPins], touched: [...touched.values()] };
+  return { inserted, duplicates: records.length - inserted, unknownPins: [...unknownPins], touched: [...touched.values()], insertedPunches };
 }
 
 /** After a user's device PIN is created/changed, attach previously unmatched punches and rebuild. */

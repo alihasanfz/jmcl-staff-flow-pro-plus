@@ -303,23 +303,86 @@ function cleanupAll() {
 }
 
 /* ---------- notifications ---------- */
+let prevUnreadCount = null;
+let lastSeenNotifId = null;
+let liveToastTimer = null;
+
+function showTopLiveAlert(n) {
+  if (!n) return;
+  const oldBanner = $('#top-live-banner');
+  if (oldBanner) oldBanner.remove();
+  if (liveToastTimer) clearTimeout(liveToastTimer);
+
+  const banner = document.createElement('div');
+  banner.id = 'top-live-banner';
+  banner.className = 'top-live-banner';
+  banner.setAttribute('role', 'alert');
+
+  const isGate = n.type === 'gate-access' || (n.title && n.title.includes('🚪'));
+  const isPunch = n.type === 'punch-sync' || (n.title && n.title.includes('🏢'));
+  const iconEmoji = isGate ? '🚪' : (isPunch ? '🏢' : (n.severity === 'critical' ? '🚨' : '🔔'));
+
+  banner.innerHTML = `
+    <span class="pill-icon">${iconEmoji}</span>
+    <div class="pill-content">
+      <b>${esc(n.title || 'New Alert')}</b>
+      <span>${esc(n.body || '')}</span>
+    </div>
+    <button class="pill-close" id="top-pill-close" title="Dismiss">✕</button>
+  `;
+
+  banner.addEventListener('click', async (e) => {
+    if (e.target.closest('#top-pill-close')) {
+      e.stopPropagation();
+      banner.remove();
+      return;
+    }
+    banner.remove();
+    if (n.id) await post(`/notifications/${n.id}/read`).catch(() => {});
+    refreshBell();
+    navigate(n.url || '/attendance?tab=punches');
+  });
+
+  document.body.appendChild(banner);
+  liveToastTimer = setTimeout(() => {
+    if (banner.parentNode) {
+      banner.style.opacity = '0';
+      banner.style.transform = 'translate(-50%, -20px)';
+      setTimeout(() => banner.remove(), 250);
+    }
+  }, 8000);
+}
+
 async function refreshBell() {
   try {
-    const { unread } = await get('/notifications');
+    const { unread, notifications } = await get('/notifications');
     const c = $('#bell-count');
-    if (!c) return;
     const num = Number(unread) || 0;
-    c.textContent = num > 99 ? '99+' : String(num);
-    if (num > 0) {
-      c.removeAttribute('hidden');
-      c.style.display = 'grid';
-    } else {
-      c.setAttribute('hidden', '');
-      c.style.display = 'none';
+    if (c) {
+      c.textContent = num > 99 ? '99+' : String(num);
+      if (num > 0) {
+        c.removeAttribute('hidden');
+        c.style.display = 'grid';
+      } else {
+        c.setAttribute('hidden', '');
+        c.style.display = 'none';
+      }
     }
+
+    // Trigger floating top alert banner when a new live notification arrives
+    if (notifications && notifications.length > 0) {
+      const latest = notifications[0];
+      if (prevUnreadCount !== null && num > prevUnreadCount && !latest.read_at && latest.id !== lastSeenNotifId) {
+        lastSeenNotifId = latest.id;
+        showTopLiveAlert(latest);
+      } else if (lastSeenNotifId === null) {
+        lastSeenNotifId = latest.id;
+      }
+    }
+    prevUnreadCount = num;
   } catch { /* ignore transient errors */ }
 }
-function startBellPolling() { stopBellPolling(); refreshBell(); pollTimer = setInterval(refreshBell, 15_000); }
+function startBellPolling() { stopBellPolling(); refreshBell(); pollTimer = setInterval(refreshBell, 10_000); }
 function stopBellPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = null; }
 
 async function toggleNotifications() {
@@ -331,38 +394,79 @@ async function toggleNotifications() {
   pop.setAttribute('role', 'dialog');
   pop.setAttribute('aria-label', 'Notifications');
   document.body.appendChild(pop);
-  const close = (e) => { if (!pop.contains(e.target) && !e.target.closest('#bell')) { pop.remove(); document.removeEventListener('mousedown', close); } };
+  const close = (e) => {
+    if (!pop.contains(e.target) && !e.target.closest('#bell') && !e.target.closest('.top-live-banner')) {
+      pop.remove();
+      document.removeEventListener('mousedown', close);
+    }
+  };
   setTimeout(() => document.addEventListener('mousedown', close), 0);
   await drawNotifications(pop);
 }
 
 async function drawNotifications(pop) {
-  const { notifications } = await get('/notifications');
+  const { notifications, unread } = await get('/notifications');
+  const unreadCount = Number(unread) || 0;
+
   setHTML(pop, html`
     <header>
-      <h2>${t('notifications')}</h2>
-      <button class="btn sm" id="read-all">Mark all read</button>
+      <h2>
+        ${icon('bell')}
+        ${t('notifications')}
+        ${unreadCount > 0 ? html`<span class="unread-pill">${unreadCount} New</span>` : ''}
+      </h2>
+      <div class="row" style="gap:6px;">
+        ${unreadCount > 0 ? html`<button class="btn sm" id="read-all" style="font-size:11.5px; padding:3px 9px;">✓ Mark all read</button>` : ''}
+        <button class="pop-close-btn" id="pop-close" title="Close">✕</button>
+      </div>
     </header>
-    ${notifications.length ? notifications.map((n) => html`
-      <div class="notif ${n.severity} ${n.read_at ? 'read' : ''}" data-id="${n.id}" data-url="${n.url}" tabindex="0" role="button">
-        <span class="dot"></span>
-        <div>
-          <b>${n.title}</b>
-          <span class="small">${n.body}</span>
-          <div class="small muted">${ago(n.created_at)}</div>
-        </div>
-      </div>`) : html`<div class="empty">No notifications yet.</div>`}`);
+    <div class="notif-body-list">
+      ${notifications.length ? notifications.map((n) => {
+        const isGate = n.type === 'gate-access' || (n.title && n.title.includes('🚪'));
+        const isPunch = n.type === 'punch-sync' || (n.title && n.title.includes('🏢'));
+        const iconEmoji = isGate ? '🚪' : (isPunch ? '🏢' : (n.severity === 'critical' ? '🚨' : '⚠️'));
+        return html`
+          <div class="notif ${n.severity || 'info'} ${n.type || (isGate ? 'gate-access' : (isPunch ? 'punch-sync' : ''))} ${n.read_at ? 'read' : ''}" data-id="${n.id}" data-url="${n.url || ''}" tabindex="0" role="button">
+            <div class="notif-icon-box">
+              ${iconEmoji}
+            </div>
+            <div class="notif-info">
+              <b>${n.title}</b>
+              <div class="body-text">${n.body}</div>
+              <div class="time-text">${ago(n.created_at)}</div>
+            </div>
+            <span class="dot"></span>
+          </div>
+        `;
+      }) : html`<div class="empty" style="padding:32px 16px;">No notifications yet.</div>`}
+    </div>
+    <footer>
+      <a href="/notifications" class="small" style="font-weight:700; color:var(--primary); text-decoration:none;" id="view-all-notifs">
+        📋 View Full Notifications Page →
+      </a>
+      <span class="small muted">${notifications.length} notifications</span>
+    </footer>
+  `);
+
+  $('#pop-close', pop)?.addEventListener('click', () => pop.remove());
+  $('#view-all-notifs', pop)?.addEventListener('click', (e) => {
+    e.preventDefault();
+    pop.remove();
+    navigate('/notifications');
+  });
+
   $('#read-all', pop)?.addEventListener('click', async () => {
     await post('/notifications/read-all');
     refreshBell();
     drawNotifications(pop);
   });
+
   $$('.notif[data-id]', pop).forEach((el) => {
     const go = async () => {
       await post(`/notifications/${el.dataset.id}/read`).catch(() => { });
       refreshBell();
       pop.remove();
-      navigate(el.dataset.url || '/');
+      navigate(el.dataset.url || '/attendance');
     };
     el.addEventListener('click', go);
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });

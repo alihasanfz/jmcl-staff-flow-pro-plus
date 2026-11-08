@@ -7,6 +7,18 @@ const { getPublicKey, notifyUsers } = require('../services/notifications');
 const { z, id } = require('./schemas');
 
 router.get('/', wrap(async (req, res) => {
+  // Enrich older generic gate access notifications with real employee names from punch_logs
+  await query(`
+    UPDATE notifications n
+       SET title = '🚪 ' || COALESCE(u.name, 'Employee #' || pl.pin) || ' • Gate Entry',
+           body = COALESCE(u.name, 'Employee #' || pl.pin) || ' (' || COALESCE(u.employee_code, 'PIN ' || pl.pin) || ') passed through SenseFace 7A barrier gate at ' || to_char(pl.punched_at AT TIME ZONE 'Asia/Dhaka', 'HH12:MI AM') || '.'
+      FROM punch_logs pl
+      LEFT JOIN users u ON u.id = pl.user_id
+     WHERE (n.title LIKE '%Gate Access%' OR n.body LIKE '%unlocked barrier gate%')
+       AND UPPER(pl.device_sn) = 'VDE2251500160'
+       AND abs(extract(epoch from (n.created_at - pl.punched_at))) < 300
+  `).catch(() => {});
+
   const { rows } = await query(
     `SELECT id, type, severity, title, body, url, read_at, created_at FROM notifications
       WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`, [req.user.id]);

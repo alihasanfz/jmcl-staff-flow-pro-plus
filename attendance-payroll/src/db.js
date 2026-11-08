@@ -12,12 +12,12 @@ if (config.usePglite) {
   const fs = require('fs');
 
   const dataDir = path.join(__dirname, '../data/pglite');
-  
+
   const initDb = () => {
     fs.mkdirSync(dataDir, { recursive: true });
     const pidFile = path.join(dataDir, 'postmaster.pid');
     if (fs.existsSync(pidFile)) {
-      try { fs.unlinkSync(pidFile); } catch (_) {}
+      try { fs.unlinkSync(pidFile); } catch (_) { }
     }
     return new PGlite(dataDir, {
       parsers: {
@@ -45,7 +45,7 @@ if (config.usePglite) {
     } catch (err) {
       if (String(err.message).includes('Aborted')) {
         console.warn('[db] PGlite aborted due to dirty state, resetting data/pglite directory...');
-        try { fs.rmSync(dataDir, { recursive: true, force: true }); } catch (_) {}
+        try { fs.rmSync(dataDir, { recursive: true, force: true }); } catch (_) { }
         db = initDb();
       }
       throw err;
@@ -75,16 +75,16 @@ if (config.usePglite) {
     query,
     connect: async () => ({
       query: (text, params) => query(text, params),
-      release: () => {},
+      release: () => { },
     }),
-    on: () => {},
+    on: () => { },
     end: async () => {
       await db.close();
     }
   };
 
   const cleanup = async () => {
-    try { await db.close(); } catch (_) {}
+    try { await db.close(); } catch (_) { }
   };
   process.once('SIGINT', cleanup);
   process.once('SIGTERM', cleanup);

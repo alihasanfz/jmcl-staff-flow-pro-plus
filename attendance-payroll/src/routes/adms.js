@@ -308,21 +308,77 @@ async function handleUpload(req, res) {
   for (const t of result.touched) await checkLate(t.userId, t.date);
   if (result.unknownPins.length) await unknownPunch(d, result.unknownPins);
 
-  if (result.inserted > 0) {
+  if (result.inserted > 0 && result.insertedPunches && result.insertedPunches.length > 0) {
     const isGate = String(d.serial_number).toUpperCase() === 'VDE2251500160' || (d.model && d.model.toLowerCase().includes('gate'));
-    const timeNow = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit' });
-    await notifyManagers({
-      type: isGate ? 'gate-access' : 'punch-sync',
-      severity: 'info',
-      title: isGate
-        ? `🚪 Gate Access: ${result.inserted} Passage${result.inserted === 1 ? '' : 's'}`
-        : `🏢 Biometric Sync: ${result.inserted} Punch${result.inserted === 1 ? '' : 'es'} Synced`,
-      body: isGate
-        ? `${d.name} unlocked barrier gate (${result.inserted} swipe${result.inserted === 1 ? '' : 's'}) at ${timeNow}.`
-        : `Synchronized ${result.inserted} biometric punch(es) from ${d.name} at ${timeNow}.`,
-      url: '/attendance',
-      dedupe: `punch-sync:${d.serial_number}:${Date.now().toString().slice(0, -4)}`,
-    }).catch(() => {});
+    const userIds = [...new Set(result.insertedPunches.map((p) => p.userId).filter(Boolean))];
+    const userMap = new Map();
+    if (userIds.length) {
+      try {
+        const { rows: uRows } = await query(`SELECT id, name, employee_code, department FROM users WHERE id = ANY($1::int[])`, [userIds]);
+        for (const u of uRows) userMap.set(u.id, u);
+      } catch (err) {
+        console.warn('[adms] Failed to resolve users for notification:', err.message);
+      }
+    }
+
+    const formatTime12 = (dtStr) => {
+      if (!dtStr) return new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit', hour12: true });
+      const parts = dtStr.split(' ');
+      if (parts.length < 2) return dtStr;
+      const [h, m] = parts[1].split(':');
+      const hh = parseInt(h, 10);
+      const ampm = hh >= 12 ? 'PM' : 'AM';
+      const h12 = hh % 12 || 12;
+      return `${String(h12).padStart(2, '0')}:${m} ${ampm}`;
+    };
+
+    if (result.insertedPunches.length <= 4) {
+      for (const p of result.insertedPunches) {
+        const u = p.userId ? userMap.get(p.userId) : null;
+        const empName = u ? u.name : (p.pin ? `Employee #${p.pin}` : 'Staff');
+        const empCode = u?.employee_code ? ` (${u.employee_code})` : (p.pin ? ` (PIN ${p.pin})` : '');
+        const time12 = formatTime12(p.local);
+        const hour = parseInt((p.local ? p.local.split(' ')[1] : '12').split(':')[0] || '12', 10);
+        const isOut = p.state === 1 && hour >= 16;
+        const action = isOut ? 'Gate Exit (OUT)' : 'Gate Entry (IN)';
+
+        await notifyManagers({
+          type: isGate ? 'gate-access' : 'punch-sync',
+          severity: 'info',
+          title: isGate
+            ? `🚪 ${empName} • ${action}`
+            : `🏢 ${empName} • ${isOut ? 'Check-Out (OUT)' : 'Check-In (IN)'}`,
+          body: isGate
+            ? `${empName}${empCode} passed through SenseFace 7A barrier gate (${action}) at ${time12}.`
+            : `${empName}${empCode} clocked on ${d.name} at ${time12}.`,
+          url: `/attendance?tab=punches&deviceSn=${d.serial_number}`,
+          dedupe: `punch:${d.serial_number}:${p.pin}:${p.local}`,
+        }).catch(() => {});
+      }
+    } else {
+      const names = result.insertedPunches.map((p) => {
+        const u = userMap.get(p.userId);
+        return u ? u.name : `Employee #${p.pin}`;
+      });
+      const uniqueNames = [...new Set(names)];
+      const sampleNames = uniqueNames.slice(0, 3).join(', ');
+      const extraCount = uniqueNames.length - 3;
+      const namesSummary = extraCount > 0 ? `${sampleNames} and ${extraCount} others` : sampleNames;
+      const latestTime = formatTime12(result.insertedPunches[result.insertedPunches.length - 1].local);
+
+      await notifyManagers({
+        type: isGate ? 'gate-access' : 'punch-sync',
+        severity: 'info',
+        title: isGate
+          ? `🚪 SenseFace 7A Gate: ${uniqueNames[0]} ${uniqueNames.length > 1 ? `(+${uniqueNames.length - 1})` : ''}`
+          : `🏢 Biometric Sync: ${uniqueNames[0]} ${uniqueNames.length > 1 ? `(+${uniqueNames.length - 1})` : ''}`,
+        body: isGate
+          ? `${namesSummary} accessed SenseFace 7A barrier gate at ${latestTime}.`
+          : `Recorded punches for ${namesSummary} on ${d.name} at ${latestTime}.`,
+        url: `/attendance?tab=punches&deviceSn=${d.serial_number}`,
+        dedupe: `punch-batch:${d.serial_number}:${Date.now().toString().slice(0, -4)}`,
+      }).catch(() => {});
+    }
   }
 
   const stamp = getParam(req.query, 'Stamp');

@@ -112,18 +112,26 @@ export async function render(view) {
     }
 
     setHTML(container, html`
-      ${filtered.map((n) => html`
-        <div class="notif ${n.severity} ${n.read_at ? 'read' : ''}" data-id="${n.id}" data-url="${n.url || ''}">
-          <span class="dot"></span>
-          <div class="grow">
-            <div class="row between">
-              <b>${n.title}</b>
-              <span class="small muted">${ago(n.created_at)}</span>
+      ${filtered.map((n) => {
+        const isGate = n.type === 'gate-access' || (n.title && n.title.includes('🚪'));
+        const isPunch = n.type === 'punch-sync' || (n.title && n.title.includes('🏢'));
+        const iconEmoji = isGate ? '🚪' : (isPunch ? '🏢' : (n.severity === 'critical' ? '🚨' : '⚠️'));
+        return html`
+          <div class="notif ${n.severity || 'info'} ${n.type || (isGate ? 'gate-access' : (isPunch ? 'punch-sync' : ''))} ${n.read_at ? 'read' : ''}" data-id="${n.id}" data-url="${n.url || ''}">
+            <div class="notif-icon-box">
+              ${iconEmoji}
             </div>
-            <div class="small" style="margin-top:2px;">${n.body}</div>
+            <div class="notif-info grow">
+              <div class="row between" style="align-items:flex-start;">
+                <b>${n.title}</b>
+                <span class="time-text">${ago(n.created_at)}</span>
+              </div>
+              <div class="body-text" style="margin-top:2px;">${n.body}</div>
+            </div>
+            <span class="dot"></span>
           </div>
-        </div>
-      `)}
+        `;
+      })}
     `);
 
     $$('.notif[data-id]', container).forEach((el) => {

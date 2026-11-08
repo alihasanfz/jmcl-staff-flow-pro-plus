@@ -116,9 +116,13 @@ router.get('/punches', manager, wrap(async (req, res) => {
   const uid = req.query.userId ? parse(id, req.query.userId) : null;
   const devSn = req.query.deviceSn ? String(req.query.deviceSn).trim() : null;
   const { rows } = await query(
-    `SELECT p.id, p.pin, p.user_id, COALESCE(u.name, '') AS name, p.source, p.state, p.verify,
+    `SELECT p.id, p.pin, p.user_id, COALESCE(u.name, 'Employee #' || p.pin) AS name,
+            u.employee_code, u.department,
+            p.source, p.state, p.verify,
             COALESCE(d.name, p.device_sn) AS device, p.device_sn,
-            to_char(p.punched_at AT TIME ZONE $1, 'YYYY-MM-DD HH24:MI:SS') AS at
+            to_char(p.punched_at AT TIME ZONE $1, 'YYYY-MM-DD HH24:MI:SS') AS at,
+            to_char(p.punched_at AT TIME ZONE $1, 'HH12:MI:SS AM') AS time_12h,
+            to_char(p.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') AS work_date
        FROM punch_logs p
        LEFT JOIN users u ON u.id = p.user_id
        LEFT JOIN devices d ON (d.id = p.device_id OR UPPER(d.serial_number) = UPPER(p.device_sn))

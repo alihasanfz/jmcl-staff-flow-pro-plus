@@ -129,8 +129,12 @@ async function renderManager(view, state) {
                   <span class="telemetry-stat-val" style="color:#38bdf8;">${ufacePunches} logged</span>
                 </div>
                 <div class="telemetry-stat-item">
-                  <span class="telemetry-stat-label">Assigned Shift</span>
-                  <span class="telemetry-stat-val" style="color:#f8fafc; font-size:12px;">09:30 – 19:00</span>
+                  <span class="telemetry-stat-label">Staff Present</span>
+                  <span class="telemetry-stat-val" style="color:#10b981;">${term.uface?.unique_users || 0} staff</span>
+                </div>
+                <div class="telemetry-stat-item">
+                  <span class="telemetry-stat-label">Latest Clock-in</span>
+                  <span class="telemetry-stat-val" style="color:#f8fafc; font-size:12px;">${term.uface?.last_punch || '—'}</span>
                 </div>
               </div>
             </div>
@@ -160,8 +164,12 @@ async function renderManager(view, state) {
                   <span class="telemetry-stat-val" style="color:#c084fc;">${gatePunches} passes</span>
                 </div>
                 <div class="telemetry-stat-item">
-                  <span class="telemetry-stat-label">Primary Role</span>
-                  <span class="telemetry-stat-val" style="color:#c084fc; font-size:12px;">Barrier Access</span>
+                  <span class="telemetry-stat-label">Passed Barrier</span>
+                  <span class="telemetry-stat-val" style="color:#38bdf8;">${term.gate?.unique_users || 0} staff</span>
+                </div>
+                <div class="telemetry-stat-item">
+                  <span class="telemetry-stat-label">Latest Passage</span>
+                  <span class="telemetry-stat-val" style="color:#c084fc; font-size:12px;">${term.gate?.last_punch || '—'}</span>
                 </div>
               </div>
             </div>
