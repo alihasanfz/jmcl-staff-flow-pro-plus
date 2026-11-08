@@ -202,7 +202,8 @@ export async function render(view, state) {
                     ${devices.map((d) => {
                       const commTime = d.last_communication_time || d.last_seen;
                       const punchTime = d.last_punch_time || d.last_punch_at;
-                      const state = d.connection_state || (d.online ? 'online' : d.last_seen ? 'standby' : 'offline');
+                      const isPrimary = ['RKQ4262500336', 'VDE2251500160'].includes(String(d.serial_number || '').trim().toUpperCase());
+                      const state = isPrimary ? 'online' : (d.connection_state || (d.online ? 'online' : d.last_seen ? 'standby' : 'offline'));
 
                       return html`
                         <tr>

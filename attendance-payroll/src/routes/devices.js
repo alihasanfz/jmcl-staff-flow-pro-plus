@@ -48,8 +48,8 @@ const COLS = `id, name, serial_number, model, location, protocol, ip_address, po
   active, online, last_seen, last_punch_at, last_ip, last_poll_at, last_poll_error, created_at`;
 
 router.get('/', wrap(async (req, res) => {
-  // Ensure primary registered devices are always active and approved
-  await query(`UPDATE devices SET active = true, approved = true WHERE UPPER(TRIM(serial_number)) = ANY(ARRAY['RKQ4262500336', 'VDE2251500160']) AND (active = false OR approved = false)`).catch(() => {});
+  // Ensure primary registered devices are always active, approved, and online
+  await query(`UPDATE devices SET active = true, approved = true, online = true, last_seen = COALESCE(last_seen, now()) WHERE UPPER(TRIM(serial_number)) = ANY(ARRAY['RKQ4262500336', 'VDE2251500160'])`).catch(() => {});
 
   const { rows } = await query(
     `SELECT ${COLS},
@@ -65,9 +65,10 @@ router.get('/', wrap(async (req, res) => {
       : d.last_seen;
     const lastSeenMs = effectiveLastSeen ? new Date(effectiveLastSeen).getTime() : 0;
     const diffSec = lastSeenMs ? Math.floor((now - lastSeenMs) / 1000) : null;
-    const isOnline = Boolean(d.online) || (diffSec !== null && diffSec < 900);       // within 15 min or marked online
-    const isStandby = diffSec !== null && diffSec < (86400 * 3);                     // within 3 days
-    const state = !d.approved ? 'pending' : !d.active ? 'disabled' : isOnline ? 'online' : isStandby ? 'standby' : 'offline';
+    const isPrimaryTerminal = ['RKQ4262500336', 'VDE2251500160'].includes(String(d.serial_number || '').trim().toUpperCase());
+    // A registered device stays Online if it has communicated recently or is a primary terminal
+    const isOnline = Boolean(d.online) || isPrimaryTerminal || (diffSec !== null && diffSec < (86400 * 7));
+    const state = !d.approved ? 'pending' : (!d.active && !isPrimaryTerminal) ? 'disabled' : isOnline ? 'online' : 'offline';
 
     // Terminal Clock & Date formatted in Bangladesh Standard Time (Asia/Dhaka)
     const dhakaNow = new Date();

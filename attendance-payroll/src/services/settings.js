@@ -12,7 +12,7 @@ const DEFAULTS = {
   attendance: {
     ...ATTENDANCE_DEFAULTS,
     not_checked_in_alert_after_minutes: 60,   // alert HR when staff are still not in this long after shift start
-    device_offline_after_minutes: 15,
+    device_offline_after_minutes: 10080,      // 7 days grace before flagging idle devices
   },
   payroll: { ...PAYROLL_DEFAULTS },
 };

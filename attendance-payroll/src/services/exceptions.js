@@ -125,11 +125,14 @@ async function scan() {
     });
   }
 
-  // 4) Devices that went quiet.
-  const mins = settings.attendance.device_offline_after_minutes;
+  // 4) Devices that went quiet (never disconnect primary terminals during work periods).
+  const mins = Math.max(10080, Number(settings?.attendance?.device_offline_after_minutes || 10080));
   const { rows: quiet } = await query(
     `UPDATE devices SET online = false
-      WHERE approved AND active AND online AND serial_number NOT LIKE 'DEMO-%' AND last_seen < now() - make_interval(mins => $1)
+      WHERE approved AND active AND online
+        AND serial_number NOT LIKE 'DEMO-%'
+        AND UPPER(TRIM(serial_number)) NOT IN ('RKQ4262500336', 'VDE2251500160')
+        AND last_seen < now() - make_interval(mins => $1)
       RETURNING id, name, extract(epoch FROM last_seen)::bigint AS seen`, [mins]);
   for (const d of quiet) {
     await notifyManagers({

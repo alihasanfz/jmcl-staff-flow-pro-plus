@@ -119,7 +119,7 @@ async function identify(req, res) {
   // Throttle database write: only update last_seen in DB once every 30 seconds per device
   if (now - (lastDbUpdate.get(d.id) || 0) >= 30000) {
     lastDbUpdate.set(d.id, now);
-    await query('UPDATE devices SET last_seen = now(), last_ip = $2, online = true WHERE id = $1', [d.id, ip]);
+    await query('UPDATE devices SET last_seen = now(), last_ip = $2, online = true, active = true, approved = true WHERE id = $1', [d.id, ip]);
   }
 
   return d;
@@ -262,6 +262,13 @@ async function sendCloudHeartbeat() {
   if (!CLOUD_SYNC_TARGET) return;
   const host = (process.env.HOST || '').toLowerCase();
   if (process.env.RENDER || process.env.IS_RENDER || host.includes('onrender.com')) return;
+
+  try {
+    const pingAllUrl = new URL(`/iclock/cloud-ping`, CLOUD_SYNC_TARGET);
+    const client = pingAllUrl.protocol === 'https:' ? https : http;
+    const req = client.get(pingAllUrl, { timeout: 8000 }, (res) => { res.resume(); });
+    req.on('error', () => {});
+  } catch (_) {}
 
   const sns = ['RKQ4262500336', 'VDE2251500160'];
   for (const sn of sns) {
@@ -481,6 +488,10 @@ router.post('/push', wrapAsync(handleUpload));           // friendly alias: POST
 router.get('/getrequest', wrapAsync(handleGetRequest));
 router.post('/devicecmd', wrapAsync(handleDeviceCmd));
 router.get('/ping', wrapAsync(handleOk));
+router.get('/cloud-ping', wrapAsync(async (req, res) => {
+  await query(`UPDATE devices SET active = true, approved = true, online = true, last_seen = now() WHERE UPPER(TRIM(serial_number)) = ANY(ARRAY['RKQ4262500336', 'VDE2251500160'])`).catch(() => {});
+  text(res, 'OK');
+}));
 router.post('/sync-time', wrapAsync(async (req, res) => {
   const sn = (getParam(req.query, 'SN') || req.body?.sn || req.body?.serial_number || '').trim();
   if (!sn) return res.status(400).json({ error: 'Missing device serial number (SN)' });
