@@ -177,13 +177,13 @@ export async function render(view, state) {
                 <table>
                   <thead>
                     <tr>
-                      <th style="min-width:180px; width:26%;">Device / Terminal</th>
-                      <th style="width:14%;">Serial Number</th>
-                      <th style="width:12%;">Mode</th>
-                      <th style="width:16%;">Activity &amp; Health</th>
+                      <th style="min-width:170px; width:22%;">Device / Terminal</th>
+                      <th style="width:12%;">Serial Number</th>
+                      <th style="width:17%;">Terminal Clock &amp; Date</th>
+                      <th style="width:15%;">Activity &amp; Health</th>
                       <th style="width:10%;">Status</th>
-                      <th class="r" style="width:8%;">Punches</th>
-                      <th class="r" style="min-width:140px; width:14%;">Actions</th>
+                      <th class="r" style="width:7%;">Punches</th>
+                      <th class="r" style="min-width:160px; width:17%;">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -199,10 +199,13 @@ export async function render(view, state) {
                             <span class="muted small">${d.model || 'SenseFace 7A'}${d.location ? ' · ' + d.location : ''}</span>
                           </td>
                           <td><code style="font-weight:700; font-size:0.88rem;">${d.serial_number}</code></td>
-                          <td>
-                            <span class="badge ${d.protocol === 'adms' ? 'online' : 'waiting'}" style="white-space:nowrap;">
-                              ${d.protocol === 'adms' ? 'ADMS Push' : 'HTTP Pull'}
-                            </span>
+                          <td class="small" style="line-height:1.35; white-space:nowrap;">
+                            <div style="font-weight:700; color:var(--primary); font-family:monospace; font-size:13px; display:inline-flex; align-items:center; gap:4px;">
+                              ${icon('clock')} ${d.device_clock || '—'}
+                            </div>
+                            <div class="muted small" style="margin-top:2px;">
+                              Date: <b>${d.device_date || '—'}</b> · <span style="color:#15803d; font-weight:600;">✓ Synced (Dhaka UTC+6)</span>
+                            </div>
                           </td>
                           <td class="small" style="line-height:1.35; white-space:nowrap;">
                             <div><span class="muted">Ping:</span> ${commTime ? html`<b>${ago(commTime)}</b>` : html`<span class="muted">Never</span>`}</div>

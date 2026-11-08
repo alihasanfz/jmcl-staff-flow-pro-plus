@@ -19,17 +19,25 @@ const C = (key, header, type = 'text', width = 1, extra = {}) => ({ key, header,
 
 const BUILDERS = {
   attendance: {
-    title: 'Daily attendance',
-    async build({ from, to, userId, department, status }) {
-      const rows = (await listAttendance({ from, to, userId, department, status }))
+    title: 'Daily Attendance Report',
+    async build({ from, to, userId, department, status, deviceSn }) {
+      const rows = (await listAttendance({ from, to, userId, department, status, deviceSn }))
         .filter((r) => status || !['weekend', 'holiday'].includes(r.status))
         .map((r) => ({ ...r, check_in_local: r.check_in_local || '—', check_out_local: r.check_out_local || '—', status: r.status.replace('_', ' ') }));
       return {
-        columns: [C('work_date', 'Date', 'text', 1.1), C('employee_code', 'Code', 'text', 0.8), C('name', 'Employee', 'text', 1.8),
-          C('department', 'Department', 'text', 1.3), C('shift_name', 'Shift', 'text', 1.2), C('check_in_local', 'In', 'text', 0.7),
-          C('check_out_local', 'Out', 'text', 0.7), C('worked_minutes', 'Worked (h)', 'hours', 0.9, { sum: true }),
-          C('late_minutes', 'Late (min)', 'int', 0.8, { sum: true }), C('early_out_minutes', 'Early out (min)', 'int', 0.9, { sum: true }),
-          C('overtime_minutes', 'OT (h)', 'hours', 0.8, { sum: true }), C('status', 'Status', 'text', 1)],
+        columns: [
+          C('work_date', 'Date', 'text', 1.0),
+          C('employee_code', 'Code', 'text', 0.8),
+          C('name', 'Employee', 'text', 1.7),
+          C('department', 'Department', 'text', 1.2),
+          C('device_name', 'Terminal / Machine', 'text', 1.4),
+          C('shift_name', 'Shift', 'text', 1.3),
+          C('check_in_local', 'In Time', 'text', 0.8),
+          C('check_out_local', 'Out Time', 'text', 0.8),
+          C('worked_minutes', 'Worked (h)', 'hours', 0.8, { sum: true }),
+          C('late_minutes', 'Late (min)', 'int', 0.7, { sum: true }),
+          C('status', 'Status', 'text', 0.9)
+        ],
         rows,
       };
     },

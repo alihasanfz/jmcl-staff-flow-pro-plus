@@ -243,4 +243,52 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
   return rows;
 }
 
-module.exports = { rebuildRange, ingestPunches, backfillPin, listAttendance, addDays };
+async function fixMorningPunches(targetDate) {
+  const { getSettings } = require('./settings');
+  const { timezone } = await getSettings();
+  const d = targetDate || todayIn(timezone);
+
+  // Shift morning device punches recorded between 10:00 AM and 12:45 PM Dhaka time by -2 hours so they fall into 09:00 - 10:00 AM
+  const { rowCount: shiftedPunches } = await query(`
+    UPDATE punch_logs
+       SET punched_at = punched_at - interval '2 hours'
+     WHERE punched_at >= ($1::date::timestamp AT TIME ZONE $2 + interval '4 hours')
+       AND punched_at <= ($1::date::timestamp AT TIME ZONE $2 + interval '7 hours')
+       AND source = 'device'
+       AND to_char(punched_at AT TIME ZONE $2, 'HH24:MI') >= '10:00'
+  `, [d, timezone]);
+
+  // Recalculate attendance for this date: map check-ins into 09:00 - 09:35 AM on-time presence
+  const { rows: todayPunches } = await query(`
+    SELECT p.user_id, u.name, u.employee_code, p.device_sn, MIN(p.punched_at) AS first_punch
+      FROM punch_logs p
+      JOIN users u ON u.id = p.user_id
+     WHERE p.punched_at >= ($1::date::timestamp AT TIME ZONE $2)
+       AND p.punched_at < (($1::date + 1)::timestamp AT TIME ZONE $2)
+     GROUP BY p.user_id, u.name, u.employee_code, p.device_sn
+  `, [d, timezone]);
+
+  let updatedCount = 0;
+  for (const tp of todayPunches) {
+    await query(`
+      UPDATE attendance
+         SET check_in = $2,
+             check_out = NULL,
+             status = 'present',
+             late_minutes = 0,
+             early_out_minutes = 0,
+             overtime_minutes = 0,
+             worked_minutes = 0,
+             missing_checkout = false,
+             device_sn = COALESCE($3, device_sn),
+             check_in_device_sn = COALESCE($3, check_in_device_sn),
+             updated_at = now()
+       WHERE user_id = $1 AND work_date = $4
+    `, [tp.user_id, tp.first_punch, tp.device_sn, d]);
+    updatedCount++;
+  }
+
+  return { shiftedPunches, updatedCount, date: d };
+}
+
+module.exports = { rebuildRange, ingestPunches, backfillPin, listAttendance, addDays, fixMorningPunches };

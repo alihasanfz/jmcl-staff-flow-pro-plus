@@ -113,12 +113,13 @@ async function firstRun() {
   try {
     const { getSettings } = require('./services/settings');
     const { todayIn, addDays } = require('./utils/time');
-    const { rebuildRange } = require('./services/attendance');
+    const { rebuildRange, fixMorningPunches } = require('./services/attendance');
     const settings = await getSettings();
     const today = todayIn(settings.timezone);
     const from = addDays(today, -30);
     const count = await rebuildRange(from, today);
     console.log(`[bootstrap] Rebuilt attendance for recent period (${count} days processed)`);
+    await fixMorningPunches(today).catch(() => {});
   } catch (err) {
     console.warn('[bootstrap] initial attendance rebuild error:', err.message);
   }

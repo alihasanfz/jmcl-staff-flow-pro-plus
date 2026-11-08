@@ -20,6 +20,7 @@ router.get('/:type', wrap(async (req, res) => {
     format: z.enum(['json', 'pdf', 'xlsx']).default('json'),
     from: date.optional(), to: date.optional(), month: month.optional(),
     userId: id.optional(), department: z.string().max(80).optional(), status: z.string().max(20).optional(),
+    deviceSn: z.string().max(80).optional(),
     columns: z.string().max(400).optional(),
   }), req.query);
 

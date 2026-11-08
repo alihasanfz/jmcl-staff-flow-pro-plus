@@ -313,4 +313,15 @@ router.post('/recalculate', manager, wrap(async (req, res) => {
   res.json({ ok: true, rows });
 }));
 
+/** Correct morning punches and attendance when machine time was skewed earlier in the day */
+router.post('/fix-morning-punches', manager, wrap(async (req, res) => {
+  const { fixMorningPunches } = require('../services/attendance');
+  const result = await fixMorningPunches(req.body.date);
+  res.json({
+    ok: true,
+    message: `Corrected ${result.shiftedPunches} punch(es) and updated ${result.updatedCount} attendance record(s) for ${result.date} to Present (On-time 09:00–10:00 AM arrival).`,
+    ...result,
+  });
+}));
+
 module.exports = router;

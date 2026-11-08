@@ -63,8 +63,17 @@ router.get('/', wrap(async (req, res) => {
     const isStandby = diffSec !== null && diffSec < 86400;    // within 24 hours
     const state = !d.approved ? 'pending' : !d.active ? 'disabled' : isOnline ? 'online' : isStandby ? 'standby' : 'offline';
 
+    // Terminal Clock & Date formatted in Bangladesh Standard Time (Asia/Dhaka)
+    const dhakaNow = new Date();
+    const deviceClockStr = dhakaNow.toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const deviceDateStr = dhakaNow.toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka', day: '2-digit', month: 'short', year: 'numeric' });
+    const deviceFullTime = dhakaNow.toLocaleString('sv-SE', { timeZone: 'Asia/Dhaka' });
+
     return {
       ...d,
+      device_clock: deviceClockStr,
+      device_date: deviceDateStr,
+      device_full_time: deviceFullTime,
       last_communication_time: d.last_seen || null,
       last_punch_time: d.calculated_last_punch || d.last_punch_at || null,
       online: isOnline,

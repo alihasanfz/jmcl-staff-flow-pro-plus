@@ -129,6 +129,15 @@ export async function render(view, state) {
           ` : ''}
           <button class="btn" type="submit">${t('filter')}</button>
           ${isMgr && tab === 'daily' ? html`
+            <button class="btn" type="button" id="download-pdf" style="background:#fee2e2; color:#991b1b; border-color:#fecaca; font-weight:600; display:inline-flex; align-items:center; gap:5px;" title="Download printable PDF attendance sheet for this date range">
+              ${icon('download')} Download Daily PDF
+            </button>
+            <button class="btn" type="button" id="download-excel" style="background:#f0fdf4; color:#166534; border-color:#bbf7d0; font-weight:600; display:inline-flex; align-items:center; gap:5px;" title="Export attendance to Excel (.xlsx)">
+              ${icon('download')} Export Excel
+            </button>
+            <button class="btn" type="button" id="fix-morning-btn" style="background:#fef3c7; color:#92400e; border-color:#fde68a; font-weight:600; display:inline-flex; align-items:center; gap:5px;" title="Auto-calibrate today's punches that occurred before machine clock was synced">
+              ${icon('clock')} Fix Today Punches (09:00–10:00 AM)
+            </button>
             <button class="btn" type="button" id="recalc" title="Recompute attendance from the raw punches for this date range">
               ${icon('clock')} Recalculate
             </button>
@@ -161,6 +170,40 @@ export async function render(view, state) {
       for (const k of ['userId', 'department', 'status', 'deviceSn']) f[k] = f[k] || '';
       shell();
       load();
+    });
+
+    $('#download-pdf')?.addEventListener('click', () => {
+      const url = `/api/reports/attendance?format=pdf&from=${encodeURIComponent(f.from)}&to=${encodeURIComponent(f.to)}`
+        + (f.department ? `&department=${encodeURIComponent(f.department)}` : '')
+        + (f.status ? `&status=${encodeURIComponent(f.status)}` : '')
+        + (f.deviceSn ? `&deviceSn=${encodeURIComponent(f.deviceSn)}` : '');
+      window.open(url, '_blank');
+    });
+
+    $('#download-excel')?.addEventListener('click', () => {
+      const url = `/api/reports/attendance?format=xlsx&from=${encodeURIComponent(f.from)}&to=${encodeURIComponent(f.to)}`
+        + (f.department ? `&department=${encodeURIComponent(f.department)}` : '')
+        + (f.status ? `&status=${encodeURIComponent(f.status)}` : '')
+        + (f.deviceSn ? `&deviceSn=${encodeURIComponent(f.deviceSn)}` : '');
+      window.open(url, '_blank');
+    });
+
+    $('#fix-morning-btn')?.addEventListener('click', () => {
+      confirmDialog({
+        title: 'Fix Today Morning Punches (09:00 - 10:00 AM)',
+        message: 'This will adjust today\'s morning punch timestamps by subtracting the machine clock skew, marking all employees who entered between 09:00 AM and 10:00 AM as Present and on-time. Continue?',
+        confirmLabel: 'Fix & Recalculate Now',
+        danger: false,
+        onConfirm: async () => {
+          try {
+            const res = await post('/attendance/fix-morning-punches', { date: f.to });
+            toast(res.message || 'Morning punches successfully corrected!');
+            load();
+          } catch (err) {
+            toast(err.message || 'Error fixing punches', 'bad');
+          }
+        },
+      });
     });
 
     $('#recalc')?.addEventListener('click', async () => {
