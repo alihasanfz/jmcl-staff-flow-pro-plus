@@ -57,10 +57,13 @@ router.get('/', wrap(async (req, res) => {
 
   const enriched = rows.map((d) => {
     const now = Date.now();
-    const lastSeenMs = d.last_seen ? new Date(d.last_seen).getTime() : 0;
+    const effectiveLastSeen = (d.calculated_last_punch && (!d.last_seen || new Date(d.calculated_last_punch) > new Date(d.last_seen)))
+      ? d.calculated_last_punch
+      : d.last_seen;
+    const lastSeenMs = effectiveLastSeen ? new Date(effectiveLastSeen).getTime() : 0;
     const diffSec = lastSeenMs ? Math.floor((now - lastSeenMs) / 1000) : null;
-    const isOnline = diffSec !== null && diffSec < 600;       // within 10 min
-    const isStandby = diffSec !== null && diffSec < 86400;    // within 24 hours
+    const isOnline = Boolean(d.online) || (diffSec !== null && diffSec < 900);       // within 15 min or marked online
+    const isStandby = diffSec !== null && diffSec < (86400 * 3);                     // within 3 days
     const state = !d.approved ? 'pending' : !d.active ? 'disabled' : isOnline ? 'online' : isStandby ? 'standby' : 'offline';
 
     // Terminal Clock & Date formatted in Bangladesh Standard Time (Asia/Dhaka)
@@ -74,7 +77,7 @@ router.get('/', wrap(async (req, res) => {
       device_clock: deviceClockStr,
       device_date: deviceDateStr,
       device_full_time: deviceFullTime,
-      last_communication_time: d.last_seen || null,
+      last_communication_time: effectiveLastSeen || d.last_seen || null,
       last_punch_time: d.calculated_last_punch || d.last_punch_at || null,
       online: isOnline,
       is_standby: isStandby,

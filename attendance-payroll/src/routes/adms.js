@@ -258,6 +258,22 @@ async function backfillRecentPunchesToCloud() {
   }
 }
 
+async function sendCloudHeartbeat() {
+  if (!CLOUD_SYNC_TARGET) return;
+  const host = (process.env.HOST || '').toLowerCase();
+  if (process.env.RENDER || process.env.IS_RENDER || host.includes('onrender.com')) return;
+
+  const sns = ['RKQ4262500336', 'VDE2251500160'];
+  for (const sn of sns) {
+    try {
+      const pingUrl = new URL(`/iclock/cdata?SN=${encodeURIComponent(sn)}`, CLOUD_SYNC_TARGET);
+      const client = pingUrl.protocol === 'https:' ? https : http;
+      const req = client.get(pingUrl, { timeout: 8000 }, (res) => { res.resume(); });
+      req.on('error', () => {});
+    } catch (_) {}
+  }
+}
+
 async function handleHandshake(req, res) {
   const d = await identify(req, res);
   if (!d) return;
@@ -426,5 +442,6 @@ router.get('/debug-data', wrapAsync(async (req, res) => {
 
 module.exports = router;
 module.exports.backfillRecentPunchesToCloud = backfillRecentPunchesToCloud;
+module.exports.sendCloudHeartbeat = sendCloudHeartbeat;
 module.exports.queueTimeSync = queueTimeSync;
 module.exports.queueDeviceCommand = queueDeviceCommand;

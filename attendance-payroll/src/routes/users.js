@@ -28,10 +28,10 @@ const COLS = `u.id, u.employee_code, u.device_pin, u.name, u.email, u.phone, u.a
               COALESCE(ss.provident_fund, 0) AS provident_fund`;
 
 const body = z.object({
-  employeeCode: z.string().trim().min(1).max(32),
-  devicePin: z.string().trim().regex(/^\d{1,9}$/, 'must be 1–9 digits, as enrolled on the device').optional(),
+  employeeCode: z.string().trim().min(1).max(32).optional().or(z.literal('').transform(() => undefined)),
+  devicePin: z.string().trim().regex(/^\d{1,9}$/, 'must be 1–9 digits, as enrolled on the device').optional().or(z.literal('').transform(() => undefined)),
   name: z.string().trim().min(1).max(120),
-  email: z.string().trim().email().max(200),
+  email: z.string().trim().email().max(200).optional().or(z.literal('').transform(() => undefined)),
   phone: z.string().trim().max(30).optional().default(''),
   address: z.string().trim().max(300).optional().default(''),
   photo: z.string().trim().optional().default(''),
@@ -40,7 +40,7 @@ const body = z.object({
     'hr_manager', 'hr_executive', 'hr',
     'accounts_manager', 'dept_manager',
     'employee', 'staff'
-  ]).default('staff'),
+  ]).default('employee'),
   department: z.string().trim().min(1).max(80).default('General'),
   departmentId: id.nullable().optional(),
   designation: z.string().trim().max(80).default(''),
@@ -115,28 +115,68 @@ router.get('/departments', wrap(async (req, res) => {
 router.post('/', wrap(async (req, res) => {
   const d = parse(body, req.body);
   assertCanManage(req.user, 'staff', d.role);
-  const pw = d.password || tempPassword();
-  const pin = d.devicePin || (/^\d{1,9}$/.test(d.employeeCode) ? d.employeeCode : null);
-  if (!pin) throw bad('Device PIN is required when the employee code is not numeric');
+  const pw = d.password || 'Demo@12345';
+
+  // Smart derivation of Device PIN and Employee Code
+  let pin = (d.devicePin || (/^\d{1,9}$/.test(d.employeeCode || '') ? d.employeeCode : '') || '').trim();
+  let code = (d.employeeCode || '').trim();
+  if (!pin && !code) {
+    const { rows: [maxPin] } = await query(`SELECT COALESCE(MAX(device_pin::int), 100) + 1 AS next_pin FROM users WHERE device_pin ~ '^[0-9]+$'`);
+    pin = String(maxPin?.next_pin || 101);
+  } else if (!pin && code) {
+    pin = code.replace(/\D/g, '') || String(Math.floor(100 + Math.random() * 900));
+  }
+  if (!code) {
+    code = `EMP${String(pin).padStart(4, '0')}`;
+  }
+
+  // Auto-generate email if not provided
+  let email = (d.email || '').trim().toLowerCase();
+  if (!email) {
+    const cleanId = String(pin || code).toLowerCase().replace(/[^a-z0-9]/g, '') || 'staff';
+    email = `emp${cleanId}@company.local`;
+    const { rows: existingEmail } = await query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+    if (existingEmail.length > 0) {
+      email = `emp${cleanId}_${Date.now().toString().slice(-4)}@company.local`;
+    }
+  }
+
+  // Ensure default shift (prefer uFace800 shift: 09:30 - 19:00)
+  let shiftId = d.shiftId || null;
+  if (!shiftId) {
+    const { rows: [defShift] } = await query(`SELECT id FROM shifts ORDER BY (name LIKE '%uFace800%') DESC, id ASC LIMIT 1`);
+    if (defShift) shiftId = defShift.id;
+  }
+
+  // Emergency contact formatting (prevent [object Object])
+  let emergencyContactObj = {};
+  if (typeof d.emergencyContact === 'string') {
+    const cleanEc = d.emergencyContact.trim();
+    if (cleanEc && cleanEc !== '[object Object]') {
+      emergencyContactObj = { contact: cleanEc };
+    }
+  } else if (typeof d.emergencyContact === 'object' && d.emergencyContact !== null) {
+    emergencyContactObj = d.emergencyContact;
+  }
 
   // Sync department name if departmentId is supplied
-  let deptName = d.department;
+  let deptName = d.department || 'General';
   if (d.departmentId) {
     const { rows: [dept] } = await query('SELECT name FROM departments WHERE id = $1', [d.departmentId]);
     if (dept) deptName = dept.name;
   }
-  let desgName = d.designation;
+  let desgName = d.designation || 'Staff';
   if (d.designationId) {
     const { rows: [desg] } = await query('SELECT name FROM designations WHERE id = $1', [d.designationId]);
     if (desg) desgName = desg.name;
   }
 
   // Calculate salary components
-  const basic = d.basicSalary ?? d.baseSalary;
+  const basic = d.basicSalary ?? d.baseSalary ?? 0;
   const houseRent = d.houseRent ?? 0;
   const medical = d.medicalAllowance ?? 0;
   const conv = d.conveyance ?? 0;
-  const other = d.otherAllowances ?? d.allowances;
+  const other = d.otherAllowances ?? d.allowances ?? 0;
   const totalAllow = houseRent + medical + conv + other;
   const gross = basic + totalAllow;
 
@@ -147,10 +187,10 @@ router.post('/', wrap(async (req, res) => {
                         shift_id, base_salary, allowances, join_date, active, must_change_password)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23,$24,COALESCE($25::date, CURRENT_DATE),$26,false)
      RETURNING id`,
-    [d.employeeCode, pin, d.name, d.email, d.phone, d.address, d.photo, await bcrypt.hash(pw, 10), d.role,
+    [code, pin, d.name, email, d.phone || '', d.address || '', d.photo || '', await bcrypt.hash(pw, 10), d.role || 'employee',
      deptName, d.departmentId || null, desgName, d.designationId || null, d.branchId || null, d.managerId || null,
-     d.employmentType, d.gender, d.dob || null, d.bloodGroup, d.nidNumber, JSON.stringify(d.emergencyContact || {}),
-     d.shiftId || null, basic, totalAllow, d.joinDate || null, d.active]
+     d.employmentType || 'permanent', d.gender || '', d.dob || null, d.bloodGroup || '', d.nidNumber || '', JSON.stringify(emergencyContactObj),
+     shiftId, basic, totalAllow, d.joinDate || null, d.active !== false]
   );
 
   // Save salary structure
@@ -166,6 +206,14 @@ router.post('/', wrap(async (req, res) => {
 
   await ensureBalances(u.id, new Date().getUTCFullYear());
   const matched = await backfillPin(u.id, pin);
+
+  // Immediately rebuild today's attendance so employee's status appears right away
+  try {
+    const { timezone } = await getSettings();
+    const today = todayIn(timezone);
+    await rebuildRange(today, today, { userId: u.id });
+  } catch (_) {}
+
   await query(`INSERT INTO audit_log (user_id, action, entity, entity_id) VALUES ($1,'create','user',$2)`, [req.user.id, String(u.id)]);
   res.status(201).json({ id: u.id, temporaryPassword: d.password ? undefined : pw, matchedPunches: matched });
 }));
@@ -204,7 +252,14 @@ router.patch('/:id', wrap(async (req, res) => {
     if (d[k] !== undefined) { params.push(d[k]); sets.push(`${col} = $${params.length}`); }
   }
   if (d.emergencyContact !== undefined) {
-    params.push(JSON.stringify(d.emergencyContact));
+    let ec = d.emergencyContact;
+    if (typeof ec === 'string') {
+      const cleanEc = ec.trim();
+      ec = (cleanEc && cleanEc !== '[object Object]') ? { contact: cleanEc } : {};
+    } else if (!ec || typeof ec !== 'object') {
+      ec = {};
+    }
+    params.push(JSON.stringify(ec));
     sets.push(`emergency_contact = $${params.length}::jsonb`);
   }
 

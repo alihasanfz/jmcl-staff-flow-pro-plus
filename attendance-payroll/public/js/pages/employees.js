@@ -21,6 +21,26 @@ export async function render(view, state) {
     designations = desRes.designations || [];
   } catch { /* ignore */ }
 
+  function formatEmergencyContact(ec) {
+    if (!ec) return '';
+    if (typeof ec === 'string') {
+      if (ec === '[object Object]' || ec.trim().startsWith('{')) {
+        try {
+          const parsed = JSON.parse(ec);
+          return formatEmergencyContact(parsed);
+        } catch (_) {
+          return ec === '[object Object]' ? '' : ec;
+        }
+      }
+      return ec === '[object Object]' ? '' : ec;
+    }
+    if (typeof ec === 'object') {
+      const parts = [ec.contact, ec.name, ec.phone, ec.relationship].filter(Boolean);
+      return parts.join(' - ');
+    }
+    return String(ec);
+  }
+
   const secretDialog = (title, who, pw) => modal({
     title, cancelLabel: t('close'), narrow: true,
     body: html`<p>Share this temporary password with <b>${who}</b> securely. It is shown only once, and they will be prompted to change it at first sign-in:</p><div class="secret">${pw}</div>`,
@@ -138,7 +158,7 @@ export async function render(view, state) {
                 <div class="kv"><dt>Address:</dt><dd>${u.address || '—'}</dd></div>
                 <div class="kv"><dt>NID Number:</dt><dd>${u.nid_number || '—'}</dd></div>
                 <div class="kv"><dt>Blood Group:</dt><dd>${u.blood_group || '—'}</dd></div>
-                <div class="kv"><dt>Emergency Contact:</dt><dd>${u.emergency_contact || '—'}</dd></div>
+                <div class="kv"><dt>Emergency Contact:</dt><dd>${formatEmergencyContact(u.emergency_contact) || '—'}</dd></div>
               </div>
             </div>
 
@@ -165,126 +185,181 @@ export async function render(view, state) {
     const canRole = isAdmin;
 
     modal({
-      title: isNew ? t('addEmployee') : `${t('editEmployee')}: ${u.name}`,
-      submitLabel: t('save'),
+      title: isNew ? '⚡ Quick Add Employee (সহজ কর্মী এন্ট্রি — নাম ও আইডি)' : `${t('editEmployee')}: ${u.name}`,
+      submitLabel: isNew ? 'Save & Link Device (সংরক্ষণ করুন)' : t('save'),
       wide: true,
       body: html`
-        <div class="stack">
-          <div class="form-grid">
-            <label class="wide">Full Name
-              <input type="text" name="name" required maxlength="120" value="${u?.name || ''}" placeholder="e.g. Tanvir Ahmed">
-            </label>
-            <label>Work Email (Login ID)
-              <input type="email" name="email" required value="${u?.email || ''}" placeholder="tanvir@company.test">
-            </label>
-            <label>Phone Number
-              <input type="text" name="phone" value="${u?.phone || ''}" placeholder="+880 1700 000000">
-            </label>
-            <label>Employee Code / ID
-              <input type="text" name="employeeCode" required maxlength="32" value="${u?.employee_code || u?.employee_id || ''}" placeholder="JMCL-001">
-            </label>
-            <label>Biometric PIN (ZKTeco Device User ID)
-              <input type="text" name="devicePin" inputmode="numeric" pattern="[0-9]{1,9}" value="${u?.device_pin || u?.biometric_pin || ''}" placeholder="e.g. 101">
-              <span class="hint">Must match the numeric ID registered on the uFace800 device.</span>
-            </label>
-            <label>Department
-              <select name="department">
-                <option value="">General</option>
-                ${departments.map((d) => html`
-                  <option value="${d.name}" ${u?.department === d.name ? 'selected' : ''}>${d.name}</option>
-                `)}
-              </select>
-            </label>
-            <label>Designation
-              <select name="designation">
-                <option value="">Select Designation</option>
-                ${designations.map((d) => html`
-                  <option value="${d.title}" ${u?.designation === d.title ? 'selected' : ''}>${d.title}</option>
-                `)}
-              </select>
-            </label>
-            <label>Work Shift
-              <select name="shiftId">
-                <option value="">No shift (not tracked)</option>
-                ${shifts.map((s) => html`<option value="${s.id}" ${u?.shift_id === s.id ? 'selected' : ''}>${s.name} (${s.start_time} - ${s.end_time})</option>`)}
-              </select>
-            </label>
-            <label>System Role
-              <select name="role" ${canRole ? '' : 'disabled'}>
-                ${[
-                  ['employee', 'Employee (Staff)'],
-                  ['hr', 'HR Staff'],
-                  ['hr_manager', 'HR Manager'],
-                  ['accounts_manager', 'Accounts Manager'],
-                  ['admin', 'Administrator'],
-                ].map(([v, l]) => html`<option value="${v}" ${(u?.role || 'employee') === v ? 'selected' : ''}>${l}</option>`)}
-              </select>
-            </label>
-            <label>Joining Date
-              <input type="date" name="joinDate" value="${u?.join_date || state.meta.today}">
-            </label>
-            <label>Basic Salary (BDT)
-              <input type="number" name="baseSalary" min="0" step="0.01" value="${u?.base_salary ?? 25000}">
-            </label>
-            <label>Allowances (House, Medical, Conveyance)
-              <input type="number" name="allowances" min="0" step="0.01" value="${u?.allowances ?? 15000}">
-            </label>
-            <label class="wide">Address
-              <input type="text" name="address" value="${u?.address || ''}" placeholder="Street, City, Postal Code">
-            </label>
-            <label>Emergency Contact
-              <input type="text" name="emergency_contact" value="${u?.emergency_contact || ''}" placeholder="Name &amp; Phone">
-            </label>
-            <label>NID Number
-              <input type="text" name="nid_number" value="${u?.nid_number || ''}" placeholder="National Identity Number">
-            </label>
-            ${isNew ? html`
-              <label class="wide">Initial Password
-                <input type="text" name="password" minlength="8" value="Demo@12345">
-                <span class="hint">Employee can change this after first sign-in.</span>
+        <div class="stack" style="gap:16px;">
+          <!-- Primary Quick Register Box: Just Name and ID -->
+          <div style="background:var(--paper-2); border:2px solid #2563eb; border-radius:10px; padding:16px; box-shadow:0 2px 8px rgba(37,99,235,0.08);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <span style="font-size:14px; font-weight:700; color:#1d4ed8; display:flex; align-items:center; gap:6px;">
+                ${icon('plus')} ${isNew ? 'Quick Add (শুধু নাম ও আইডি দিলেই যথেষ্ট)' : 'Primary Biometric Identity'}
+              </span>
+              <span class="badge online" style="font-size:11px;">Auto-Sync Active</span>
+            </div>
+
+            <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:14px;">
+              <label class="wide" style="font-weight:700;">
+                Full Name (কর্মীর পুরো নাম) *
+                <input type="text" name="name" required maxlength="120" value="${u?.name || ''}" placeholder="e.g. Md. Rahim / তানভীর আহমেদ" autofocus style="font-size:15px; font-weight:600;">
               </label>
-            ` : html`
-              <label class="check" style="align-self:end">
-                <input type="checkbox" name="active" ${u.active !== false ? 'checked' : ''}> Active Employee
+
+              <label style="font-weight:700;">
+                Biometric PIN / Machine ID (মেশিনের পাঞ্চ পিন) *
+                <input type="text" name="devicePin" inputmode="numeric" pattern="[0-9]{1,9}" value="${u?.device_pin || u?.biometric_pin || ''}" placeholder="e.g. 55" style="font-size:15px; font-weight:700; font-family:monospace; color:var(--primary);">
+                <span class="hint" style="color:#2563eb; font-weight:600;">uFace800 বা SenseFace মেশিনে যে ID সেভ আছে।</span>
               </label>
-            `}
+
+              <label style="font-weight:700;">
+                Employee Code (আইডি কোড)
+                <input type="text" name="employeeCode" maxlength="32" value="${u?.employee_code || u?.employee_id || ''}" placeholder="Auto: EMP0055">
+                <span class="hint">খালি রাখলে PIN দিয়ে অটো কোড তৈরি হবে।</span>
+              </label>
+
+              <label class="wide" style="font-weight:700;">
+                Work Shift (কাজের শিফট)
+                <select name="shiftId" style="font-weight:600;">
+                  ${shifts.map((s) => html`
+                    <option value="${s.id}" ${
+                      (u?.shift_id === s.id || (!u?.shift_id && s.name.includes('uFace800'))) ? 'selected' : ''
+                    }>${s.name} (${s.start_time} - ${s.end_time})</option>
+                  `)}
+                </select>
+                <span class="hint">ডিফল্ট: uFace800 শিফট (সকাল 09:30 AM – রাত 07:00 PM)।</span>
+              </label>
+            </div>
           </div>
+
+          <!-- Collapsible Optional & Profile Details -->
+          <details style="border:1px solid var(--line); border-radius:8px; padding:12px 16px; background:var(--paper);" ${!isNew ? 'open' : ''}>
+            <summary style="font-weight:600; color:var(--text); cursor:pointer; font-size:13px; user-select:none;">
+              ▼ Additional Profile &amp; Salary Details (ঐচ্ছিক / বিস্তারিত তথ্য - প্রয়োজন হলে ক্লিক করুন)
+            </summary>
+            <div class="form-grid" style="margin-top:14px;">
+              <label>Work Email (Login ID)
+                <input type="email" name="email" value="${u?.email || ''}" placeholder="Auto: emp[PIN]@company.local">
+              </label>
+              <label>Phone Number
+                <input type="text" name="phone" value="${u?.phone || ''}" placeholder="+880 1700 000000">
+              </label>
+              <label>Department
+                <select name="department">
+                  <option value="General">General</option>
+                  ${departments.map((d) => html`
+                    <option value="${d.name}" ${(u?.department || 'General') === d.name ? 'selected' : ''}>${d.name}</option>
+                  `)}
+                </select>
+              </label>
+              <label>Designation
+                <select name="designation">
+                  <option value="Staff">Staff</option>
+                  ${designations.map((d) => html`
+                    <option value="${d.title}" ${(u?.designation || 'Staff') === d.title ? 'selected' : ''}>${d.title}</option>
+                  `)}
+                </select>
+              </label>
+              <label>System Role
+                <select name="role" ${canRole ? '' : 'disabled'}>
+                  ${[
+                    ['employee', 'Employee (Staff)'],
+                    ['hr', 'HR Staff'],
+                    ['hr_manager', 'HR Manager'],
+                    ['accounts_manager', 'Accounts Manager'],
+                    ['admin', 'Administrator'],
+                  ].map(([v, l]) => html`<option value="${v}" ${(u?.role || 'employee') === v ? 'selected' : ''}>${l}</option>`)}
+                </select>
+              </label>
+              <label>Joining Date
+                <input type="date" name="joinDate" value="${u?.join_date || state.meta.today}">
+              </label>
+              <label>Basic Salary (BDT)
+                <input type="number" name="baseSalary" min="0" step="0.01" value="${u?.base_salary ?? 0}">
+              </label>
+              <label>Allowances
+                <input type="number" name="allowances" min="0" step="0.01" value="${u?.allowances ?? 0}">
+              </label>
+              <label class="wide">Address
+                <input type="text" name="address" value="${u?.address || ''}" placeholder="Dhaka, Mirpur">
+              </label>
+              <label>Emergency Contact
+                <input type="text" name="emergency_contact" value="${formatEmergencyContact(u?.emergency_contact)}" placeholder="Name &amp; Phone">
+              </label>
+              <label>NID Number
+                <input type="text" name="nid_number" value="${u?.nid_number || ''}" placeholder="National Identity Number">
+              </label>
+              ${isNew ? html`
+                <label class="wide">Initial Password
+                  <input type="text" name="password" minlength="8" value="Demo@12345">
+                  <span class="hint">Default password is Demo@12345.</span>
+                </label>
+              ` : html`
+                <label class="check" style="align-self:end">
+                  <input type="checkbox" name="active" ${u.active !== false ? 'checked' : ''}> Active Employee
+                </label>
+              `}
+            </div>
+          </details>
         </div>
       `,
       onSubmit: async (form, close) => {
         const v = formValues(form);
+        const pin = String(v.devicePin || v.employeeCode || '').trim();
+        const code = String(v.employeeCode || (pin ? 'EMP' + pin.padStart(4, '0') : '')).trim();
+        const email = String(v.email || (pin ? `emp${pin}@company.local` : '')).trim();
+
         const body = {
-          name: v.name,
-          email: v.email,
-          phone: v.phone || null,
-          employeeCode: v.employeeCode,
-          devicePin: v.devicePin || v.employeeCode,
+          name: v.name.trim(),
+          email: email || undefined,
+          phone: v.phone ? v.phone.trim() : null,
+          employeeCode: code || undefined,
+          devicePin: pin || undefined,
           department: v.department || 'General',
-          designation: v.designation || '',
+          designation: v.designation || 'Staff',
           shiftId: v.shiftId ? Number(v.shiftId) : null,
           baseSalary: Number(v.baseSalary || 0),
           allowances: Number(v.allowances || 0),
-          joinDate: v.joinDate,
-          address: v.address || null,
-          emergency_contact: v.emergency_contact || null,
-          nid_number: v.nid_number || null,
+          joinDate: v.joinDate || undefined,
+          address: v.address ? v.address.trim() : null,
+          emergencyContact: formatEmergencyContact(v.emergency_contact) || null,
+          nidNumber: v.nid_number ? v.nid_number.trim() : null,
           ...(canRole ? { role: v.role } : {}),
         };
 
         if (isNew) {
-          const r = await post('/users', { ...body, password: v.password });
+          const r = await post('/users', { ...body, password: v.password || 'Demo@12345' });
           close();
-          toast('Employee created successfully');
+          toast(`Employee "${v.name}" added & linked to machine PIN ${pin || 'auto'}!`);
           await load();
           if (r.temporaryPassword) secretDialog('Employee Created', v.name, r.temporaryPassword);
         } else {
           await patch(`/users/${u.id}`, { ...body, active: v.active });
           close();
-          toast('Employee profile updated');
+          toast('Employee profile updated successfully');
           load();
         }
       },
     });
+
+    // Smart auto-fill listeners
+    setTimeout(() => {
+      const pinInput = document.querySelector('input[name="devicePin"]');
+      const codeInput = document.querySelector('input[name="employeeCode"]');
+      const emailInput = document.querySelector('input[name="email"]');
+      if (pinInput && isNew) {
+        pinInput.addEventListener('input', () => {
+          const val = pinInput.value.trim();
+          if (val) {
+            if (codeInput && (!codeInput.value || codeInput.value.startsWith('EMP'))) {
+              codeInput.value = `EMP${val.padStart(4, '0')}`;
+            }
+            if (emailInput && (!emailInput.value || emailInput.value.endsWith('@company.local'))) {
+              emailInput.value = `emp${val}@company.local`;
+            }
+          }
+        });
+      }
+    }, 50);
   };
 
   // Export to CSV

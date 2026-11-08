@@ -35,13 +35,17 @@ function start() {
   every(15_000, 'device poll', LOCK_POLL, pollDue);
   setTimeout(() => exclusive(LOCK_SCAN, scan).catch((e) => console.error('[scheduler] initial scan failed:', e.message)), 5_000).unref();
 
-  // Cloud sync relay every 2 minutes so local punches are persistently mirrored to Render
+  // Cloud sync relay and continuous device heartbeat to keep terminals online in cloud
   const LOCK_SYNC = 7103;
-  const { backfillRecentPunchesToCloud } = require('../routes/adms');
-  every(120_000, 'cloud sync relay', LOCK_SYNC, backfillRecentPunchesToCloud);
-  setTimeout(() => exclusive(LOCK_SYNC, backfillRecentPunchesToCloud).catch(() => {}), 10_000).unref();
+  const { backfillRecentPunchesToCloud, sendCloudHeartbeat } = require('../routes/adms');
+  every(60_000, 'cloud sync relay', LOCK_SYNC, backfillRecentPunchesToCloud);
+  every(45_000, 'cloud heartbeat', LOCK_SYNC + 1, sendCloudHeartbeat);
+  setTimeout(() => {
+    exclusive(LOCK_SYNC, backfillRecentPunchesToCloud).catch(() => {});
+    sendCloudHeartbeat().catch(() => {});
+  }, 5_000).unref();
 
-  console.log('[scheduler] started (exception scan every 60s, device poll check every 15s, cloud sync relay every 120s)');
+  console.log('[scheduler] started (exception scan every 60s, device poll check every 15s, cloud sync relay every 60s, cloud heartbeat every 45s)');
 }
 function stop() { timers.forEach(clearInterval); timers = []; }
 
