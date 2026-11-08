@@ -23,7 +23,7 @@ async function load() {
   const { rows } = await query(`SELECT key, value FROM settings WHERE key NOT LIKE '\\_%'`);
   const stored = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   cache = {
-    company_name: stored.company_name ?? DEFAULTS.company_name,
+    company_name: (stored.company_name && stored.company_name !== 'JMCL Staff Flow Pro') ? stored.company_name : 'Jeans Manufacturing Company Ltd.',
     currency: stored.currency ?? DEFAULTS.currency,
     timezone: stored.timezone ?? DEFAULTS.timezone,
     attendance: { ...DEFAULTS.attendance, ...(stored.attendance || {}) },
