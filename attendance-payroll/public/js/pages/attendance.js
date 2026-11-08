@@ -128,15 +128,15 @@ export async function render(view, state) {
               <select name="status">
                 <option value="">All Statuses</option>
                 ${[
-                  ['present', 'Present'],
-                  ['late', 'Late'],
-                  ['half_day', 'Half day'],
-                  ['absent', 'Absent'],
-                  ['leave', 'On leave'],
-                  ['unpaid_leave', 'Unpaid leave'],
-                  ['weekend', 'Weekly off'],
-                  ['holiday', 'Holiday'],
-                ].map(([v, l]) => html`<option value="${v}" ${v === f.status ? 'selected' : ''}>${l}</option>`)}
+          ['present', 'Present'],
+          ['late', 'Late'],
+          ['half_day', 'Half day'],
+          ['absent', 'Absent'],
+          ['leave', 'On leave'],
+          ['unpaid_leave', 'Unpaid leave'],
+          ['weekend', 'Weekly off'],
+          ['holiday', 'Holiday'],
+        ].map(([v, l]) => html`<option value="${v}" ${v === f.status ? 'selected' : ''}>${l}</option>`)}
               </select>
             </label>
           ` : ''}
@@ -296,14 +296,14 @@ export async function render(view, state) {
                   <td><span class="badge ${r.source === 'device' ? 'online' : 'waiting'}">${r.source}</span></td>
                   <td>
                     ${(() => {
-                      const timeStr = r.at ? r.at.split(' ')[1] || '' : '';
-                      const hour = parseInt(timeStr.split(':')[0] || '12', 10);
-                      const isOut = r.state === 1 && hour >= 16;
-                      if (isOut) {
-                        return html`<span class="badge" style="background:#fee2e2; color:#991b1b; font-weight:700;">🔴 Check-out (OUT)</span>`;
-                      }
-                      return html`<span class="badge" style="background:#dcfce7; color:#15803d; font-weight:700;">🟢 Check-in (IN)</span>`;
-                    })()}
+            const timeStr = r.at ? r.at.split(' ')[1] || '' : '';
+            const hour = parseInt(timeStr.split(':')[0] || '12', 10);
+            const isOut = r.state === 1 && hour >= 16;
+            if (isOut) {
+              return html`<span class="badge" style="background:#fee2e2; color:#991b1b; font-weight:700;">🔴 Check-out (OUT)</span>`;
+            }
+            return html`<span class="badge" style="background:#dcfce7; color:#15803d; font-weight:700;">🟢 Check-in (IN)</span>`;
+          })()}
                   </td>
                 </tr>
               `)}
@@ -493,15 +493,15 @@ export async function render(view, state) {
           <label>Status
             <select name="status">
               ${[
-                ['present', 'Present'],
-                ['late', 'Late'],
-                ['half_day', 'Half Day'],
-                ['absent', 'Absent'],
-                ['leave', 'On Leave'],
-                ['unpaid_leave', 'Unpaid Leave'],
-                ['weekend', 'Weekly Off'],
-                ['holiday', 'Holiday'],
-              ].map(([val, lbl]) => html`
+          ['present', 'Present'],
+          ['late', 'Late'],
+          ['half_day', 'Half Day'],
+          ['absent', 'Absent'],
+          ['leave', 'On Leave'],
+          ['unpaid_leave', 'Unpaid Leave'],
+          ['weekend', 'Weekly Off'],
+          ['holiday', 'Holiday'],
+        ].map(([val, lbl]) => html`
                 <option value="${val}" ${rec.status === val ? 'selected' : ''}>${lbl}</option>
               `)}
             </select>

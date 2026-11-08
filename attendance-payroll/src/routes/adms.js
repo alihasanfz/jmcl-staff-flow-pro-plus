@@ -307,6 +307,7 @@ async function handleUpload(req, res) {
 
 const commandQueue = new Map();
 const lastTimeSync = new Map();
+const lastCheckCmd = new Map();
 let nextCmdId = 100;
 
 function queueDeviceCommand(sn, cmd) {
@@ -353,6 +354,19 @@ async function handleGetRequest(req, res) {
     if (queued && queued.length > 0) {
       const nextCmd = queued.shift();
       console.log(`[adms-cmd] Auto-syncing time to ${d.serial_number}: C:${nextCmd.id}:${nextCmd.cmd}`);
+      return res.status(200).type('text/plain').send(`C:${nextCmd.id}:${nextCmd.cmd}\n`);
+    }
+  }
+
+  // Periodic device log flush check every 15 minutes to guarantee all punches in machine memory are pushed
+  const lastCheck = lastCheckCmd.get(snKey) || 0;
+  if (now - lastCheck >= 900000) { // 15 minutes
+    lastCheckCmd.set(snKey, now);
+    queueDeviceCommand(d.serial_number, 'CHECK');
+    const queued = commandQueue.get(snKey);
+    if (queued && queued.length > 0) {
+      const nextCmd = queued.shift();
+      console.log(`[adms-cmd] Polling memory log flush from ${d.serial_number}: C:${nextCmd.id}:${nextCmd.cmd}`);
       return res.status(200).type('text/plain').send(`C:${nextCmd.id}:${nextCmd.cmd}\n`);
     }
   }
