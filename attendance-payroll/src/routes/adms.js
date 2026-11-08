@@ -425,6 +425,7 @@ async function handleGetRequest(req, res) {
   forwardToCloud(req);
 
   const snKey = d.serial_number.toUpperCase();
+  const now = Date.now();
   const queue = commandQueue.get(snKey);
 
   // If there are explicit queued commands (e.g. manual sync or setting changes), dispatch first
