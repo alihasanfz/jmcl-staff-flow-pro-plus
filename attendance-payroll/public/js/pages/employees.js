@@ -185,40 +185,40 @@ export async function render(view, state) {
     const canRole = isAdmin;
 
     modal({
-      title: isNew ? '⚡ Quick Add Employee (সহজ কর্মী এন্ট্রি — নাম ও আইডি)' : `${t('editEmployee')}: ${u.name}`,
-      submitLabel: isNew ? 'Save & Link Device (সংরক্ষণ করুন)' : t('save'),
+      title: isNew ? 'Quick Add Employee (Name & ID)' : `Edit Employee: ${u.name}`,
+      submitLabel: isNew ? 'Save Employee' : 'Save Changes',
       wide: true,
       body: html`
         <div class="stack" style="gap:16px;">
-          <!-- Primary Quick Register Box: Just Name and ID -->
+          <!-- Primary Quick Register Box: Name and ID -->
           <div style="background:var(--paper-2); border:2px solid #2563eb; border-radius:10px; padding:16px; box-shadow:0 2px 8px rgba(37,99,235,0.08);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
               <span style="font-size:14px; font-weight:700; color:#1d4ed8; display:flex; align-items:center; gap:6px;">
-                ${icon('plus')} ${isNew ? 'Quick Add (শুধু নাম ও আইডি দিলেই যথেষ্ট)' : 'Primary Biometric Identity'}
+                ${icon('plus')} ${isNew ? 'Quick Add (Enter Name & Machine ID to Save)' : 'Primary Biometric Identity'}
               </span>
-              <span class="badge online" style="font-size:11px;">Auto-Sync Active</span>
+              <span class="badge online" style="font-size:11px;">Instant Device Sync</span>
             </div>
 
             <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:14px;">
               <label class="wide" style="font-weight:700;">
-                Full Name (কর্মীর পুরো নাম) *
-                <input type="text" name="name" required maxlength="120" value="${u?.name || ''}" placeholder="e.g. Md. Rahim / তানভীর আহমেদ" autofocus style="font-size:15px; font-weight:600;">
+                Full Name *
+                <input type="text" name="name" required maxlength="120" value="${u?.name || ''}" placeholder="e.g. Md. Rahim" autofocus style="font-size:15px; font-weight:600;">
               </label>
 
               <label style="font-weight:700;">
-                Biometric PIN / Machine ID (মেশিনের পাঞ্চ পিন) *
+                Biometric PIN / Machine ID *
                 <input type="text" name="devicePin" inputmode="numeric" pattern="[0-9]{1,9}" value="${u?.device_pin || u?.biometric_pin || ''}" placeholder="e.g. 55" style="font-size:15px; font-weight:700; font-family:monospace; color:var(--primary);">
-                <span class="hint" style="color:#2563eb; font-weight:600;">uFace800 বা SenseFace মেশিনে যে ID সেভ আছে।</span>
+                <span class="hint" style="color:#2563eb; font-weight:600;">Must match numeric ID registered on uFace800 or SenseFace terminal.</span>
               </label>
 
               <label style="font-weight:700;">
-                Employee Code (আইডি কোড)
+                Employee Code / ID
                 <input type="text" name="employeeCode" maxlength="32" value="${u?.employee_code || u?.employee_id || ''}" placeholder="Auto: EMP0055">
-                <span class="hint">খালি রাখলে PIN দিয়ে অটো কোড তৈরি হবে।</span>
+                <span class="hint">Auto-generated from PIN if left blank.</span>
               </label>
 
               <label class="wide" style="font-weight:700;">
-                Work Shift (কাজের শিফট)
+                Work Shift
                 <select name="shiftId" style="font-weight:600;">
                   ${shifts.map((s) => html`
                     <option value="${s.id}" ${
@@ -226,7 +226,7 @@ export async function render(view, state) {
                     }>${s.name} (${s.start_time} - ${s.end_time})</option>
                   `)}
                 </select>
-                <span class="hint">ডিফল্ট: uFace800 শিফট (সকাল 09:30 AM – রাত 07:00 PM)।</span>
+                <span class="hint">Default shift: ZK-uFace800 (09:30 AM – 07:00 PM).</span>
               </label>
             </div>
           </div>
@@ -234,7 +234,7 @@ export async function render(view, state) {
           <!-- Collapsible Optional & Profile Details -->
           <details style="border:1px solid var(--line); border-radius:8px; padding:12px 16px; background:var(--paper);" ${!isNew ? 'open' : ''}>
             <summary style="font-weight:600; color:var(--text); cursor:pointer; font-size:13px; user-select:none;">
-              ▼ Additional Profile &amp; Salary Details (ঐচ্ছিক / বিস্তারিত তথ্য - প্রয়োজন হলে ক্লিক করুন)
+              ▼ Additional Profile &amp; Salary Details (Optional — click to expand)
             </summary>
             <div class="form-grid" style="margin-top:14px;">
               <label>Work Email (Login ID)
@@ -276,11 +276,11 @@ export async function render(view, state) {
               <label>Basic Salary (BDT)
                 <input type="number" name="baseSalary" min="0" step="0.01" value="${u?.base_salary ?? 0}">
               </label>
-              <label>Allowances
+              <label>Allowances (BDT)
                 <input type="number" name="allowances" min="0" step="0.01" value="${u?.allowances ?? 0}">
               </label>
               <label class="wide">Address
-                <input type="text" name="address" value="${u?.address || ''}" placeholder="Dhaka, Mirpur">
+                <input type="text" name="address" value="${u?.address || ''}" placeholder="Street, City, Postal Code">
               </label>
               <label>Emergency Contact
                 <input type="text" name="emergency_contact" value="${formatEmergencyContact(u?.emergency_contact)}" placeholder="Name &amp; Phone">
@@ -311,7 +311,7 @@ export async function render(view, state) {
         const body = {
           name: v.name.trim(),
           email: email || undefined,
-          phone: v.phone ? v.phone.trim() : null,
+          phone: v.phone ? v.phone.trim() : '',
           employeeCode: code || undefined,
           devicePin: pin || undefined,
           department: v.department || 'General',
@@ -320,16 +320,16 @@ export async function render(view, state) {
           baseSalary: Number(v.baseSalary || 0),
           allowances: Number(v.allowances || 0),
           joinDate: v.joinDate || undefined,
-          address: v.address ? v.address.trim() : null,
-          emergencyContact: formatEmergencyContact(v.emergency_contact) || null,
-          nidNumber: v.nid_number ? v.nid_number.trim() : null,
+          address: v.address ? v.address.trim() : '',
+          emergencyContact: formatEmergencyContact(v.emergency_contact) || '',
+          nidNumber: v.nid_number ? v.nid_number.trim() : '',
           ...(canRole ? { role: v.role } : {}),
         };
 
         if (isNew) {
           const r = await post('/users', { ...body, password: v.password || 'Demo@12345' });
           close();
-          toast(`Employee "${v.name}" added & linked to machine PIN ${pin || 'auto'}!`);
+          toast(`Employee "${v.name}" added successfully`);
           await load();
           if (r.temporaryPassword) secretDialog('Employee Created', v.name, r.temporaryPassword);
         } else {

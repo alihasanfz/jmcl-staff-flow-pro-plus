@@ -175,41 +175,122 @@ function periodLabel(p) {
 
 async function toXlsx(report, params) {
   const settings = await getSettings();
-  const companyName = settings.company_name || 'Jeans Manufacturing Company Ltd.';
+  const companyName = 'JEANS MANUFACTURING COMPANY LTD.';
   const wb = new ExcelJS.Workbook();
   wb.creator = companyName;
   wb.created = new Date();
-  const ws = wb.addWorksheet(report.title.slice(0, 31), { views: [{ state: 'frozen', ySplit: 4 }] });
+  const ws = wb.addWorksheet(report.title.slice(0, 31), { views: [{ state: 'frozen', ySplit: 5 }] });
   const n = report.columns.length;
 
+  // Title Banner
   ws.mergeCells(1, 1, 1, n);
-  ws.getCell(1, 1).value = `JEANS MANUFACTURING COMPANY LTD. — ${report.title}`;
-  ws.getCell(1, 1).font = { bold: true, size: 14, color: { argb: 'FF0284C7' } };
-  ws.mergeCells(2, 1, 2, n);
-  const termLabel = params.deviceSn ? `Terminal: ${params.deviceSn === 'RKQ4262500336' ? 'ZK-uFace 800' : params.deviceSn === 'VDE2251500160' ? 'SenseFace 7A' : params.deviceSn}` : 'All Terminals';
-  ws.getCell(2, 1).value = [report.subtitle || periodLabel(params), termLabel, params.department ? `Department: ${params.department}` : null,
-    `Generated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`].filter(Boolean).join('  ·  ');
-  ws.getCell(2, 1).font = { color: { argb: 'FF5B6B7C' }, size: 10 };
+  const titleCell = ws.getCell(1, 1);
+  titleCell.value = companyName;
+  titleCell.font = { bold: true, size: 15, color: { argb: 'FFFFFFFF' } };
+  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F2942' } };
+  titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+  ws.getRow(1).height = 30;
 
-  const header = ws.getRow(4);
+  // Subtitle Banner
+  ws.mergeCells(2, 1, 2, n);
+  const subCell = ws.getCell(2, 1);
+  subCell.value = String(report.title || 'Attendance Report').toUpperCase();
+  subCell.font = { bold: true, size: 11, color: { argb: 'FF38BDF8' } };
+  subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+  subCell.alignment = { vertical: 'middle', horizontal: 'center' };
+  ws.getRow(2).height = 22;
+
+  // Meta Info Strip
+  ws.mergeCells(3, 1, 3, n);
+  const metaCell = ws.getCell(3, 1);
+  const termLabel = params.deviceSn ? `Terminal: ${params.deviceSn === 'RKQ4262500336' ? 'ZK-uFace 800' : params.deviceSn === 'VDE2251500160' ? 'SenseFace 7A' : params.deviceSn}` : 'All Terminals';
+  const dhakaTime = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: 'short', year: 'numeric' });
+  metaCell.value = [report.subtitle || periodLabel(params), termLabel, params.department ? `Department: ${params.department}` : null,
+    `Total Records: ${report.rows.length}`, `Printed: ${dhakaTime} (Dhaka Time)`].filter(Boolean).join('   |   ');
+  metaCell.font = { bold: false, size: 9.5, color: { argb: 'FF475569' } };
+  metaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+  metaCell.alignment = { vertical: 'middle', horizontal: 'center' };
+  ws.getRow(3).height = 20;
+
+  // Blank separator
+  ws.getRow(4).height = 8;
+
+  // Table Column Headers (Row 5)
+  const header = ws.getRow(5);
   report.columns.forEach((c, i) => {
     const cell = header.getCell(i + 1);
     cell.value = c.header;
-    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F1B2A' } };
-    cell.alignment = { vertical: 'middle', horizontal: ['int', 'money', 'hours'].includes(c.type) ? 'right' : 'left', wrapText: true };
-    ws.getColumn(i + 1).width = Math.max(10, Math.round(c.width * 14));
+    cell.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    cell.alignment = { vertical: 'middle', horizontal: ['int', 'money', 'hours'].includes(c.type) ? 'right' : 'center', wrapText: true };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF0F172A' } },
+      bottom: { style: 'medium', color: { argb: 'FF0284C7' } },
+      left: { style: 'thin', color: { argb: 'FF334155' } },
+      right: { style: 'thin', color: { argb: 'FF334155' } },
+    };
+    ws.getColumn(i + 1).width = Math.max(12, Math.round(c.width * 15));
     if (c.type === 'money') ws.getColumn(i + 1).numFmt = '#,##0.00';
     if (c.type === 'hours') ws.getColumn(i + 1).numFmt = '0.00';
   });
-  header.height = 24;
+  header.height = 26;
 
-  report.rows.forEach((r) => ws.addRow(report.columns.map((c) => rawValue(c, r[c.key]))));
+  // Data Rows
+  report.rows.forEach((r, rIdx) => {
+    const rowValues = report.columns.map((c) => {
+      const v = r[c.key];
+      if (c.key === 'check_out_local' && (!v || v === '—') && r.check_in_local && r.check_in_local !== '—') {
+        return 'On Duty';
+      }
+      return rawValue(c, v);
+    });
+    const row = ws.addRow(rowValues);
+    row.height = 20;
+    const isEven = rIdx % 2 === 0;
+    const bg = isEven ? 'FFFFFFFF' : 'FFF8FAFC';
+
+    report.columns.forEach((c, cIdx) => {
+      const cell = row.getCell(cIdx + 1);
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      };
+      cell.alignment = { vertical: 'middle', horizontal: ['int', 'money', 'hours'].includes(c.type) ? 'right' : 'left' };
+
+      // High-visibility color formatting for time and status
+      if (c.key === 'check_in_local' && cell.value && cell.value !== '—') {
+        cell.font = { color: { argb: 'FF15803D' }, bold: true };
+      } else if (c.key === 'check_out_local') {
+        if (cell.value === 'On Duty') {
+          cell.font = { color: { argb: 'FF15803D' }, bold: true };
+        } else if (cell.value && cell.value !== '—') {
+          cell.font = { color: { argb: 'FFDC2626' }, bold: true };
+        }
+      } else if (c.key === 'status') {
+        const s = String(cell.value || '').toLowerCase();
+        if (s.includes('present')) cell.font = { color: { argb: 'FF15803D' }, bold: true };
+        else if (s.includes('late')) cell.font = { color: { argb: 'FFB45309' }, bold: true };
+        else if (s.includes('absent')) cell.font = { color: { argb: 'FFDC2626' }, bold: true };
+      }
+    });
+  });
+
+  // Summary Total Row
   if (report.rows.length) {
     const totalRow = ws.addRow(report.columns.map((c, i) => (i === 0 ? 'Total' : c.sum ? rawValue(c, report.totals[c.key]) : '')));
-    totalRow.font = { bold: true };
-    totalRow.eachCell((cell) => { cell.border = { top: { style: 'thin', color: { argb: 'FF0F1B2A' } } }; });
-    ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4 + report.rows.length, column: n } };
+    totalRow.height = 24;
+    totalRow.font = { bold: true, size: 10 };
+    totalRow.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF0F172A' } },
+        bottom: { style: 'double', color: { argb: 'FF0F172A' } },
+      };
+    });
+    ws.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5 + report.rows.length, column: n } };
   }
   return wb.xlsx.writeBuffer();
 }
@@ -229,7 +310,7 @@ function registerFonts(doc) {
 async function toPdf(report, params, res) {
   const settings = await getSettings();
   const landscape = report.columns.length > 6;
-  const doc = new PDFDocument({ size: 'A4', layout: landscape ? 'landscape' : 'portrait', margin: 36, bufferPages: true, info: { Title: report.title, Author: settings.company_name } });
+  const doc = new PDFDocument({ size: 'A4', layout: landscape ? 'landscape' : 'portrait', margin: 32, bufferPages: true, info: { Title: report.title, Author: 'Jeans Manufacturing Company Ltd.' } });
   const f = registerFonts(doc);
   doc.pipe(res);
 
@@ -239,45 +320,84 @@ async function toPdf(report, params, res) {
   const cols = report.columns.map((c) => ({ ...c, w: (c.width / totalWeight) * usable }));
   const fontSize = cols.length > 10 ? 7 : 8.5;
   const rowH = fontSize + 9;
-  const INK = '#0F1B2A';
-  const MUTED = '#5B6B7C';
+  const INK = '#0F172A';
+  const MUTED = '#475569';
 
   const cell = (text, c, x, y, bold = false) => {
-    doc.font(bold ? f.bold : f.regular).fontSize(fontSize).fillColor(INK)
+    let color = INK;
+    if (c.key === 'check_in_local' && text && text !== '—') color = '#15803d';
+    if (c.key === 'check_out_local') {
+      if (text === 'On Duty') color = '#15803d';
+      else if (text && text !== '—') color = '#dc2626';
+    }
+    if (c.key === 'status') {
+      const s = String(text || '').toLowerCase();
+      if (s.includes('present')) color = '#15803d';
+      else if (s.includes('late')) color = '#b45309';
+      else if (s.includes('absent')) color = '#dc2626';
+    }
+
+    doc.font(bold ? f.bold : f.regular).fontSize(fontSize).fillColor(color)
       .text(text, x + 4, y + 4.5, { width: c.w - 8, height: fontSize + 2, ellipsis: true, align: ['int', 'money', 'hours'].includes(c.type) ? 'right' : 'left', lineBreak: false });
   };
+
   const header = (y) => {
-    doc.rect(left, y, usable, rowH + 3).fill(INK);
+    doc.rect(left, y, usable, rowH + 4).fill('#0F2942');
     let x = left;
     for (const c of cols) {
       doc.font(f.bold).fontSize(fontSize).fillColor('#FFFFFF')
         .text(c.header, x + 4, y + 5.5, { width: c.w - 8, height: fontSize + 2, ellipsis: true, align: ['int', 'money', 'hours'].includes(c.type) ? 'right' : 'left', lineBreak: false });
       x += c.w;
     }
-    return y + rowH + 3;
+    return y + rowH + 4;
   };
 
-  doc.font(f.bold).fontSize(16).fillColor('#0284c7').text('JEANS MANUFACTURING COMPANY LTD.', left, 34);
-  doc.font(f.bold).fontSize(11).fillColor(INK).text(report.title);
+  // Top Accent Bar
+  doc.rect(left, 20, usable, 4).fill('#0284c7');
+
+  // Executive Title
+  doc.font(f.bold).fontSize(16).fillColor('#0F2942').text('JEANS MANUFACTURING COMPANY LTD.', left, 30);
+  doc.font(f.bold).fontSize(11).fillColor('#1E3A8A').text(report.title.toUpperCase());
+
+  // Meta info strip
   const termLabel = params.deviceSn ? `Terminal: ${params.deviceSn === 'RKQ4262500336' ? 'ZK-uFace 800' : params.deviceSn === 'VDE2251500160' ? 'SenseFace 7A' : params.deviceSn}` : 'All Terminals';
-  doc.fontSize(8.5).fillColor(MUTED).text([report.subtitle || periodLabel(params), termLabel, params.department ? `Department: ${params.department}` : null,
-    `${report.rows.length} record${report.rows.length === 1 ? '' : 's'}`].filter(Boolean).join('   ·   '));
+  const dhakaTime = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short', year: 'numeric' });
+  doc.fontSize(8).fillColor(MUTED).text([
+    report.subtitle || periodLabel(params),
+    termLabel,
+    params.department ? `Dept: ${params.department}` : null,
+    `Total: ${report.rows.length} records`,
+    `Printed: ${dhakaTime}`
+  ].filter(Boolean).join('   ·   '));
+
   let y = doc.y + 10;
   y = header(y);
 
   const bottom = () => doc.page.height - doc.page.margins.bottom - 18;
   report.rows.forEach((r, i) => {
     if (y + rowH > bottom()) { doc.addPage(); y = header(doc.page.margins.top); }
-    if (i % 2 === 0) doc.rect(left, y, usable, rowH).fill('#F1F4F7');
+    if (i % 2 === 0) doc.rect(left, y, usable, rowH).fill('#F8FAFC');
+    
+    // Light bottom border on rows
+    doc.moveTo(left, y + rowH).lineTo(left + usable, y + rowH).lineWidth(0.5).strokeColor('#E2E8F0').stroke();
+
     let x = left;
-    for (const c of cols) { cell(textValue(c, r[c.key]), c, x, y); x += c.w; }
+    for (const c of cols) {
+      let val = textValue(c, r[c.key]);
+      if (c.key === 'check_out_local' && (!val || val === '—') && r.check_in_local && r.check_in_local !== '—') {
+        val = 'On Duty';
+      }
+      cell(val, c, x, y);
+      x += c.w;
+    }
     y += rowH;
   });
+
   if (!report.rows.length) {
     doc.font(f.regular).fontSize(10).fillColor(MUTED).text('No records match these filters.', left, y + 12);
   } else {
     if (y + rowH > bottom()) { doc.addPage(); y = doc.page.margins.top; }
-    doc.moveTo(left, y).lineTo(left + usable, y).lineWidth(1).strokeColor(INK).stroke();
+    doc.moveTo(left, y).lineTo(left + usable, y).lineWidth(1.2).strokeColor('#0F2942').stroke();
     let x = left;
     cols.forEach((c, i) => { cell(i === 0 ? 'Total' : c.sum ? textValue(c, report.totals[c.key]) : '', c, x, y, true); x += c.w; });
   }
@@ -286,7 +406,7 @@ async function toPdf(report, params, res) {
   for (let i = range.start; i < range.start + range.count; i++) {
     doc.switchToPage(i);
     doc.font(f.regular).fontSize(7.5).fillColor(MUTED)
-      .text(`Page ${i + 1} of ${range.count}   ·   Generated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`,
+      .text(`Page ${i + 1} of ${range.count}   ·   Jeans Manufacturing Company Ltd. Biometric System   ·   ${dhakaTime}`,
         left, doc.page.height - doc.page.margins.bottom - 4, { width: usable, align: 'right', lineBreak: false });
   }
   doc.end();

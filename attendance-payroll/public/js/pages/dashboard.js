@@ -268,11 +268,11 @@ async function renderManager(view, state) {
                             <span style="font-weight:700; color:#dc2626; font-family:monospace; display:inline-flex; align-items:center; gap:4px;">
                               🔴 OUT: ${r.checkOut}
                             </span>
-                          ` : html`
+                          ` : r.checkIn ? html`
                             <span class="badge online" style="background:#f0fdf4; color:#166534; font-size:11px; font-weight:600;">
-                              At Work (ডিউটিতে)
+                              🟢 On Duty
                             </span>
-                          `}
+                          ` : html`<span class="muted small">—</span>`}
                         </td>
                         <td style="padding:10px 16px;">${badge(r.state)}</td>
                       </tr>

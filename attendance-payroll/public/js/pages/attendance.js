@@ -373,7 +373,11 @@ export async function render(view, state) {
                     <span style="font-weight:700; color:#dc2626; font-family:monospace; display:inline-flex; align-items:center; gap:4px;">
                       🔴 ${r.check_out_local}
                     </span>
-                  ` : html`<span class="badge online" style="background:#f0fdf4; color:#166534; font-size:11px;">At Work (ডিউটিতে)</span>`}
+                  ` : (r.check_in_local && r.check_in_local !== '—') ? html`
+                    <span class="badge online" style="background:#f0fdf4; color:#166534; font-size:11px; font-weight:600; display:inline-flex; align-items:center; gap:3px;">
+                      🟢 On Duty
+                    </span>
+                  ` : html`<span class="muted">—</span>`}
                 </td>
                 <td class="r time">${fmtHours(r.worked_minutes)}</td>
                 <td class="r">${fmtMin(r.late_minutes)}</td>
