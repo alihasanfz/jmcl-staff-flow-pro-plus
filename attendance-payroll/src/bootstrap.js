@@ -38,6 +38,15 @@ async function firstRun() {
   const seed = require('./seed');
   await seed.seedReference();
 
+  // Set official company name
+  try {
+    await query(`
+      INSERT INTO settings (key, value)
+      VALUES ('company_name', '"Jeans Manufacturing Company Ltd."'::jsonb)
+      ON CONFLICT (key) DO UPDATE SET value = '"Jeans Manufacturing Company Ltd."'::jsonb
+    `);
+  } catch (_) {}
+
   // Ensure uFace 800 (09:30 AM – 07:00 PM) shift exists
   try {
     await query(`

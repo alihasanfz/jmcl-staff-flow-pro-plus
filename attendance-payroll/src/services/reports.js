@@ -167,21 +167,27 @@ function textValue(c, v, currency) {
   return String(v);
 }
 
-function periodLabel(p) { return p.month ? p.month : `${p.from} to ${p.to}`; }
+function periodLabel(p) {
+  if (p.month) return `Month: ${p.month}`;
+  if (p.from && p.to && p.from === p.to) return `Attendance Date: ${p.from}`;
+  return `Period: ${p.from} to ${p.to}`;
+}
 
 async function toXlsx(report, params) {
   const settings = await getSettings();
+  const companyName = settings.company_name || 'Jeans Manufacturing Company Ltd.';
   const wb = new ExcelJS.Workbook();
-  wb.creator = settings.company_name;
+  wb.creator = companyName;
   wb.created = new Date();
   const ws = wb.addWorksheet(report.title.slice(0, 31), { views: [{ state: 'frozen', ySplit: 4 }] });
   const n = report.columns.length;
 
   ws.mergeCells(1, 1, 1, n);
-  ws.getCell(1, 1).value = `${settings.company_name} — ${report.title}`;
-  ws.getCell(1, 1).font = { bold: true, size: 14, color: { argb: 'FF0F1B2A' } };
+  ws.getCell(1, 1).value = `JEANS MANUFACTURING COMPANY LTD. — ${report.title}`;
+  ws.getCell(1, 1).font = { bold: true, size: 14, color: { argb: 'FF0284C7' } };
   ws.mergeCells(2, 1, 2, n);
-  ws.getCell(2, 1).value = [report.subtitle || periodLabel(params), params.department ? `Department: ${params.department}` : null,
+  const termLabel = params.deviceSn ? `Terminal: ${params.deviceSn === 'RKQ4262500336' ? 'ZK-uFace 800' : params.deviceSn === 'VDE2251500160' ? 'SenseFace 7A' : params.deviceSn}` : 'All Terminals';
+  ws.getCell(2, 1).value = [report.subtitle || periodLabel(params), termLabel, params.department ? `Department: ${params.department}` : null,
     `Generated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`].filter(Boolean).join('  ·  ');
   ws.getCell(2, 1).font = { color: { argb: 'FF5B6B7C' }, size: 10 };
 
@@ -251,10 +257,11 @@ async function toPdf(report, params, res) {
     return y + rowH + 3;
   };
 
-  doc.font(f.bold).fontSize(15).fillColor(INK).text(`${settings.company_name}`, left, 36);
-  doc.font(f.regular).fontSize(11).fillColor(INK).text(report.title);
-  doc.fontSize(8.5).fillColor(MUTED).text([report.subtitle || periodLabel(params), params.department ? `Department: ${params.department}` : null,
-    `${report.rows.length} row${report.rows.length === 1 ? '' : 's'}`].filter(Boolean).join('   ·   '));
+  doc.font(f.bold).fontSize(16).fillColor('#0284c7').text('JEANS MANUFACTURING COMPANY LTD.', left, 34);
+  doc.font(f.bold).fontSize(11).fillColor(INK).text(report.title);
+  const termLabel = params.deviceSn ? `Terminal: ${params.deviceSn === 'RKQ4262500336' ? 'ZK-uFace 800' : params.deviceSn === 'VDE2251500160' ? 'SenseFace 7A' : params.deviceSn}` : 'All Terminals';
+  doc.fontSize(8.5).fillColor(MUTED).text([report.subtitle || periodLabel(params), termLabel, params.department ? `Department: ${params.department}` : null,
+    `${report.rows.length} record${report.rows.length === 1 ? '' : 's'}`].filter(Boolean).join('   ·   '));
   let y = doc.y + 10;
   y = header(y);
 

@@ -12,7 +12,7 @@ const cell = (c, v) => {
 export async function render(view, state) {
   const [{ types }, deptRes, userRes] = await Promise.all([get('/reports/types'), get('/users/departments'), get('/users?active=true')]);
   const today = state.meta.today;
-  const f = { type: 'attendance', from: addDays(today, -29), to: today, month: today.slice(0, 7), department: '', userId: '', status: '' };
+  const f = { type: 'attendance', from: today, to: today, month: today.slice(0, 7), department: '', userId: '', status: '' };
   let report = null;
   let chosen = null; // selected column keys
 
@@ -30,6 +30,11 @@ export async function render(view, state) {
           <label>Report<select name="type">${types.map((t) => html`<option value="${t.key}" ${t.key === f.type ? 'selected' : ''}>${t.title}</option>`)}</select></label>
           ${isPay ? html`<label>Month<input type="month" name="month" value="${f.month}"></label>` : html`
             <label>From<input type="date" name="from" value="${f.from}"></label><label>To<input type="date" name="to" value="${f.to}"></label>
+            <div class="row" style="gap:6px; align-items:center;">
+              <button type="button" class="btn sm" id="rep-today" style="border-radius:14px; font-size:11.5px; padding:2px 8px;">Today</button>
+              <button type="button" class="btn sm" id="rep-yest" style="border-radius:14px; font-size:11.5px; padding:2px 8px;">Yesterday</button>
+              <button type="button" class="btn sm" id="rep-month" style="border-radius:14px; font-size:11.5px; padding:2px 8px;">This Month</button>
+            </div>
             <label>Department<select name="department"><option value="">All</option>${deptRes.departments.map((d) => html`<option ${d === f.department ? 'selected' : ''}>${d}</option>`)}</select></label>
             <label>Employee<select name="userId"><option value="">Everyone</option>${userRes.users.map((u) => html`<option value="${u.id}" ${String(u.id) === f.userId ? 'selected' : ''}>${u.name}</option>`)}</select></label>`}
           ${f.type === 'attendance' ? html`<label>Status<select name="status"><option value="">All working days</option>${['present', 'late', 'half_day', 'absent', 'leave', 'unpaid_leave'].map((s) => html`<option value="${s}" ${s === f.status ? 'selected' : ''}>${s.replace('_', ' ')}</option>`)}</select></label>` : ''}
@@ -38,6 +43,10 @@ export async function render(view, state) {
         </form>
         <div id="out"></div>
       </div>`);
+
+    $('#rep-today')?.addEventListener('click', () => { f.from = today; f.to = today; shell(); preview(); });
+    $('#rep-yest')?.addEventListener('click', () => { const y = addDays(today, -1); f.from = y; f.to = y; shell(); preview(); });
+    $('#rep-month')?.addEventListener('click', () => { f.from = today.slice(0, 7) + '-01'; f.to = today; shell(); preview(); });
     $('#form').addEventListener('submit', (e) => {
       e.preventDefault();
       const prevType = f.type;

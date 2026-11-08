@@ -93,7 +93,12 @@ async function recentPunches(limit = 12) {
   const { timezone: tz } = await getSettings();
   const { rows } = await query(
     `SELECT p.id, COALESCE(u.name, 'Unknown PIN ' || p.pin) AS name, p.pin, (p.user_id IS NULL) AS unknown, p.source,
-            to_char(p.punched_at AT TIME ZONE $1, 'YYYY-MM-DD HH24:MI:SS') AS at, d.name AS device
+            p.state,
+            to_char(p.punched_at AT TIME ZONE $1, 'YYYY-MM-DD HH24:MI:SS') AS at,
+            to_char(p.punched_at AT TIME ZONE $1, 'HH12:MI:SS AM') AS time_12h,
+            CASE WHEN to_char(p.punched_at AT TIME ZONE $1, 'HH24:MI:SS') < '16:00:00' THEN 'IN' ELSE 'OUT' END AS punch_type,
+            COALESCE(d.name, p.device_sn) AS device,
+            p.device_sn
        FROM punch_logs p LEFT JOIN users u ON u.id = p.user_id LEFT JOIN devices d ON d.id = p.device_id
       ORDER BY p.punched_at DESC LIMIT $2`, [tz, limit]);
   return rows;
@@ -101,8 +106,23 @@ async function recentPunches(limit = 12) {
 
 async function deviceStatus() {
   const { rows } = await query(
-    `SELECT id, name, serial_number, location, online, approved, active, last_seen FROM devices ORDER BY name`);
-  return rows;
+    `SELECT id, name, serial_number, model, location, online, approved, active, last_seen,
+            ROUND(EXTRACT(EPOCH FROM (now() - last_seen)))::int AS diff_sec
+       FROM devices ORDER BY id ASC`);
+
+  const dhakaNow = new Date();
+  const deviceClockStr = dhakaNow.toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+  const deviceDateStr = dhakaNow.toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka', day: '2-digit', month: 'short', year: 'numeric' });
+
+  return rows.map((d) => {
+    const isOnline = d.diff_sec !== null && d.diff_sec < 900;
+    return {
+      ...d,
+      online: isOnline,
+      device_clock: deviceClockStr,
+      device_date: deviceDateStr,
+    };
+  });
 }
 
 /** Self-service summary for Staff users. */

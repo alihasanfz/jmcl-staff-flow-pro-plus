@@ -6,7 +6,8 @@ import { t } from '../i18n.js';
 export async function render(view, state) {
   const isMgr = ['admin', 'company_admin', 'super_admin', 'hr_manager', 'hr_executive', 'hr', 'accounts_manager', 'dept_manager'].includes(state.user.role);
   const today = state.meta.today;
-  const f = { from: addDays(today, -13), to: today, userId: '', department: '', status: '', deviceSn: '' };
+  // Default to today so single-date daily attendance is shown immediately
+  const f = { from: today, to: today, userId: '', department: '', status: '', deviceSn: '' };
   let tab = 'daily';
   let users = [];
   let departments = [];
@@ -69,14 +70,26 @@ export async function render(view, state) {
         </div>
 
         ${isMgr ? html`
-          <div class="row between">
+          <div class="row between" style="margin-bottom:10px; flex-wrap:wrap; gap:8px; align-items:center;">
             <div class="tabs" role="tablist" style="margin-bottom:0">
               <button role="tab" data-tab="daily" aria-selected="${tab === 'daily'}">Daily records</button>
               <button role="tab" data-tab="punches" aria-selected="${tab === 'punches'}">Raw punches</button>
             </div>
-            ${tab === 'daily' ? html`
-              <button class="btn primary" id="add-att-btn">${icon('plus')} Add Attendance Record</button>
-            ` : ''}
+            <div class="row" style="gap:6px; flex-wrap:wrap;">
+              <span style="font-size:11px; font-weight:700; color:var(--text-muted); align-self:center; text-transform:uppercase;">Quick Date:</span>
+              <button type="button" class="btn sm ${f.from === today && f.to === today ? 'primary' : ''}" id="btn-quick-today" style="border-radius:16px; padding:3px 10px; font-size:12px;">
+                📅 Today (${today})
+              </button>
+              <button type="button" class="btn sm ${f.from === addDays(today, -1) && f.to === addDays(today, -1) ? 'primary' : ''}" id="btn-quick-yesterday" style="border-radius:16px; padding:3px 10px; font-size:12px;">
+                ⏮ Yesterday
+              </button>
+              <button type="button" class="btn sm ${f.from === addDays(today, -6) ? 'primary' : ''}" id="btn-quick-7d" style="border-radius:16px; padding:3px 10px; font-size:12px;">
+                Last 7 Days
+              </button>
+              ${tab === 'daily' ? html`
+                <button class="btn primary sm" id="add-att-btn" style="border-radius:16px; padding:3px 12px; font-size:12px; margin-left:8px;">${icon('plus')} Add Record</button>
+              ` : ''}
+            </div>
           </div>
         ` : ''}
 
@@ -172,8 +185,27 @@ export async function render(view, state) {
       load();
     });
 
+    $('#btn-quick-today')?.addEventListener('click', () => {
+      f.from = today; f.to = today;
+      shell(); load();
+    });
+
+    $('#btn-quick-yesterday')?.addEventListener('click', () => {
+      const yest = addDays(today, -1);
+      f.from = yest; f.to = yest;
+      shell(); load();
+    });
+
+    $('#btn-quick-7d')?.addEventListener('click', () => {
+      f.from = addDays(today, -6); f.to = today;
+      shell(); load();
+    });
+
     $('#download-pdf')?.addEventListener('click', () => {
-      const url = `/api/reports/attendance?format=pdf&from=${encodeURIComponent(f.from)}&to=${encodeURIComponent(f.to)}`
+      // Strictly download for the selected single date or chosen date range
+      const targetFrom = f.from || f.to || today;
+      const targetTo = f.to || f.from || today;
+      const url = `/api/reports/attendance?format=pdf&from=${encodeURIComponent(targetFrom)}&to=${encodeURIComponent(targetTo)}`
         + (f.department ? `&department=${encodeURIComponent(f.department)}` : '')
         + (f.status ? `&status=${encodeURIComponent(f.status)}` : '')
         + (f.deviceSn ? `&deviceSn=${encodeURIComponent(f.deviceSn)}` : '');
@@ -181,7 +213,9 @@ export async function render(view, state) {
     });
 
     $('#download-excel')?.addEventListener('click', () => {
-      const url = `/api/reports/attendance?format=xlsx&from=${encodeURIComponent(f.from)}&to=${encodeURIComponent(f.to)}`
+      const targetFrom = f.from || f.to || today;
+      const targetTo = f.to || f.from || today;
+      const url = `/api/reports/attendance?format=xlsx&from=${encodeURIComponent(targetFrom)}&to=${encodeURIComponent(targetTo)}`
         + (f.department ? `&department=${encodeURIComponent(f.department)}` : '')
         + (f.status ? `&status=${encodeURIComponent(f.status)}` : '')
         + (f.deviceSn ? `&deviceSn=${encodeURIComponent(f.deviceSn)}` : '');
@@ -260,7 +294,17 @@ export async function render(view, state) {
                     `}
                   </td>
                   <td><span class="badge ${r.source === 'device' ? 'online' : 'waiting'}">${r.source}</span></td>
-                  <td>${r.state === 0 ? 'Check-in' : r.state === 1 ? 'Check-out' : r.state ?? '—'}</td>
+                  <td>
+                    ${(() => {
+                      const timeStr = r.at ? r.at.split(' ')[1] || '' : '';
+                      const hour = parseInt(timeStr.split(':')[0] || '12', 10);
+                      const isOut = r.state === 1 && hour >= 16;
+                      if (isOut) {
+                        return html`<span class="badge" style="background:#fee2e2; color:#991b1b; font-weight:700;">🔴 Check-out (OUT)</span>`;
+                      }
+                      return html`<span class="badge" style="background:#dcfce7; color:#15803d; font-weight:700;">🟢 Check-in (IN)</span>`;
+                    })()}
+                  </td>
                 </tr>
               `)}
             </tbody>
@@ -283,8 +327,8 @@ export async function render(view, state) {
               ${isMgr ? html`<th>Employee</th>` : ''}
               <th>Terminal</th>
               <th>Shift</th>
-              <th>In</th>
-              <th>Out</th>
+              <th>In Time (IN)</th>
+              <th>Out Time (OUT)</th>
               <th class="r">Worked</th>
               <th class="r">Late</th>
               <th class="r">Early out</th>
@@ -317,8 +361,20 @@ export async function render(view, state) {
                   `}
                 </td>
                 <td class="muted small">${r.shift_name || '—'}</td>
-                <td><b class="time">${r.check_in_local || '—'}</b></td>
-                <td><b class="time">${r.check_out_local || (r.missing_checkout ? html`<span class="badge late">Missing</span>` : '—')}</b></td>
+                <td>
+                  ${r.check_in_local && r.check_in_local !== '—' ? html`
+                    <span style="font-weight:700; color:#15803d; font-family:monospace; display:inline-flex; align-items:center; gap:4px;">
+                      🟢 ${r.check_in_local}
+                    </span>
+                  ` : html`<span class="muted">—</span>`}
+                </td>
+                <td>
+                  ${r.check_out_local && r.check_out_local !== '—' ? html`
+                    <span style="font-weight:700; color:#dc2626; font-family:monospace; display:inline-flex; align-items:center; gap:4px;">
+                      🔴 ${r.check_out_local}
+                    </span>
+                  ` : html`<span class="badge online" style="background:#f0fdf4; color:#166534; font-size:11px;">At Work (ডিউটিতে)</span>`}
+                </td>
                 <td class="r time">${fmtHours(r.worked_minutes)}</td>
                 <td class="r">${fmtMin(r.late_minutes)}</td>
                 <td class="r">${fmtMin(r.early_out_minutes)}</td>

@@ -6,7 +6,7 @@ const { DEFAULT_RULES: PAYROLL_DEFAULTS } = require('../logic/payrollCalc');
 const { DEFAULT_RULES: ATTENDANCE_DEFAULTS } = require('../logic/attendanceRules');
 
 const DEFAULTS = {
-  company_name: 'JMCL Staff Flow Pro',
+  company_name: 'Jeans Manufacturing Company Ltd.',
   currency: 'BDT',
   timezone: config.defaultTimezone,
   attendance: {

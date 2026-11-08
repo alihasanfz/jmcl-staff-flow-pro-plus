@@ -685,3 +685,204 @@ svg {
   flex-shrink: 0 !important;
   vertical-align: middle !important;
 }
+
+/* ========================================================
+   High-End Biometric Dashboard & Live Terminal Gateway UI
+   ======================================================== */
+.live-gateway-banner {
+  background: linear-gradient(135deg, rgba(14, 28, 43, 0.95), rgba(10, 37, 64, 0.92));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 18px 22px;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  margin-bottom: 20px;
+}
+[data-theme="light"] .live-gateway-banner {
+  background: linear-gradient(135deg, #0f172a, #1e293b);
+  border: 1px solid #334155;
+}
+.gateway-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 16px;
+}
+.gateway-title-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.gateway-title-text h1 {
+  font-size: 19px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  color: #fff;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gateway-title-text span {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+.gateway-terminals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+.gateway-terminal-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+.gateway-terminal-card:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  transform: translateY(-1px);
+}
+.gateway-terminal-card.uface {
+  border-left: 4px solid #0284c7;
+}
+.gateway-terminal-card.senseface {
+  border-left: 4px solid #a855f7;
+}
+.term-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.term-name {
+  font-weight: 700;
+  font-size: 14.5px;
+  color: #f8fafc;
+}
+.term-meta {
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+.pulse-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.pulse-badge.online {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.glowing-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #22c55e;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+  animation: pulseGlow 1.8s infinite;
+}
+@keyframes pulseGlow {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+.term-readout-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1.1fr 1.2fr;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  align-items: center;
+}
+.readout-col {
+  display: flex;
+  flex-direction: column;
+}
+.readout-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.readout-val {
+  font-size: 15px;
+  font-weight: 750;
+  color: #f1f5f9;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.readout-val.clock {
+  color: #38bdf8;
+}
+.readout-sub {
+  font-size: 11px;
+  color: #10b981;
+  font-weight: 600;
+}
+
+/* Stylish KPI Grid */
+.modern-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.modern-kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+.modern-kpi-card .kpi-num {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.modern-kpi-card .kpi-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.modern-kpi-card .kpi-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+}
+.modern-kpi-card.kpi-present .kpi-bar { background: #22c55e; }
+.modern-kpi-card.kpi-present .kpi-num { color: #16a34a; }
+.modern-kpi-card.kpi-late .kpi-bar { background: #f59e0b; }
+.modern-kpi-card.kpi-late .kpi-num { color: #d97706; }
+.modern-kpi-card.kpi-absent .kpi-bar { background: #ef4444; }
+.modern-kpi-card.kpi-absent .kpi-num { color: #dc2626; }
+.modern-kpi-card.kpi-expected .kpi-bar { background: #0284c7; }
+.modern-kpi-card.kpi-leave .kpi-bar { background: #8b5cf6; }
+.modern-kpi-card.kpi-ot .kpi-bar { background: #06b6d4; }
+

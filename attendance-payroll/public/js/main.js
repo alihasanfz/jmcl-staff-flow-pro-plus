@@ -104,7 +104,7 @@ async function render() {
   const cur = nav.find((n) => n.path === path);
   const localizedLabel = t(cur.key) || cur.label;
   $('#page-title').textContent = localizedLabel;
-  document.title = `${localizedLabel} · ${state.meta.company || 'JMCL Staff Flow Pro'}`;
+  document.title = `${localizedLabel} · ${state.meta.company || 'Jeans Manufacturing Company Ltd.'}`;
 
   const view = $('#view');
   if (cleanup) { try { cleanup(); } catch { /* ignore */ } cleanup = null; }
@@ -129,7 +129,7 @@ function buildShell(nav) {
       <aside class="sidebar">
         <div class="brand">
           <img src="/icons/icon-192.png" alt="">
-          <span>${state.meta.company || 'JMCL Staff Flow Pro'}</span>
+          <span>${state.meta.company || 'Jeans Manufacturing Company Ltd.'}</span>
         </div>
         <nav class="nav" aria-label="Main">
           ${nav.map((n) => html`
