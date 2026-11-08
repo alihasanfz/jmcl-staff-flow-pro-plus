@@ -250,8 +250,9 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
                         WHEN MAX(pl.punched_at) > MIN(pl.punched_at)
                              AND (
                                a.work_date < (now() AT TIME ZONE $1)::date
-                               OR EXTRACT(HOUR FROM MAX(pl.punched_at) AT TIME ZONE $1) >= 18
+                               OR EXTRACT(HOUR FROM MAX(pl.punched_at) AT TIME ZONE $1) >= 15
                                OR MAX(COALESCE(pl.state, 0)) = 1
+                               OR MAX(pl.punched_at) >= MIN(pl.punched_at) + interval '2 hours'
                              )
                         THEN to_char(MAX(pl.punched_at) AT TIME ZONE $1, 'HH24:MI')
                         ELSE NULL

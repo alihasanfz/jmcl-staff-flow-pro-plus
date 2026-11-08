@@ -53,9 +53,12 @@ export async function render(view, state) {
           </div>
 
           ${f.deviceSn === 'RKQ4262500336' ? html`
-            <div style="margin-top:10px; padding:10px 14px; background:rgba(2,132,199,0.06); border-left:3px solid #0284c7; border-radius:6px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-              <div style="font-size:12.5px; color:#0369a1;">
-                <b>🏢 ZKTeco Terminal (ZK-UFACE800-01) Filtered Attendance:</b> Showing official shift time-attendance punches (<b>09:30 AM to 07:00 PM</b>).
+            <div style="margin-top:10px; padding:12px 16px; background:rgba(2,132,199,0.06); border-left:3px solid #0284c7; border-radius:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+              <div style="font-size:12.5px; color:#0369a1; line-height:1.45;">
+                <b>🏢 ZKTeco Terminal (ZK-UFACE800-01) Filtered Attendance:</b> Official shift time-attendance (<b>09:30 AM to 07:00 PM</b>).
+                <div style="font-size:11.5px; color:#0284c7; margin-top:3px;">
+                  ℹ️ <b>Out Time Note:</b> Employees are currently on duty. Out Time will automatically record and appear in red (🔴) as soon as staff punch on the uFace 800 machine at shift checkout.
+                </div>
               </div>
               <span class="badge online" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;">SN: RKQ4262500336</span>
             </div>
@@ -404,6 +407,14 @@ export async function render(view, state) {
                   ${r.check_out_local && r.check_out_local !== '—' ? html`
                     <span style="font-weight:700; color:#dc2626; font-family:monospace; display:inline-flex; align-items:center; gap:4px;">
                       🔴 ${r.check_out_local}
+                    </span>
+                  ` : r.check_in_local && r.check_in_local !== '—' && r.work_date === today ? html`
+                    <span class="badge" style="background:rgba(16,185,129,0.1); color:#15803d; border:1px solid rgba(16,185,129,0.25); font-weight:600; font-size:11px; white-space:nowrap;">
+                      🟢 At Work (Shift to 07:00 PM)
+                    </span>
+                  ` : r.check_in_local && r.check_in_local !== '—' && r.work_date < today ? html`
+                    <span class="badge" style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; font-size:11px; font-weight:600;">
+                      ⚠️ Missing Checkout
                     </span>
                   ` : html`<span class="muted font-mono">—</span>`}
                 </td>
