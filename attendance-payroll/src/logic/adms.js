@@ -71,7 +71,7 @@ function handshakeResponse(serial, attlogStamp) {
     'ServerVer=3.4.1',
     'PushVersion=3.2.1',
     'TimeZone=6',
-    'SyncTime=1',
+    'SyncTime=0',
     '',
   ].join('\n');
 }

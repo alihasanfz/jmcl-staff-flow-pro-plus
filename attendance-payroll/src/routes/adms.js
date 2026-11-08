@@ -84,7 +84,7 @@ async function identify(req, res) {
       ({ rows: [d] } = await query(
         `INSERT INTO devices (name, serial_number, approved, active, online, last_seen, last_ip)
          VALUES ($1, $2, true, true, true, now(), $3)
-         ON CONFLICT (serial_number) DO UPDATE SET last_seen = now(), last_ip = EXCLUDED.last_ip, online = true, approved = true
+         ON CONFLICT (serial_number) DO UPDATE SET last_seen = now(), last_ip = EXCLUDED.last_ip, online = true, approved = true, active = true
          RETURNING *`,
         [`ZKTeco Terminal (${sn})`, sn, ip]
       ));
@@ -434,18 +434,8 @@ async function handleGetRequest(req, res) {
     return res.status(200).type('text/plain').send(`C:${nextCmd.id}:${nextCmd.cmd}\n`);
   }
 
-  // Auto-sync device clock once every 60 minutes so it never drifts or auto-changes
-  const now = Date.now();
-  const lastSync = lastTimeSync.get(snKey) || 0;
-  if (now - lastSync >= 3600000) { // 1 hour
-    const { id, time } = queueTimeSync(d.serial_number);
-    const queued = commandQueue.get(snKey);
-    if (queued && queued.length > 0) {
-      const nextCmd = queued.shift();
-      console.log(`[adms-cmd] Auto-syncing time to ${d.serial_number}: C:${nextCmd.id}:${nextCmd.cmd}`);
-      return res.status(200).type('text/plain').send(`C:${nextCmd.id}:${nextCmd.cmd}\n`);
-    }
-  }
+  // Auto-sync disabled: Machine hardware clock is NEVER modified automatically.
+  // Time sync only occurs if manually triggered by an administrator from the Web UI.
 
   // Periodic device log flush check every 15 minutes to guarantee all punches in machine memory are pushed
   const lastCheck = lastCheckCmd.get(snKey) || 0;

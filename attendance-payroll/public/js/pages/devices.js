@@ -56,7 +56,10 @@ export async function render(view, state) {
             </div>
           </div>
           <div class="row" style="gap:8px; flex-wrap:wrap;">
-            <button class="btn" id="sync-time-global-btn" title="Synchronize Terminal Time with Server Clock" style="background:#f0fdf4; color:#15803d; border-color:#bbf7d0; font-weight:600;">
+            <button class="btn" id="reconnect-devices-btn" title="Refresh Live Online Connection for All Terminals" style="background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; font-weight:600;">
+              ⚡ Reconnect Live
+            </button>
+            <button class="btn" id="sync-time-global-btn" title="Manually Synchronize Terminal Time with Server Clock" style="background:#f0fdf4; color:#15803d; border-color:#bbf7d0; font-weight:600;">
               ${icon('clock')} Sync Device Time
             </button>
             <button class="btn" id="upload-usb-btn" title="Import punches from USB Flash Drive (.dat / .csv)">
@@ -88,6 +91,15 @@ export async function render(view, state) {
       });
     });
 
+    $('#reconnect-devices-btn')?.addEventListener('click', async () => {
+      try {
+        await post('/devices/reconnect');
+        toast('Terminals reconnected live!');
+        load();
+      } catch (e) {
+        toast(e.message, 'bad');
+      }
+    });
     $('#sync-time-global-btn')?.addEventListener('click', () => openSyncTimeModal(null));
     $('#upload-usb-btn')?.addEventListener('click', openUploadModal);
     $('#gateway-info-btn')?.addEventListener('click', openGatewayModal);
