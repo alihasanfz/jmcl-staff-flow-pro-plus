@@ -68,6 +68,7 @@ router.get('/', wrap(async (req, res) => {
     const isPrimaryTerminal = ['RKQ4262500336', 'VDE2251500160'].includes(String(d.serial_number || '').trim().toUpperCase());
     // A registered device stays Online if it has communicated recently or is a primary terminal
     const isOnline = Boolean(d.online) || isPrimaryTerminal || (diffSec !== null && diffSec < (86400 * 7));
+    const isStandby = false;
     const state = !d.approved ? 'pending' : (!d.active && !isPrimaryTerminal) ? 'disabled' : isOnline ? 'online' : 'offline';
 
     // Terminal Clock & Date formatted in Bangladesh Standard Time (Asia/Dhaka)
