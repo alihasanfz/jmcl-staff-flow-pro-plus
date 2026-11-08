@@ -61,10 +61,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .topbar .date { color: var(--muted); font-size: 13px; }
 .view { padding: 24px 28px 56px; max-width: 1360px; width: 100%; }
 
+[hidden] { display: none !important; }
+
 .bell { position: relative; background: none; border: 1px solid var(--line); border-radius: 8px; width: 38px; height: 38px; cursor: pointer; display: grid; place-items: center; }
 .bell:hover { background: var(--paper); }
 .bell svg { width: 18px; height: 18px; }
 .bell .count { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--bad); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+.bell .count[hidden] { display: none !important; }
 .panel-pop { position: fixed; top: 60px; right: 20px; width: min(400px, calc(100vw - 24px)); max-height: min(70vh, 560px); overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 40px rgba(14, 28, 43, .18); z-index: 40; }
 .panel-pop header { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); }
 .notif { display: grid; grid-template-columns: 10px 1fr; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line-2); cursor: pointer; }

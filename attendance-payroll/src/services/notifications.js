@@ -57,7 +57,9 @@ async function notifyRoles(roles, payload) {
   const { rows } = await query('SELECT id FROM users WHERE active AND role = ANY($1)', [roles]);
   await notifyUsers(rows.map((r) => r.id), payload);
 }
-/** Attendance exceptions go to HR and Admin. */
-const notifyManagers = (payload) => notifyRoles(['admin', 'hr'], payload);
+/** Attendance exceptions and biometric event notifications go to all Admin and HR managers. */
+const notifyManagers = (payload) => notifyRoles([
+  'admin', 'company_admin', 'super_admin', 'hr', 'hr_manager', 'hr_executive', 'accounts_manager', 'dept_manager'
+], payload);
 
 module.exports = { initPush, getPublicKey, sendPush, notifyUsers, notifyRoles, notifyManagers };

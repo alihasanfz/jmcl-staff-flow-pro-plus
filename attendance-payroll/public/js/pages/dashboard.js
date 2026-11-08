@@ -113,11 +113,11 @@ async function renderManager(view, state) {
             <div class="gateway-terminal-card senseface">
               <div class="term-card-top">
                 <div>
-                  <div class="term-name">👤 ZKTeco Terminal (VDE2251500160)</div>
-                  <div class="term-meta">Model: <b>SenseFace 7A</b> · SN: <code>VDE2251500160</code> · Head_Office</div>
+                  <div class="term-name">🚪 ZKTeco Terminal (VDE2251500160)</div>
+                  <div class="term-meta">Model: <b>SenseFace 7A</b> · SN: <code>VDE2251500160</code> · Factory Barrier Gate</div>
                 </div>
                 <span class="pulse-badge online">
-                  <span class="glowing-dot"></span> LIVE
+                  <span class="glowing-dot"></span> GATE ACTIVE
                 </span>
               </div>
               <div class="term-readout-row">
@@ -130,8 +130,8 @@ async function renderManager(view, state) {
                   <span class="readout-val" id="senseface-live-date">-- --- ----</span>
                 </div>
                 <div class="readout-col">
-                  <span class="readout-label">Assigned Shift</span>
-                  <span class="readout-sub">General Staff</span>
+                  <span class="readout-label">Terminal Role</span>
+                  <span class="readout-sub" style="color:#a855f7; font-weight:700;">🚪 Barrier Gate Access</span>
                 </div>
               </div>
             </div>
@@ -252,7 +252,7 @@ async function renderManager(view, state) {
                             </span>
                           ` : html`
                             <span class="badge" style="background:#f3e8ff; color:#7e22ce; border:1px solid #e9d5ff; font-weight:600;">
-                              👤 SenseFace 7A
+                              🚪 SenseFace 7A (Gate)
                             </span>
                           `}
                         </td>
@@ -261,18 +261,14 @@ async function renderManager(view, state) {
                             <span style="font-weight:700; color:#15803d; font-family:monospace; display:inline-flex; align-items:center; gap:4px;">
                               🟢 IN: ${r.checkIn}
                             </span>
-                          ` : html`<span class="muted small">—</span>`}
+                          ` : html`<span class="muted small font-mono">—</span>`}
                         </td>
                         <td style="padding:10px 16px;">
                           ${r.checkOut ? html`
                             <span style="font-weight:700; color:#dc2626; font-family:monospace; display:inline-flex; align-items:center; gap:4px;">
                               🔴 OUT: ${r.checkOut}
                             </span>
-                          ` : r.checkIn ? html`
-                            <span class="badge online" style="background:#f0fdf4; color:#166534; font-size:11px; font-weight:600;">
-                              🟢 On Duty
-                            </span>
-                          ` : html`<span class="muted small">—</span>`}
+                          ` : html`<span class="muted small font-mono">—</span>`}
                         </td>
                         <td style="padding:10px 16px;">${badge(r.state)}</td>
                       </tr>
@@ -320,7 +316,7 @@ async function renderManager(view, state) {
                     </span>
                     <div>
                       <b>${p.name}</b>
-                      <span class="small muted"> · ${p.device && p.device.includes('RKQ') ? '🏢 uFace 800' : p.device && p.device.includes('VDE') ? '👤 SenseFace 7A' : (p.device || p.source)}</span>
+                      <span class="small muted"> · ${p.device && p.device.includes('RKQ') ? '🏢 uFace 800' : p.device && p.device.includes('VDE') ? '🚪 SenseFace 7A (Gate)' : (p.device || p.source)}</span>
                     </div>
                   </div>
                   <span class="time muted" style="font-weight:600; font-size:12.5px;">${p.time_12h || p.at.slice(11, 19)}</span>

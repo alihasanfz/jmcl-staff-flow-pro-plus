@@ -47,9 +47,13 @@ router.get('/live', wrap(async (req, res) => {
       LEFT JOIN devices d ON UPPER(d.serial_number) = UPPER(COALESCE(a.check_in_device_sn, a.device_sn, u.primary_device_sn))
      WHERE u.active = true
        AND ($3::text IS NULL OR (
-         UPPER(COALESCE(a.device_sn, '')) = UPPER($3)
-         OR UPPER(COALESCE(a.check_in_device_sn, '')) = UPPER($3)
-         OR UPPER(COALESCE(u.primary_device_sn, '')) = UPPER($3)
+         UPPER(COALESCE(a.check_in_device_sn, a.device_sn, '')) = UPPER($3)
+         OR EXISTS (
+           SELECT 1 FROM punch_logs pl
+            WHERE pl.user_id = u.id
+              AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = $2::text
+              AND UPPER(pl.device_sn) = UPPER($3)
+         )
        ))
      ORDER BY (a.check_in IS NOT NULL) DESC, a.check_in DESC, u.name
   `, [timezone, today, devSn]);

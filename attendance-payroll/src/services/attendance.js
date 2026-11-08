@@ -209,21 +209,71 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
   if (userId) { params.push(userId); where += ` AND a.user_id = $${params.length}`; }
   if (department) { params.push(department); where += ` AND u.department = $${params.length}`; }
   if (status) { params.push(status); where += ` AND a.status = $${params.length}`; }
+
   if (deviceSn) {
     params.push(deviceSn);
+    const snParam = `$${params.length}`;
     where += ` AND (
-      UPPER(COALESCE(a.device_sn, '')) = UPPER($${params.length})
-      OR UPPER(COALESCE(a.check_in_device_sn, '')) = UPPER($${params.length})
-      OR UPPER(COALESCE(a.check_out_device_sn, '')) = UPPER($${params.length})
-      OR UPPER(COALESCE(u.primary_device_sn, '')) = UPPER($${params.length})
+      UPPER(COALESCE(a.check_in_device_sn, a.device_sn, '')) = UPPER(${snParam})
       OR EXISTS (
         SELECT 1 FROM punch_logs pl
-        WHERE pl.user_id = a.user_id
-          AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
-          AND UPPER(pl.device_sn) = UPPER($${params.length})
+         WHERE pl.user_id = a.user_id
+           AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
+           AND UPPER(pl.device_sn) = UPPER(${snParam})
       )
     )`;
+
+    params.push(limit);
+    const limitParam = `$${params.length}`;
+
+    // Select punch times specifically for THIS device so device data is 100% separate
+    const { rows } = await query(
+      `SELECT a.id, a.user_id, u.name, u.employee_code, u.department, a.work_date::text AS work_date, a.status,
+              COALESCE(
+                (SELECT to_char(MIN(pl.punched_at) AT TIME ZONE $1, 'HH24:MI')
+                   FROM punch_logs pl
+                  WHERE pl.user_id = a.user_id
+                    AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
+                    AND UPPER(pl.device_sn) = UPPER(${snParam})),
+                to_char(a.check_in AT TIME ZONE $1, 'HH24:MI')
+              ) AS check_in_local,
+              (SELECT CASE
+                        WHEN MAX(pl.punched_at) > MIN(pl.punched_at)
+                             AND (
+                               a.work_date < (now() AT TIME ZONE $1)::date
+                               OR EXTRACT(HOUR FROM MAX(pl.punched_at) AT TIME ZONE $1) >= 18
+                               OR MAX(COALESCE(pl.state, 0)) = 1
+                             )
+                        THEN to_char(MAX(pl.punched_at) AT TIME ZONE $1, 'HH24:MI')
+                        ELSE NULL
+                      END
+                 FROM punch_logs pl
+                WHERE pl.user_id = a.user_id
+                  AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
+                  AND UPPER(pl.device_sn) = UPPER(${snParam})
+              ) AS check_out_local,
+              a.worked_minutes, a.late_minutes, a.early_out_minutes, a.overtime_minutes,
+              a.missing_checkout, a.off_day_work,
+              COALESCE(
+                (SELECT COUNT(*)::int FROM punch_logs pl
+                  WHERE pl.user_id = a.user_id
+                    AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
+                    AND UPPER(pl.device_sn) = UPPER(${snParam})),
+                a.punch_count
+              ) AS punch_count,
+              s.name AS shift_name,
+              COALESCE(d.name, ${snParam}) AS device_name,
+              ${snParam} AS device_sn
+         FROM attendance a
+         JOIN users u ON u.id = a.user_id
+         LEFT JOIN shifts s ON s.id = a.shift_id
+         LEFT JOIN devices d ON UPPER(d.serial_number) = UPPER(${snParam})
+        WHERE ${where}
+        ORDER BY a.work_date DESC, u.name
+        LIMIT ${limitParam}`, params);
+    return rows;
   }
+
   params.push(limit);
   const { rows } = await query(
     `SELECT a.id, a.user_id, u.name, u.employee_code, u.department, a.work_date::text AS work_date, a.status,
@@ -231,8 +281,8 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
             to_char(a.check_out AT TIME ZONE $1, 'HH24:MI') AS check_out_local,
             a.worked_minutes, a.late_minutes, a.early_out_minutes, a.overtime_minutes,
             a.missing_checkout, a.off_day_work, a.punch_count, s.name AS shift_name,
-            COALESCE(d.name, a.device_sn, a.check_in_device_sn, '—') AS device_name,
-            COALESCE(a.device_sn, a.check_in_device_sn, u.primary_device_sn, '') AS device_sn
+            COALESCE(d.name, a.check_in_device_sn, a.device_sn, '—') AS device_name,
+            COALESCE(a.check_in_device_sn, a.device_sn, u.primary_device_sn, '') AS device_sn
        FROM attendance a
        JOIN users u ON u.id = a.user_id
        LEFT JOIN shifts s ON s.id = a.shift_id

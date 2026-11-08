@@ -308,6 +308,23 @@ async function handleUpload(req, res) {
   for (const t of result.touched) await checkLate(t.userId, t.date);
   if (result.unknownPins.length) await unknownPunch(d, result.unknownPins);
 
+  if (result.inserted > 0) {
+    const isGate = String(d.serial_number).toUpperCase() === 'VDE2251500160' || (d.model && d.model.toLowerCase().includes('gate'));
+    const timeNow = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit' });
+    await notifyManagers({
+      type: isGate ? 'gate-access' : 'punch-sync',
+      severity: 'info',
+      title: isGate
+        ? `🚪 Gate Access: ${result.inserted} Passage${result.inserted === 1 ? '' : 's'}`
+        : `🏢 Biometric Sync: ${result.inserted} Punch${result.inserted === 1 ? '' : 'es'} Synced`,
+      body: isGate
+        ? `${d.name} unlocked barrier gate (${result.inserted} swipe${result.inserted === 1 ? '' : 's'}) at ${timeNow}.`
+        : `Synchronized ${result.inserted} biometric punch(es) from ${d.name} at ${timeNow}.`,
+      url: '/attendance',
+      dedupe: `punch-sync:${d.serial_number}:${Date.now().toString().slice(0, -4)}`,
+    }).catch(() => {});
+  }
+
   const stamp = getParam(req.query, 'Stamp');
   if (stamp) {
     await query('UPDATE devices SET last_seen = now(), last_punch_at = now(), attlog_stamp = $2, online = true WHERE id = $1', [d.id, stamp.slice(0, 40)]);

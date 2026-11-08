@@ -73,6 +73,22 @@ async function scan() {
         body: list(missing.map((m) => m.name)), url: '/attendance', dedupe: `not-in:${today}`,
       });
     }
+
+    // Periodic attendance summary for managers
+    const { rows: todayAtt } = await query(
+      `SELECT COUNT(*) FILTER (WHERE status IN ('present', 'late', 'half_day'))::int AS present,
+              COUNT(*) FILTER (WHERE late_minutes > 0)::int AS late,
+              COUNT(*)::int AS total
+         FROM attendance WHERE work_date = $1`, [today]
+    );
+    if (todayAtt[0] && todayAtt[0].present > 0) {
+      await notifyManagers({
+        type: 'attendance-summary', severity: 'info',
+        title: `Biometric Attendance: ${todayAtt[0].present} Present`,
+        body: `Live update: ${todayAtt[0].present} present (${todayAtt[0].late} late) out of ${todayAtt[0].total} employees active.`,
+        url: '/attendance', dedupe: `shift-status:${today}:${Math.floor(nowMin / 60)}`,
+      }).catch(() => {});
+    }
   }
 
   // 3) Finished days (yesterday, and today once the shift has ended).

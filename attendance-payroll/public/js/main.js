@@ -308,11 +308,18 @@ async function refreshBell() {
     const { unread } = await get('/notifications');
     const c = $('#bell-count');
     if (!c) return;
-    c.textContent = unread > 99 ? '99+' : unread;
-    c.hidden = !unread;
+    const num = Number(unread) || 0;
+    c.textContent = num > 99 ? '99+' : String(num);
+    if (num > 0) {
+      c.removeAttribute('hidden');
+      c.style.display = 'grid';
+    } else {
+      c.setAttribute('hidden', '');
+      c.style.display = 'none';
+    }
   } catch { /* ignore transient errors */ }
 }
-function startBellPolling() { stopBellPolling(); refreshBell(); pollTimer = setInterval(refreshBell, 30_000); }
+function startBellPolling() { stopBellPolling(); refreshBell(); pollTimer = setInterval(refreshBell, 15_000); }
 function stopBellPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = null; }
 
 async function toggleNotifications() {

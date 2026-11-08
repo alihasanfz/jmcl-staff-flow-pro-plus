@@ -58,6 +58,37 @@ test('duplicate punches within minimum gap do not create a checkout', () => {
   assert.equal(r.check_out, null);
 });
 
+test('mid-day swipes during ongoing shift do not trigger premature checkout', () => {
+  // Today is 2026-11-02, nowMin is 14:00 (840 min), shift ends at 18:00 (1080 min)
+  const r = computeDay({
+    date: '2026-11-02', today: '2026-11-02', nowMin: 14 * 60,
+    user: { join_date: '2026-01-01' }, shift,
+    punches: [
+      { t: '09:15:00', at: '2026-11-02T09:15:00' },
+      { t: '12:30:00', at: '2026-11-02T12:30:00' }, // lunch / gate passage
+      { t: '13:45:00', at: '2026-11-02T13:45:00' }, // gate return
+    ],
+    holiday: false, leave: null,
+  });
+  assert.equal(r.check_in, '2026-11-02T09:15:00');
+  assert.equal(r.check_out, null); // must be NULL during shift
+  assert.equal(r.status, 'late'); // 09:15 > 09:10
+});
+
+test('shift checkout near shift end registers legitimate checkout', () => {
+  const r = computeDay({
+    date: '2026-11-02', today: '2026-11-02', nowMin: 18 * 60 + 10,
+    user: { join_date: '2026-01-01' }, shift,
+    punches: [
+      { t: '08:58:00', at: '2026-11-02T08:58:00' },
+      { t: '18:05:00', at: '2026-11-02T18:05:00' },
+    ],
+    holiday: false, leave: null,
+  });
+  assert.equal(r.check_out, '2026-11-02T18:05:00');
+  assert.equal(r.status, 'present');
+});
+
 test('half day when worked time below threshold', () => {
   assert.equal(mk('2026-10-26', ['09:00:00', '12:00:00']).status, 'half_day');
 });

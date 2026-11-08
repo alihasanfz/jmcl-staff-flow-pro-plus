@@ -42,10 +42,12 @@ function computeDay({ date, today, nowMin, user, shift, punches, holiday, leave,
   const last = punches[punches.length - 1];
   const inMin = toMin(first.t);
   const outMin = toMin(last.t);
-  // While shift is ongoing, multiple swipes within 35 min of morning arrival do not close attendance as a checkout
+  // While shift is ongoing, intermediate swipes (such as gate access, barrier passage, or lunch)
+  // do NOT close attendance as a checkout. A punch during an ongoing shift is only considered
+  // a checkout if it is within 60 min of shift end or later, or an explicit Checkout punch (state 1) after 4+ hours.
   const isShiftOngoing = date === today && nowMin < endMin;
-  const isMorningArrivalDoubleTap = isShiftOngoing && (outMin - inMin < 35) && (outMin < 12 * 60);
-  const hasOut = punches.length >= 2 && (outMin - inMin >= r.min_punch_gap_minutes) && !isMorningArrivalDoubleTap;
+  const isLegitCheckout = outMin >= (endMin - 60) || (last.state === 1 && outMin >= startMin + 240);
+  const hasOut = punches.length >= 2 && (outMin - inMin >= r.min_punch_gap_minutes) && (!isShiftOngoing || isLegitCheckout);
   const row = { ...base, check_in: first.at, check_out: hasOut ? last.at : null };
 
   const span = hasOut ? outMin - inMin : 0;

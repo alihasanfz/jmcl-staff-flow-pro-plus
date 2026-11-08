@@ -55,11 +55,22 @@ async function firstRun() {
       ON CONFLICT (name) DO UPDATE SET start_time = '09:30:00', end_time = '19:00:00', break_minutes = 60, grace_minutes = 10, early_out_grace_minutes = 10, overtime_after_minutes = 30
     `);
 
-    // Assign default shift to uFace 800 terminal
+    // Ensure terminal metadata and assigned roles are accurate and up to date
     await query(`
       UPDATE devices
-         SET default_shift_id = (SELECT id FROM shifts WHERE name LIKE '%uFace800%' LIMIT 1)
+         SET name = 'ZKTeco Terminal (ZK-UFACE800-01)',
+             model = 'uFace 800 (Main Attendance)',
+             location = 'Main Office Attendance Entrance',
+             default_shift_id = (SELECT id FROM shifts WHERE name LIKE '%uFace800%' LIMIT 1)
        WHERE UPPER(serial_number) = 'RKQ4262500336'
+    `);
+
+    await query(`
+      UPDATE devices
+         SET name = 'ZKTeco Terminal (VDE2251500160)',
+             model = 'SenseFace 7A (Gate Controller)',
+             location = 'Factory Barrier Gate (Door Access)'
+       WHERE UPPER(serial_number) = 'VDE2251500160'
     `);
 
     // Assign uFace 800 employees to this shift
