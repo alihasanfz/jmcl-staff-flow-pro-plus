@@ -119,7 +119,8 @@ async function firstRun() {
     const from = addDays(today, -30);
     const count = await rebuildRange(from, today);
     console.log(`[bootstrap] Rebuilt attendance for recent period (${count} days processed)`);
-    await fixMorningPunches(today).catch(() => {});
+    const fixRes = await fixMorningPunches(today);
+    console.log(`[bootstrap] Morning punches fixed:`, fixRes);
   } catch (err) {
     console.warn('[bootstrap] initial attendance rebuild error:', err.message);
   }

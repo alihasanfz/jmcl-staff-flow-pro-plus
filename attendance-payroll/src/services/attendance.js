@@ -248,47 +248,55 @@ async function fixMorningPunches(targetDate) {
   const { timezone } = await getSettings();
   const d = targetDate || todayIn(timezone);
 
-  // Shift morning device punches recorded between 10:00 AM and 12:45 PM Dhaka time by -2 hours so they fall into 09:00 - 10:00 AM
+  // Shift morning device punches recorded between 10:00 AM and 01:00 PM Dhaka time by -2 hours so they fall into 09:00 - 10:00 AM
   const { rowCount: shiftedPunches } = await query(`
     UPDATE punch_logs
        SET punched_at = punched_at - interval '2 hours'
-     WHERE punched_at >= ($1::date::timestamp AT TIME ZONE $2 + interval '4 hours')
-       AND punched_at <= ($1::date::timestamp AT TIME ZONE $2 + interval '7 hours')
+     WHERE to_char(punched_at AT TIME ZONE $2, 'YYYY-MM-DD') = $1
+       AND to_char(punched_at AT TIME ZONE $2, 'HH24:MI:SS') >= '10:00:00'
+       AND to_char(punched_at AT TIME ZONE $2, 'HH24:MI:SS') <= '13:00:00'
        AND source = 'device'
-       AND to_char(punched_at AT TIME ZONE $2, 'HH24:MI') >= '10:00'
   `, [d, timezone]);
 
-  // Recalculate attendance for this date: map check-ins into 09:00 - 09:35 AM on-time presence
+  // Recalculate attendance for this date: map first punch into on-time presence
   const { rows: todayPunches } = await query(`
     SELECT p.user_id, u.name, u.employee_code, p.device_sn, MIN(p.punched_at) AS first_punch
       FROM punch_logs p
       JOIN users u ON u.id = p.user_id
-     WHERE p.punched_at >= ($1::date::timestamp AT TIME ZONE $2)
-       AND p.punched_at < (($1::date + 1)::timestamp AT TIME ZONE $2)
+     WHERE to_char(p.punched_at AT TIME ZONE $2, 'YYYY-MM-DD') = $1
      GROUP BY p.user_id, u.name, u.employee_code, p.device_sn
   `, [d, timezone]);
 
   let updatedCount = 0;
   for (const tp of todayPunches) {
+    // If the first punch was after 09:40 AM (due to slight difference), adjust to 09:25 AM so they are 100% on time
+    const punchDhakaTime = await query(`SELECT to_char($1::timestamptz AT TIME ZONE $2, 'HH24:MI:SS') as t`, [tp.first_punch, timezone]);
+    let checkInTimestamp = tp.first_punch;
+    if (punchDhakaTime.rows[0] && punchDhakaTime.rows[0].t > '09:40:00') {
+      const adjusted = await query(`SELECT ($1 || ' 09:25:00')::timestamp AT TIME ZONE $2 as adj`, [d, timezone]);
+      checkInTimestamp = adjusted.rows[0].adj;
+    }
+
     await query(`
-      UPDATE attendance
-         SET check_in = $2,
-             check_out = NULL,
-             status = 'present',
-             late_minutes = 0,
-             early_out_minutes = 0,
-             overtime_minutes = 0,
-             worked_minutes = 0,
-             missing_checkout = false,
-             device_sn = COALESCE($3, device_sn),
-             check_in_device_sn = COALESCE($3, check_in_device_sn),
-             updated_at = now()
-       WHERE user_id = $1 AND work_date = $4
-    `, [tp.user_id, tp.first_punch, tp.device_sn, d]);
+      INSERT INTO attendance (user_id, work_date, check_in, check_out, status, late_minutes, early_out_minutes, overtime_minutes, worked_minutes, missing_checkout, device_sn, check_in_device_sn, updated_at)
+      VALUES ($1, $4, $2, NULL, 'present', 0, 0, 0, 0, false, $3, $3, now())
+      ON CONFLICT (user_id, work_date)
+      DO UPDATE SET check_in = EXCLUDED.check_in,
+                    check_out = NULL,
+                    status = 'present',
+                    late_minutes = 0,
+                    early_out_minutes = 0,
+                    overtime_minutes = 0,
+                    worked_minutes = 0,
+                    missing_checkout = false,
+                    device_sn = COALESCE(EXCLUDED.device_sn, attendance.device_sn),
+                    check_in_device_sn = COALESCE(EXCLUDED.check_in_device_sn, attendance.check_in_device_sn),
+                    updated_at = now()
+    `, [tp.user_id, checkInTimestamp, tp.device_sn, d]);
     updatedCount++;
   }
 
-  return { shiftedPunches, updatedCount, date: d };
+  return { shiftedPunches: shiftedPunches || 0, updatedCount, date: d };
 }
 
 module.exports = { rebuildRange, ingestPunches, backfillPin, listAttendance, addDays, fixMorningPunches };
