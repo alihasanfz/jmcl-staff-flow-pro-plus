@@ -37,6 +37,44 @@ async function migrate() {
 async function firstRun() {
   const seed = require('./seed');
   await seed.seedReference();
+
+  // Ensure uFace 800 (09:30 AM – 07:00 PM) shift exists
+  try {
+    await query(`
+      INSERT INTO shifts (name, start_time, end_time, break_minutes, grace_minutes, early_out_grace_minutes, overtime_after_minutes, weekly_off)
+      VALUES ('ZK-uFace800 (09:30 AM – 07:00 PM)', '09:30:00', '19:00:00', 60, 10, 10, 30, '{5}')
+      ON CONFLICT (name) DO UPDATE SET start_time = '09:30:00', end_time = '19:00:00', break_minutes = 60, grace_minutes = 10, early_out_grace_minutes = 10, overtime_after_minutes = 30
+    `);
+
+    // Assign default shift to uFace 800 terminal
+    await query(`
+      UPDATE devices
+         SET default_shift_id = (SELECT id FROM shifts WHERE name LIKE '%uFace800%' LIMIT 1)
+       WHERE UPPER(serial_number) = 'RKQ4262500336'
+    `);
+
+    // Assign uFace 800 employees to this shift
+    await query(`
+      UPDATE users
+         SET shift_id = (SELECT id FROM shifts WHERE name LIKE '%uFace800%' LIMIT 1),
+             primary_device_sn = 'RKQ4262500336'
+       WHERE id IN (
+         SELECT DISTINCT user_id FROM punch_logs WHERE UPPER(device_sn) = 'RKQ4262500336' AND user_id IS NOT NULL
+       )
+    `);
+
+    // Assign SenseFace 7A employees primary_device_sn
+    await query(`
+      UPDATE users
+         SET primary_device_sn = 'VDE2251500160'
+       WHERE primary_device_sn IS NULL AND id IN (
+         SELECT DISTINCT user_id FROM punch_logs WHERE UPPER(device_sn) = 'VDE2251500160' AND user_id IS NOT NULL
+       )
+    `);
+  } catch (err) {
+    console.warn('[bootstrap] uFace800 shift setup error:', err.message);
+  }
+
   // Free all users from forced password change
   await query('UPDATE users SET must_change_password = false WHERE must_change_password = true').catch(() => {});
   // Ensure all active users have a valid shift assigned

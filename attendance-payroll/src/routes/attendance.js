@@ -16,19 +16,21 @@ const scopeUser = (req) => (isManager(req.user) ? (req.query.userId ? parse(id, 
 router.get('/live', wrap(async (req, res) => {
   const { timezone } = await getSettings();
   const today = todayIn(timezone);
+  const devSn = req.query.deviceSn ? String(req.query.deviceSn).trim() : null;
 
   const { rows: punches } = await query(`
     SELECT p.id, to_char(p.punched_at AT TIME ZONE $1, 'HH24:MI:SS') AS at,
            p.punched_at, p.punched_at AS punch_time, p.pin, p.device_sn, p.source,
            p.state, p.state AS punch_state, p.verify,
            u.id AS user_id, u.name, u.name AS employee_name, u.employee_code, u.department, u.photo,
-           d.name AS device_name, d.location AS device_location
+           COALESCE(d.name, p.device_sn) AS device_name, d.location AS device_location
       FROM punch_logs p
       LEFT JOIN users u ON u.id = p.user_id
-      LEFT JOIN devices d ON d.id = p.device_id
+      LEFT JOIN devices d ON (d.id = p.device_id OR UPPER(d.serial_number) = UPPER(p.device_sn))
+     WHERE ($2::text IS NULL OR UPPER(p.device_sn) = UPPER($2))
      ORDER BY p.punched_at DESC
      LIMIT 100
-  `, [timezone]);
+  `, [timezone, devSn]);
 
   const { rows: attendance } = await query(`
     SELECT a.id, a.user_id, u.name, u.employee_code, u.department, u.photo,
@@ -36,13 +38,21 @@ router.get('/live', wrap(async (req, res) => {
            to_char(a.check_in AT TIME ZONE $1, 'HH24:MI') AS check_in,
            to_char(a.check_out AT TIME ZONE $1, 'HH24:MI') AS check_out,
            a.worked_minutes, a.late_minutes, a.early_out_minutes, a.overtime_minutes, a.status,
-           a.missing_checkout
+           a.missing_checkout,
+           COALESCE(d.name, a.device_sn, a.check_in_device_sn, '—') AS device_name,
+           COALESCE(a.device_sn, a.check_in_device_sn, '') AS device_sn
       FROM users u
       LEFT JOIN attendance a ON a.user_id = u.id AND a.work_date = $2
       LEFT JOIN shifts s ON s.id = COALESCE(a.shift_id, u.shift_id)
+      LEFT JOIN devices d ON UPPER(d.serial_number) = UPPER(COALESCE(a.check_in_device_sn, a.device_sn, u.primary_device_sn))
      WHERE u.active = true
+       AND ($3::text IS NULL OR (
+         UPPER(COALESCE(a.device_sn, '')) = UPPER($3)
+         OR UPPER(COALESCE(a.check_in_device_sn, '')) = UPPER($3)
+         OR UPPER(COALESCE(u.primary_device_sn, '')) = UPPER($3)
+       ))
      ORDER BY (a.check_in IS NOT NULL) DESC, a.check_in DESC, u.name
-  `, [timezone, today]);
+  `, [timezone, today, devSn]);
 
   const totalEmployees = attendance.length;
   const present = attendance.filter((r) => ['present', 'late', 'half_day'].includes(r.status)).length;
@@ -67,7 +77,9 @@ router.get('/', wrap(async (req, res) => {
   const rows = await listAttendance({
     from, to, userId: scopeUser(req),
     department: isManager(req.user) ? req.query.department : undefined,
-    status: req.query.status || undefined, limit: 2000,
+    status: req.query.status || undefined,
+    deviceSn: req.query.deviceSn ? String(req.query.deviceSn).trim() : undefined,
+    limit: 2000,
   });
   res.json({ from, to, rows });
 }));
@@ -98,13 +110,18 @@ router.get('/punches', manager, wrap(async (req, res) => {
   const to = req.query.to ? parse(date, req.query.to) : todayIn(timezone);
   const from = req.query.from ? parse(date, req.query.from) : addDays(to, -2);
   const uid = req.query.userId ? parse(id, req.query.userId) : null;
+  const devSn = req.query.deviceSn ? String(req.query.deviceSn).trim() : null;
   const { rows } = await query(
-    `SELECT p.id, p.pin, p.user_id, COALESCE(u.name, '') AS name, p.source, p.state, p.verify, d.name AS device,
+    `SELECT p.id, p.pin, p.user_id, COALESCE(u.name, '') AS name, p.source, p.state, p.verify,
+            COALESCE(d.name, p.device_sn) AS device, p.device_sn,
             to_char(p.punched_at AT TIME ZONE $1, 'YYYY-MM-DD HH24:MI:SS') AS at
-       FROM punch_logs p LEFT JOIN users u ON u.id = p.user_id LEFT JOIN devices d ON d.id = p.device_id
+       FROM punch_logs p
+       LEFT JOIN users u ON u.id = p.user_id
+       LEFT JOIN devices d ON (d.id = p.device_id OR UPPER(d.serial_number) = UPPER(p.device_sn))
       WHERE p.punched_at >= ($2::date::timestamp AT TIME ZONE $1) AND p.punched_at < (($3::date + 1)::timestamp AT TIME ZONE $1)
         AND ($4::int IS NULL OR p.user_id = $4)
-      ORDER BY p.punched_at DESC LIMIT 1000`, [timezone, from, to, uid]);
+        AND ($5::text IS NULL OR UPPER(p.device_sn) = UPPER($5))
+      ORDER BY p.punched_at DESC LIMIT 1000`, [timezone, from, to, uid, devSn]);
   res.json({ rows });
 }));
 

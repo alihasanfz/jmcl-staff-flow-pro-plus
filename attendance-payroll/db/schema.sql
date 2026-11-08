@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS devices (
   created_at       timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS last_punch_at timestamptz;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS default_shift_id int REFERENCES shifts(id);
 
 CREATE TABLE IF NOT EXISTS punch_logs (
   id          bigserial PRIMARY KEY,
@@ -106,6 +107,10 @@ CREATE TABLE IF NOT EXISTS attendance (
   UNIQUE (user_id, work_date)
 );
 CREATE INDEX IF NOT EXISTS attendance_date_idx ON attendance (work_date, status);
+ALTER TABLE attendance ADD COLUMN IF NOT EXISTS device_sn text;
+ALTER TABLE attendance ADD COLUMN IF NOT EXISTS check_in_device_sn text;
+ALTER TABLE attendance ADD COLUMN IF NOT EXISTS check_out_device_sn text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS primary_device_sn text;
 
 CREATE TABLE IF NOT EXISTS leave_types (
   id           serial PRIMARY KEY,

@@ -6,25 +6,68 @@ import { t } from '../i18n.js';
 export async function render(view, state) {
   const isMgr = ['admin', 'company_admin', 'super_admin', 'hr_manager', 'hr_executive', 'hr', 'accounts_manager', 'dept_manager'].includes(state.user.role);
   const today = state.meta.today;
-  const f = { from: addDays(today, -13), to: today, userId: '', department: '', status: '' };
+  const f = { from: addDays(today, -13), to: today, userId: '', department: '', status: '', deviceSn: '' };
   let tab = 'daily';
   let users = [];
   let departments = [];
+  let devices = [];
+  let autoRefreshTimer = null;
 
   if (isMgr) {
     try {
-      const [uRes, dRes] = await Promise.all([
+      const [uRes, dRes, devRes] = await Promise.all([
         get('/users?active=true'),
         get('/departments').catch(() => get('/users/departments').then((r) => ({ departments: (r.departments || []).map((name) => ({ name })) }))),
+        get('/devices').catch(() => ({ devices: [] })),
       ]);
       users = uRes.users || [];
       departments = dRes.departments || [];
+      devices = devRes.devices || [];
     } catch { /* ignore */ }
   }
 
   const shell = () => {
     setHTML(view, html`
       <div class="stack">
+        <!-- Dedicated Machine Selector / Multi-Terminal Tabs -->
+        <div class="terminal-nav-wrap" style="background:var(--bg-panel, #fff); border:1px solid var(--border, #e2e8f0); border-radius:12px; padding:12px 16px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,0.03);">
+          <div class="row between" style="gap:12px; flex-wrap:wrap; align-items:center;">
+            <div class="row" style="gap:8px; flex-wrap:wrap; align-items:center;">
+              <span style="font-weight:700; font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-right:4px;">
+                ${icon('globe')} বায়োমেট্রিক টার্মিনাল:
+              </span>
+              <button type="button" class="btn sm ${f.deviceSn === '' ? 'primary' : ''}" data-term="" style="border-radius:20px; font-weight:600; padding:5px 14px;">
+                📋 সব মেশিন (All Devices)
+              </button>
+              <button type="button" class="btn sm ${f.deviceSn === 'RKQ4262500336' ? 'primary' : ''}" data-term="RKQ4262500336" style="border-radius:20px; font-weight:600; padding:5px 14px;">
+                🏢 ZK-uFace 800 <span style="background:#0284c7; color:#fff; font-size:10px; border-radius:10px; padding:2px 7px; margin-left:6px;">09:30 AM – 07:00 PM</span>
+              </button>
+              <button type="button" class="btn sm ${f.deviceSn === 'VDE2251500160' ? 'primary' : ''}" data-term="VDE2251500160" style="border-radius:20px; font-weight:600; padding:5px 14px;">
+                👤 SenseFace 7A <span style="background:#7e22ce; color:#fff; font-size:10px; border-radius:10px; padding:2px 7px; margin-left:6px;">Face &amp; Finger</span>
+              </button>
+            </div>
+            <div class="row" style="gap:8px; align-items:center;">
+              <span class="badge online" style="font-size:11px;"><span class="pulse-dot online"></span> Auto-Sync Live</span>
+            </div>
+          </div>
+
+          ${f.deviceSn === 'RKQ4262500336' ? html`
+            <div style="margin-top:10px; padding:10px 14px; background:rgba(2,132,199,0.06); border-left:3px solid #0284c7; border-radius:6px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+              <div style="font-size:12.5px; color:#0369a1;">
+                <b>🏢 ZKTeco Terminal (ZK-UFACE800-01) আলাদা উপস্থিতি ডাটা:</b> শিফট সময়সূচি <b>সকাল ০৯:৩০ AM থেকে রাত ০৭:০০ PM</b> পর্যন্ত নির্ধারিত। শুক্রবার সাপ্তাহিক ছুটি।
+              </div>
+              <span class="badge online" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;">SN: RKQ4262500336</span>
+            </div>
+          ` : f.deviceSn === 'VDE2251500160' ? html`
+            <div style="margin-top:10px; padding:10px 14px; background:rgba(147,51,234,0.06); border-left:3px solid #9333ea; border-radius:6px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+              <div style="font-size:12.5px; color:#7e22ce;">
+                <b>👤 SenseFace 7A আলাদা উপস্থিতি ডাটা:</b> ফেস ও ফিঙ্গারপ্রিন্ট টার্মিনাল থেকে আসা উপস্থিতি রেকর্ড।
+              </div>
+              <span class="badge online" style="background:#f3e8ff; color:#7e22ce; border:1px solid #e9d5ff;">SN: VDE2251500160</span>
+            </div>
+          ` : ''}
+        </div>
+
         ${isMgr ? html`
           <div class="row between">
             <div class="tabs" role="tablist" style="margin-bottom:0">
@@ -43,6 +86,13 @@ export async function render(view, state) {
           </label>
           <label>To
             <input type="date" name="to" value="${f.to}" max="${today}">
+          </label>
+          <label>Terminal / মেশিন
+            <select name="deviceSn">
+              <option value="">সব মেশিন (All Terminals)</option>
+              <option value="RKQ4262500336" ${f.deviceSn === 'RKQ4262500336' ? 'selected' : ''}>🏢 ZK-uFace 800 (09:30–19:00)</option>
+              <option value="VDE2251500160" ${f.deviceSn === 'VDE2251500160' ? 'selected' : ''}>👤 SenseFace 7A</option>
+            </select>
           </label>
           ${isMgr ? html`
             <label>Employee
@@ -99,10 +149,17 @@ export async function render(view, state) {
       load();
     }));
 
+    $$('[data-term]', view).forEach((b) => b.addEventListener('click', () => {
+      f.deviceSn = b.dataset.term;
+      shell();
+      load();
+    }));
+
     $('#filters').addEventListener('submit', (e) => {
       e.preventDefault();
       Object.assign(f, formValues(e.target));
-      for (const k of ['userId', 'department', 'status']) f[k] = f[k] || '';
+      for (const k of ['userId', 'department', 'status', 'deviceSn']) f[k] = f[k] || '';
+      shell();
       load();
     });
 
@@ -123,9 +180,9 @@ export async function render(view, state) {
     const box = $('#results');
     try {
       if (tab === 'punches') {
-        const { rows } = await get(`/attendance/punches${qs({ from: f.from, to: f.to, userId: f.userId })}`);
+        const { rows } = await get(`/attendance/punches${qs({ from: f.from, to: f.to, userId: f.userId, deviceSn: f.deviceSn })}`);
         if (!rows.length) {
-          setHTML(box, html`<p class="empty">No punches recorded in this range.</p>`);
+          setHTML(box, html`<p class="empty">No punches recorded for this terminal/filter.</p>`);
           return;
         }
         setHTML(box, html`
@@ -135,7 +192,7 @@ export async function render(view, state) {
                 <th>Punch Time</th>
                 <th>Employee</th>
                 <th>Device PIN</th>
-                <th>Device / Terminal</th>
+                <th>Terminal / Device</th>
                 <th>Source</th>
                 <th>Punch Type</th>
               </tr>
@@ -144,9 +201,21 @@ export async function render(view, state) {
               ${rows.map((r) => html`
                 <tr>
                   <td class="time">${r.at}</td>
-                  <td>${r.name || html`<span class="badge absent">Unknown PIN</span>`}</td>
+                  <td>${r.name || html`<span class="badge absent">Unknown PIN (${r.pin})</span>`}</td>
                   <td><span class="num">${r.pin}</span></td>
-                  <td>${r.device || '—'}</td>
+                  <td>
+                    ${r.device_sn === 'RKQ4262500336' || (r.device && r.device.includes('RKQ')) ? html`
+                      <span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-weight:600; white-space:nowrap;">
+                        🏢 uFace 800
+                      </span>
+                    ` : r.device_sn === 'VDE2251500160' || (r.device && r.device.includes('VDE')) ? html`
+                      <span class="badge" style="background:#f3e8ff; color:#7e22ce; border:1px solid #e9d5ff; font-weight:600; white-space:nowrap;">
+                        👤 SenseFace 7A
+                      </span>
+                    ` : html`
+                      <span class="muted small">${r.device || '—'}</span>
+                    `}
+                  </td>
                   <td><span class="badge ${r.source === 'device' ? 'online' : 'waiting'}">${r.source}</span></td>
                   <td>${r.state === 0 ? 'Check-in' : r.state === 1 ? 'Check-out' : r.state ?? '—'}</td>
                 </tr>
@@ -157,9 +226,9 @@ export async function render(view, state) {
         return;
       }
 
-      const { rows } = await get(`/attendance${qs({ from: f.from, to: f.to, userId: isMgr ? f.userId : '', department: f.department, status: f.status })}`);
+      const { rows } = await get(`/attendance${qs({ from: f.from, to: f.to, userId: isMgr ? f.userId : '', department: f.department, status: f.status, deviceSn: f.deviceSn })}`);
       if (!rows.length) {
-        setHTML(box, html`<p class="empty">No attendance records found for these filters.</p>`);
+        setHTML(box, html`<p class="empty">No attendance records found for this terminal and date range.</p>`);
         return;
       }
 
@@ -169,6 +238,7 @@ export async function render(view, state) {
             <tr>
               <th>Date</th>
               ${isMgr ? html`<th>Employee</th>` : ''}
+              <th>Terminal</th>
               <th>Shift</th>
               <th>In</th>
               <th>Out</th>
@@ -190,7 +260,20 @@ export async function render(view, state) {
                     <span>${r.department || 'General'}</span>
                   </td>
                 ` : ''}
-                <td class="muted">${r.shift_name || '—'}</td>
+                <td>
+                  ${r.device_sn === 'RKQ4262500336' || (r.device_name && r.device_name.includes('RKQ')) ? html`
+                    <span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-weight:600; white-space:nowrap;">
+                      🏢 uFace 800
+                    </span>
+                  ` : r.device_sn === 'VDE2251500160' || (r.device_name && r.device_name.includes('VDE')) ? html`
+                    <span class="badge" style="background:#f3e8ff; color:#7e22ce; border:1px solid #e9d5ff; font-weight:600; white-space:nowrap;">
+                      👤 SenseFace 7A
+                    </span>
+                  ` : html`
+                    <span class="muted small">${r.device_name || '—'}</span>
+                  `}
+                </td>
+                <td class="muted small">${r.shift_name || '—'}</td>
                 <td><b class="time">${r.check_in_local || '—'}</b></td>
                 <td><b class="time">${r.check_out_local || (r.missing_checkout ? html`<span class="badge late">Missing</span>` : '—')}</b></td>
                 <td class="r time">${fmtHours(r.worked_minutes)}</td>

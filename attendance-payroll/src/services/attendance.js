@@ -34,7 +34,8 @@ async function rebuildRange(from, to, { userId = null } = {}) {
     query(`SELECT user_id,
                   to_char(punched_at AT TIME ZONE $1, 'YYYY-MM-DD') AS d,
                   to_char(punched_at AT TIME ZONE $1, 'HH24:MI:SS') AS t,
-                  punched_at AS at
+                  punched_at AS at,
+                  device_sn
              FROM punch_logs
             WHERE user_id IS NOT NULL
               AND punched_at >= ($2::date::timestamp AT TIME ZONE $1)
@@ -54,7 +55,7 @@ async function rebuildRange(from, to, { userId = null } = {}) {
   for (const p of punchesRes.rows) {
     const k = `${p.user_id}|${p.d}`;
     if (!punchMap.has(k)) punchMap.set(k, []);
-    punchMap.get(k).push({ t: p.t, at: p.at });
+    punchMap.get(k).push({ t: p.t, at: p.at, device_sn: p.device_sn });
   }
 
   const upserts = [];
@@ -64,12 +65,25 @@ async function rebuildRange(from, to, { userId = null } = {}) {
     const leaves = leavesByUser.get(u.id) || [];
     for (const date of eachDay(from, last)) {
       const leave = leaves.find((l) => l.s <= date && l.e >= date) || null;
+      const dayPunches = punchMap.get(`${u.id}|${date}`) || [];
       const row = computeDay({
         date, today, nowMin, user: u, shift, holiday: holidays.has(date), leave,
-        punches: punchMap.get(`${u.id}|${date}`) || [], rules: settings.attendance,
+        punches: dayPunches, rules: settings.attendance,
       });
-      if (row) upserts.push({ user_id: u.id, work_date: date, ...row });
-      else deletes.push({ user_id: u.id, work_date: date });
+      if (row) {
+        const inDev = dayPunches[0]?.device_sn || null;
+        const outDev = dayPunches.length >= 2 ? dayPunches[dayPunches.length - 1]?.device_sn : null;
+        upserts.push({
+          user_id: u.id,
+          work_date: date,
+          ...row,
+          device_sn: inDev || outDev || null,
+          check_in_device_sn: inDev,
+          check_out_device_sn: outDev,
+        });
+      } else {
+        deletes.push({ user_id: u.id, work_date: date });
+      }
     }
   }
 
@@ -78,22 +92,30 @@ async function rebuildRange(from, to, { userId = null } = {}) {
       const c = upserts.slice(i, i + CHUNK);
       await db.query(
         `INSERT INTO attendance (user_id, work_date, shift_id, check_in, check_out, punch_count, worked_minutes,
-                                 late_minutes, early_out_minutes, overtime_minutes, status, missing_checkout, off_day_work, updated_at)
+                                 late_minutes, early_out_minutes, overtime_minutes, status, missing_checkout, off_day_work,
+                                 device_sn, check_in_device_sn, check_out_device_sn, updated_at)
          SELECT x.*, now() FROM unnest($1::int[], $2::date[], $3::int[], $4::timestamptz[], $5::timestamptz[], $6::int[],
-                                       $7::int[], $8::int[], $9::int[], $10::int[], $11::text[], $12::bool[], $13::bool[])
+                                       $7::int[], $8::int[], $9::int[], $10::int[], $11::text[], $12::bool[], $13::bool[],
+                                       $14::text[], $15::text[], $16::text[])
               AS x(user_id, work_date, shift_id, check_in, check_out, punch_count, worked_minutes, late_minutes,
-                   early_out_minutes, overtime_minutes, status, missing_checkout, off_day_work)
+                   early_out_minutes, overtime_minutes, status, missing_checkout, off_day_work,
+                   device_sn, check_in_device_sn, check_out_device_sn)
          ON CONFLICT (user_id, work_date) DO UPDATE SET
            shift_id = EXCLUDED.shift_id, check_in = EXCLUDED.check_in, check_out = EXCLUDED.check_out,
            punch_count = EXCLUDED.punch_count, worked_minutes = EXCLUDED.worked_minutes,
            late_minutes = EXCLUDED.late_minutes, early_out_minutes = EXCLUDED.early_out_minutes,
            overtime_minutes = EXCLUDED.overtime_minutes, status = EXCLUDED.status,
-           missing_checkout = EXCLUDED.missing_checkout, off_day_work = EXCLUDED.off_day_work, updated_at = now()`,
+           missing_checkout = EXCLUDED.missing_checkout, off_day_work = EXCLUDED.off_day_work,
+           device_sn = COALESCE(EXCLUDED.device_sn, attendance.device_sn),
+           check_in_device_sn = COALESCE(EXCLUDED.check_in_device_sn, attendance.check_in_device_sn),
+           check_out_device_sn = COALESCE(EXCLUDED.check_out_device_sn, attendance.check_out_device_sn),
+           updated_at = now()`,
         [
           c.map((r) => r.user_id), c.map((r) => r.work_date), c.map((r) => r.shift_id), c.map((r) => r.check_in),
           c.map((r) => r.check_out), c.map((r) => r.punch_count), c.map((r) => r.worked_minutes),
           c.map((r) => r.late_minutes), c.map((r) => r.early_out_minutes), c.map((r) => r.overtime_minutes),
           c.map((r) => r.status), c.map((r) => r.missing_checkout), c.map((r) => r.off_day_work),
+          c.map((r) => r.device_sn), c.map((r) => r.check_in_device_sn), c.map((r) => r.check_out_device_sn),
         ],
       );
     }
@@ -180,23 +202,41 @@ async function backfillPin(userId, pin) {
 }
 
 /** Filterable attendance listing (used by the API and by reports). */
-async function listAttendance({ from, to, userId, department, status, limit = 5000 }) {
+async function listAttendance({ from, to, userId, department, status, deviceSn, limit = 5000 }) {
   const { timezone } = await getSettings();
   const params = [timezone, from, to];
   let where = 'a.work_date BETWEEN $2 AND $3';
   if (userId) { params.push(userId); where += ` AND a.user_id = $${params.length}`; }
   if (department) { params.push(department); where += ` AND u.department = $${params.length}`; }
   if (status) { params.push(status); where += ` AND a.status = $${params.length}`; }
+  if (deviceSn) {
+    params.push(deviceSn);
+    where += ` AND (
+      UPPER(COALESCE(a.device_sn, '')) = UPPER($${params.length})
+      OR UPPER(COALESCE(a.check_in_device_sn, '')) = UPPER($${params.length})
+      OR UPPER(COALESCE(a.check_out_device_sn, '')) = UPPER($${params.length})
+      OR UPPER(COALESCE(u.primary_device_sn, '')) = UPPER($${params.length})
+      OR EXISTS (
+        SELECT 1 FROM punch_logs pl
+        WHERE pl.user_id = a.user_id
+          AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
+          AND UPPER(pl.device_sn) = UPPER($${params.length})
+      )
+    )`;
+  }
   params.push(limit);
   const { rows } = await query(
     `SELECT a.id, a.user_id, u.name, u.employee_code, u.department, a.work_date::text AS work_date, a.status,
             to_char(a.check_in AT TIME ZONE $1, 'HH24:MI') AS check_in_local,
             to_char(a.check_out AT TIME ZONE $1, 'HH24:MI') AS check_out_local,
             a.worked_minutes, a.late_minutes, a.early_out_minutes, a.overtime_minutes,
-            a.missing_checkout, a.off_day_work, a.punch_count, s.name AS shift_name
+            a.missing_checkout, a.off_day_work, a.punch_count, s.name AS shift_name,
+            COALESCE(d.name, a.device_sn, a.check_in_device_sn, '—') AS device_name,
+            COALESCE(a.device_sn, a.check_in_device_sn, u.primary_device_sn, '') AS device_sn
        FROM attendance a
        JOIN users u ON u.id = a.user_id
        LEFT JOIN shifts s ON s.id = a.shift_id
+       LEFT JOIN devices d ON UPPER(d.serial_number) = UPPER(COALESCE(a.check_in_device_sn, a.device_sn, u.primary_device_sn))
       WHERE ${where}
       ORDER BY a.work_date DESC, u.name
       LIMIT $${params.length}`, params);
