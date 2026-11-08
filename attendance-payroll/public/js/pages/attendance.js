@@ -34,10 +34,10 @@ export async function render(view, state) {
           <div class="row between" style="gap:12px; flex-wrap:wrap; align-items:center;">
             <div class="row" style="gap:8px; flex-wrap:wrap; align-items:center;">
               <span style="font-weight:700; font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-right:4px;">
-                ${icon('globe')} বায়োমেট্রিক টার্মিনাল:
+                ${icon('globe')} Terminal:
               </span>
               <button type="button" class="btn sm ${f.deviceSn === '' ? 'primary' : ''}" data-term="" style="border-radius:20px; font-weight:600; padding:5px 14px;">
-                📋 সব মেশিন (All Devices)
+                📋 All Terminals
               </button>
               <button type="button" class="btn sm ${f.deviceSn === 'RKQ4262500336' ? 'primary' : ''}" data-term="RKQ4262500336" style="border-radius:20px; font-weight:600; padding:5px 14px;">
                 🏢 ZK-uFace 800 <span style="background:#0284c7; color:#fff; font-size:10px; border-radius:10px; padding:2px 7px; margin-left:6px;">09:30 AM – 07:00 PM</span>
@@ -54,14 +54,14 @@ export async function render(view, state) {
           ${f.deviceSn === 'RKQ4262500336' ? html`
             <div style="margin-top:10px; padding:10px 14px; background:rgba(2,132,199,0.06); border-left:3px solid #0284c7; border-radius:6px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
               <div style="font-size:12.5px; color:#0369a1;">
-                <b>🏢 ZKTeco Terminal (ZK-UFACE800-01) আলাদা উপস্থিতি ডাটা:</b> শিফট সময়সূচি <b>সকাল ০৯:৩০ AM থেকে রাত ০৭:০০ PM</b> পর্যন্ত নির্ধারিত। শুক্রবার সাপ্তাহিক ছুটি।
+                <b>🏢 ZKTeco Terminal (ZK-UFACE800-01) Filtered Attendance:</b> Shift schedule configured from <b>09:30 AM to 07:00 PM</b>. Friday is weekly off.
               </div>
               <span class="badge online" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;">SN: RKQ4262500336</span>
             </div>
           ` : f.deviceSn === 'VDE2251500160' ? html`
             <div style="margin-top:10px; padding:10px 14px; background:rgba(147,51,234,0.06); border-left:3px solid #9333ea; border-radius:6px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
               <div style="font-size:12.5px; color:#7e22ce;">
-                <b>👤 SenseFace 7A আলাদা উপস্থিতি ডাটা:</b> ফেস ও ফিঙ্গারপ্রিন্ট টার্মিনাল থেকে আসা উপস্থিতি রেকর্ড।
+                <b>👤 SenseFace 7A Filtered Attendance:</b> Facial and fingerprint biometric records from this terminal.
               </div>
               <span class="badge online" style="background:#f3e8ff; color:#7e22ce; border:1px solid #e9d5ff;">SN: VDE2251500160</span>
             </div>
@@ -87,9 +87,9 @@ export async function render(view, state) {
           <label>To
             <input type="date" name="to" value="${f.to}" max="${today}">
           </label>
-          <label>Terminal / মেশিন
+          <label>Terminal / Device
             <select name="deviceSn">
-              <option value="">সব মেশিন (All Terminals)</option>
+              <option value="">All Terminals</option>
               <option value="RKQ4262500336" ${f.deviceSn === 'RKQ4262500336' ? 'selected' : ''}>🏢 ZK-uFace 800 (09:30–19:00)</option>
               <option value="VDE2251500160" ${f.deviceSn === 'VDE2251500160' ? 'selected' : ''}>👤 SenseFace 7A</option>
             </select>

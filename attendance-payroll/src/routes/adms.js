@@ -318,8 +318,10 @@ function queueDeviceCommand(sn, cmd) {
   return id;
 }
 
-function queueTimeSync(sn) {
-  const dhakaTime = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Dhaka' }).replace('T', ' ');
+function queueTimeSync(sn, customDateTime = null) {
+  const dhakaTime = customDateTime
+    ? String(customDateTime).trim().replace('T', ' ')
+    : new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Dhaka' }).replace('T', ' ');
   const key = String(sn || '').trim().toUpperCase();
   lastTimeSync.set(key, Date.now());
   const id = queueDeviceCommand(sn, `SET OPTIONS DateTime=${dhakaTime}`);

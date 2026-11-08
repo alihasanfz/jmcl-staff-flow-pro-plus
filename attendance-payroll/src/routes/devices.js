@@ -312,11 +312,29 @@ router.post('/:id/test', wrap(async (req, res) => {
   res.json(await probeDevice(d));
 }));
 
+router.post('/sync-all-time', wrap(async (req, res) => {
+  const { queueTimeSync } = require('./adms');
+  const customDt = req.body?.datetime || null;
+  const { rows } = await query('SELECT * FROM devices WHERE active = true AND approved = true');
+  const results = rows.map((d) => ({
+    deviceId: d.id,
+    name: d.name,
+    serialNumber: d.serial_number,
+    ...queueTimeSync(d.serial_number, customDt),
+  }));
+  res.json({
+    ok: true,
+    message: `Time synchronization queued for ${results.length} terminal(s). Devices will update their clocks on their next poll.`,
+    results,
+  });
+}));
+
 router.post('/:id/sync-time', wrap(async (req, res) => {
   const { rows: [d] } = await query('SELECT * FROM devices WHERE id = $1', [parse(id, req.params.id)]);
   if (!d) throw notFound('Device not found');
   const { queueTimeSync } = require('./adms');
-  const result = queueTimeSync(d.serial_number);
+  const customDt = req.body?.datetime || null;
+  const result = queueTimeSync(d.serial_number, customDt);
   res.json({
     ok: true,
     message: `Time sync command queued for ${d.name} (${d.serial_number}). The device will set its clock to exact Bangladesh Time (${result.time}) on its next poll (within seconds).`,

@@ -56,6 +56,9 @@ export async function render(view, state) {
             </div>
           </div>
           <div class="row" style="gap:8px; flex-wrap:wrap;">
+            <button class="btn" id="sync-time-global-btn" title="Synchronize Terminal Time with Server Clock" style="background:#f0fdf4; color:#15803d; border-color:#bbf7d0; font-weight:600;">
+              ${icon('clock')} Sync Device Time
+            </button>
             <button class="btn" id="upload-usb-btn" title="Import punches from USB Flash Drive (.dat / .csv)">
               ${icon('upload')} Upload USB Log
             </button>
@@ -85,6 +88,7 @@ export async function render(view, state) {
       });
     });
 
+    $('#sync-time-global-btn')?.addEventListener('click', () => openSyncTimeModal(null));
     $('#upload-usb-btn')?.addEventListener('click', openUploadModal);
     $('#gateway-info-btn')?.addEventListener('click', openGatewayModal);
     $('#test-punch-global-btn')?.addEventListener('click', () => openTestPunchModal(null));
@@ -335,18 +339,9 @@ export async function render(view, state) {
       });
 
       $$('[data-sync-time]', container).forEach((b) => {
-        b.addEventListener('click', async () => {
-          try {
-            b.disabled = true;
-            b.textContent = 'Syncing...';
-            const res = await post(`/devices/${b.dataset.syncTime}/sync-time`);
-            toast(res.message || 'Time synchronization command sent to device!');
-          } catch (e) {
-            toast(e.message || 'Failed to sync time', 'bad');
-          } finally {
-            b.disabled = false;
-            b.innerHTML = `${icon('refresh')} Sync Time`;
-          }
+        b.addEventListener('click', () => {
+          const dev = devices.find((d) => String(d.id) === b.dataset.syncTime);
+          openSyncTimeModal(dev);
         });
       });
 
@@ -849,6 +844,96 @@ export async function render(view, state) {
     });
   };
 
+  /** Modal: Synchronize Terminal Clock */
+  const openSyncTimeModal = async (dev = null) => {
+    let devList = [];
+    try {
+      const res = await get('/devices');
+      devList = res.devices || [];
+    } catch { /* ignore */ }
+
+    const now = new Date();
+    const currentDhaka = now.toLocaleString('sv-SE', { timeZone: 'Asia/Dhaka' }).replace('T', ' ');
+
+    modal({
+      title: 'Synchronize Terminal Clock (Fix Machine Time)',
+      submitLabel: '⚡ Apply & Sync Now',
+      body: html`
+        <div class="stack" style="gap:14px;">
+          <div style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
+            <div class="row between" style="align-items:center;">
+              <span style="font-weight:600; font-size:13px; color:var(--text-muted);">Current Bangladesh / Server Time:</span>
+              <span style="font-weight:700; font-size:14px; color:var(--primary); font-family:monospace;">${currentDhaka}</span>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <label class="wide">Target Biometric Terminal
+              <select name="targetDevice" id="sync-target-device">
+                <option value="all" ${!dev ? 'selected' : ''}>⚡ All Connected Terminals (${devList.length} devices)</option>
+                ${devList.map((d) => html`
+                  <option value="${d.id}" ${dev && String(dev.id) === String(d.id) ? 'selected' : ''}>
+                    ${d.name} (${d.serial_number}) · ${d.model || 'Terminal'}
+                  </option>
+                `)}
+              </select>
+            </label>
+
+            <label class="wide">Time Synchronization Mode
+              <select name="timeMode" id="sync-time-mode">
+                <option value="current">Current Bangladesh Time (${currentDhaka}) — Recommended</option>
+                <option value="custom">Custom Date &amp; Time (Manual override)</option>
+              </select>
+            </label>
+
+            <div class="wide" id="wrap-custom-datetime" style="display:none;">
+              <label>Custom Date &amp; Time
+                <input type="datetime-local" name="customDateTime" id="sync-custom-datetime" value="${currentDhaka.replace(' ', 'T').slice(0, 16)}">
+                <span class="hint">The machine will be explicitly updated to this exact date and time.</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="notice ok" style="font-size:12px; line-height:1.45;">
+            <b>How it works:</b><br>
+            When you click <b>Apply &amp; Sync Now</b>, our server queues a real-time ADMS command (<code>SET OPTIONS DateTime=...</code>) for the selected terminal.
+            The device picks up the command on its next poll (within 5–10 seconds) and automatically adjusts its internal clock.
+          </div>
+        </div>
+      `,
+      onOpen: (form) => {
+        const modeSel = $('#sync-time-mode', form);
+        const wrapCustom = $('#wrap-custom-datetime', form);
+        modeSel?.addEventListener('change', () => {
+          if (wrapCustom) wrapCustom.style.display = modeSel.value === 'custom' ? 'block' : 'none';
+        });
+      },
+      onSubmit: async (form, close) => {
+        const target = form.targetDevice.value;
+        const mode = form.timeMode.value;
+        let dt = null;
+        if (mode === 'custom') {
+          const val = form.customDateTime.value;
+          if (val) dt = val.replace('T', ' ') + ':00';
+        }
+
+        try {
+          if (target === 'all') {
+            const res = await post('/devices/sync-all-time', { datetime: dt });
+            toast(res.message || 'Time sync commands sent to all devices!');
+          } else {
+            const res = await post(`/devices/${target}/sync-time`, { datetime: dt });
+            toast(res.message || 'Time sync command sent to device!');
+          }
+          close();
+          load();
+        } catch (err) {
+          toast(err.message || 'Failed to sync time', 'bad');
+        }
+      },
+    });
+  };
+
   /** Modal: Add / Edit Device */
   const openEditModal = (d) => {
     const isNew = !d;
@@ -884,11 +969,11 @@ export async function render(view, state) {
           <!-- ADMS Cloud Server Destination Parameters Box -->
           <div class="wide" id="wrap-adms-server-box" style="background:var(--surface); border:1.5px solid var(--primary); border-radius:8px; padding:14px; margin:4px 0 8px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-              <span style="font-weight:700; color:var(--primary); font-size:0.9rem;">📡 ZKTeco Cloud Server Settings (মেশিনে যা টাইপ করবেন)</span>
+              <span style="font-weight:700; color:var(--primary); font-size:0.9rem;">📡 ZKTeco Cloud Server Settings (Enter on Terminal)</span>
               <span class="badge online" style="font-size:11px;">ADMS Push Destination</span>
             </div>
             <p style="margin:0 0 10px; font-size:0.84rem; color:var(--muted); line-height:1.4;">
-              আপনার ZKTeco মেশিনে যান: <b>Menu &rarr; Comm. &rarr; Cloud Server Setting</b> এবং হুবহু এই Server Address ও Port দিন:
+              On your ZKTeco Terminal, go to: <b>Menu &rarr; Comm. &rarr; Cloud Server Setting</b> and enter this exact Server Address and Port:
             </p>
             <div style="display:grid; grid-template-columns: minmax(0, 1fr) 120px; gap:10px;">
               <label style="margin:0; font-size:0.8rem; font-weight:600;">Server Address (Cloud Host / IP)
@@ -899,7 +984,7 @@ export async function render(view, state) {
               </label>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:10px; font-size:0.82rem;">
-              <span class="muted">• <b>Enable Domain Name:</b> বন্ধ (<b>OFF</b>) রাখুন (যদি আইপি ব্যবহার করেন)।</span>
+              <span class="muted">• <b>Enable Domain Name:</b> Keep <b>OFF</b> if using IP address (Turn <b>ON</b> if using domain).</span>
               <button type="button" class="btn sm" id="modal-btn-use-lan" style="font-size:11px; padding:3px 9px;">Set to My PC IP (${localIp}:3000)</button>
             </div>
           </div>
