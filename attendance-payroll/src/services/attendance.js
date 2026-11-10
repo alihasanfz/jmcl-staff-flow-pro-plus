@@ -247,24 +247,7 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
                     AND UPPER(pl.device_sn) = UPPER(${snParam})),
                 to_char(a.check_in AT TIME ZONE $1, 'HH24:MI')
               ) AS check_in_local,
-              COALESCE(
-                (SELECT CASE
-                          WHEN MAX(pl.punched_at) > MIN(pl.punched_at)
-                               AND (
-                                 a.work_date < (now() AT TIME ZONE $1)::date
-                                 OR EXTRACT(HOUR FROM MAX(pl.punched_at) AT TIME ZONE $1) >= 15
-                                 OR MAX(COALESCE(pl.state, 0)) = 1
-                                 OR MAX(pl.punched_at) >= MIN(pl.punched_at) + interval '2 hours'
-                               )
-                          THEN to_char(MAX(pl.punched_at) AT TIME ZONE $1, 'HH24:MI')
-                          ELSE NULL
-                        END
-                   FROM punch_logs pl
-                  WHERE pl.user_id = a.user_id
-                    AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
-                    AND UPPER(pl.device_sn) = UPPER(${snParam})),
-                to_char(a.check_out AT TIME ZONE $1, 'HH24:MI')
-              ) AS check_out_local,
+              to_char(a.check_out AT TIME ZONE $1, 'HH24:MI') AS check_out_local,
               a.worked_minutes, a.late_minutes, a.early_out_minutes, a.overtime_minutes,
               a.missing_checkout, a.off_day_work,
               COALESCE(

@@ -24,7 +24,7 @@ function errorHandler(err, req, res, next) {
   if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Request body is not valid JSON' });
   if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Request body is too large' });
   console.error('[error]', req.method, req.originalUrl, err);
-  return res.status(500).json({ error: 'Something went wrong on the server' });
+  return res.status(500).json({ error: err.message || 'Something went wrong on the server' });
 }
 
 const notFoundHandler = (req, res) => res.status(404).json({ error: 'Endpoint not found' });

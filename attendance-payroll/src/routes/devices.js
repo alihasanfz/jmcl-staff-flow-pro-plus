@@ -44,19 +44,24 @@ const device = z.object({
   if (d.enforceIp && !d.ipAddress) ctx.addIssue({ code: 'custom', path: ['ipAddress'], message: 'is required to enforce the source IP' });
 });
 
-const COLS = `id, name, serial_number, model, location, protocol, ip_address, port, api_url, enforce_ip, poll_interval_sec, approved,
-  active, online, last_seen, last_punch_at, last_ip, last_poll_at, last_poll_error, created_at`;
-
 router.get('/', wrap(async (req, res) => {
   // Ensure primary registered devices are always active, approved, and online
   await query(`UPDATE devices SET active = true, approved = true, online = true, last_seen = COALESCE(last_seen, now()) WHERE UPPER(TRIM(serial_number)) = ANY(ARRAY['RKQ4262500336', 'VDE2251500160'])`).catch(() => {});
 
-  const { rows } = await query(
-    `SELECT ${COLS},
-      (SELECT COUNT(*)::int FROM punch_logs p WHERE (p.device_id = devices.id OR UPPER(p.device_sn) = UPPER(devices.serial_number)) AND p.punched_at > now() - interval '24 hours') AS punches_24h,
-      (SELECT MAX(p.punched_at) FROM punch_logs p WHERE p.device_id = devices.id OR UPPER(p.device_sn) = UPPER(devices.serial_number)) AS calculated_last_punch
-     FROM devices ORDER BY approved DESC, name`
-  );
+  let rows = [];
+  try {
+    const r = await query(
+      `SELECT d.*,
+        (SELECT COUNT(*)::int FROM punch_logs p WHERE (p.device_id = d.id OR UPPER(p.device_sn) = UPPER(d.serial_number)) AND p.punched_at > now() - interval '24 hours') AS punches_24h,
+        (SELECT MAX(p.punched_at) FROM punch_logs p WHERE p.device_id = d.id OR UPPER(p.device_sn) = UPPER(d.serial_number)) AS calculated_last_punch
+       FROM devices d ORDER BY d.approved DESC NULLS LAST, d.name`
+    );
+    rows = r.rows;
+  } catch (err) {
+    console.warn('[devices] main query failed, falling back to simple query:', err.message);
+    const r = await query('SELECT * FROM devices ORDER BY name');
+    rows = r.rows;
+  }
 
   const enriched = rows.map((d) => {
     const now = Date.now();

@@ -519,6 +519,20 @@ router.get('/recalculate-attendance', wrapAsync(async (req, res) => {
     res.status(500).json({ error: err.message, stack: err.stack });
   }
 }));
+router.get('/debug-today-punches', wrapAsync(async (req, res) => {
+  const { timezone } = await getSettings();
+  const d = req.query.date || todayIn(timezone);
+  const { rows } = await query(`
+    SELECT p.id, p.device_sn, p.pin, p.user_id, COALESCE(u.name, 'PIN ' || p.pin) AS name,
+           to_char(p.punched_at AT TIME ZONE $1, 'YYYY-MM-DD HH24:MI:SS') AS punch_time,
+           p.state, p.source
+      FROM punch_logs p
+      LEFT JOIN users u ON u.id = p.user_id
+     WHERE to_char(p.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = $2
+     ORDER BY p.punched_at ASC
+  `, [timezone, d]);
+  res.json({ date: d, count: rows.length, punches: rows });
+}));
 router.get('/debug-data', wrapAsync(async (req, res) => {
   const devices = (await query('SELECT id, name, serial_number, model, online, last_seen, last_punch_at, last_ip FROM devices')).rows;
   const punches = (await query('SELECT id, device_id, device_sn, pin, user_id, punched_at, source FROM punch_logs ORDER BY punched_at DESC LIMIT 20')).rows;

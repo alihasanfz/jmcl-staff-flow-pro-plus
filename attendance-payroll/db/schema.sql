@@ -65,6 +65,19 @@ CREATE TABLE IF NOT EXISTS devices (
 );
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS last_punch_at timestamptz;
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS default_shift_id int REFERENCES shifts(id);
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS last_poll_at timestamptz;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS last_poll_error text;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS attlog_stamp text;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS last_ip text;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS ip_address text;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS port int;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS api_url text;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS enforce_ip boolean NOT NULL DEFAULT false;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS poll_interval_sec int NOT NULL DEFAULT 60;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS approved boolean NOT NULL DEFAULT true;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS online boolean NOT NULL DEFAULT true;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS last_seen timestamptz;
 
 CREATE TABLE IF NOT EXISTS punch_logs (
   id          bigserial PRIMARY KEY,

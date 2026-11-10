@@ -89,6 +89,20 @@ test('shift checkout near shift end registers legitimate checkout', () => {
   assert.equal(r.status, 'present');
 });
 
+test('morning intermediate swipes do not trigger automatic checkout after shift end', () => {
+  const r = computeDay({
+    date: '2026-11-10', today: '2026-11-10', nowMin: 20 * 60 + 30, // 20:30 (after 19:00 shift end)
+    user: { join_date: '2026-01-01' }, shift,
+    punches: [
+      { t: '08:25:00', at: '2026-11-10T08:25:00' },
+      { t: '09:29:00', at: '2026-11-10T09:29:00' },
+    ],
+    holiday: false, leave: null,
+  });
+  assert.equal(r.check_out, null);
+  assert.equal(r.missing_checkout, true);
+});
+
 test('half day when worked time below threshold', () => {
   assert.equal(mk('2026-10-26', ['09:00:00', '12:00:00']).status, 'half_day');
 });

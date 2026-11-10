@@ -55,6 +55,25 @@ async function firstRun() {
       ON CONFLICT (name) DO UPDATE SET start_time = '09:30:00', end_time = '19:00:00', break_minutes = 60, grace_minutes = 10, early_out_grace_minutes = 10, overtime_after_minutes = 30
     `);
 
+    // Ensure all device schema columns exist
+    await query(`
+      ALTER TABLE devices ADD COLUMN IF NOT EXISTS last_punch_at timestamptz;
+      ALTER TABLE devices ADD COLUMN IF NOT EXISTS default_shift_id int REFERENCES shifts(id);
+      ALTER TABLE devices ADD COLUMN IF NOT EXISTS last_poll_at timestamptz;
+      ALTER TABLE devices ADD COLUMN IF NOT EXISTS last_poll_error text;
+      ALTER TABLE devices ADD COLUMN IF NOT EXISTS attlog_stamp text;
+      ALTER TABLE devices ADD COLUMN IF NOT EXISTS last_ip text;
+      ALTER TABLE devices ADD COLUMN IF NOT EXISTS ip_address text;
+      ALTER TABLE devices ADD COLUMN IF NOT EXISTS port int;
+      ALTER TABLE devices ADD COLUMN IF NOT EXISTS api_url text;
+      ALTER TABLE devices ADD COLUMN IF NOT EXISTS enforce_ip boolean NOT NULL DEFAULT false;
+      ALTER TABLE devices ADD COLUMN IF NOT EXISTS poll_interval_sec int NOT NULL DEFAULT 60;
+      ALTER TABLE devices ADD COLUMN IF NOT EXISTS approved boolean NOT NULL DEFAULT true;
+      ALTER TABLE devices ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true;
+      ALTER TABLE devices ADD COLUMN IF NOT EXISTS online boolean NOT NULL DEFAULT true;
+      ALTER TABLE devices ADD COLUMN IF NOT EXISTS last_seen timestamptz;
+    `).catch((e) => console.warn('[bootstrap] device column check:', e.message));
+
     // Ensure terminal metadata and assigned roles are accurate and up to date
     await query(`
       UPDATE devices
