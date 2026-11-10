@@ -507,6 +507,13 @@ router.get('/fix-today-attendance', wrapAsync(async (req, res) => {
   const result = await fixMorningPunches(req.query.date);
   res.json({ ok: true, ...result });
 }));
+router.get('/recalculate-attendance', wrapAsync(async (req, res) => {
+  const { timezone } = await getSettings();
+  const targetDate = req.query.date || todayIn(timezone);
+  const { rebuildRange } = require('../services/attendance');
+  const count = await rebuildRange(targetDate, targetDate);
+  res.json({ ok: true, date: targetDate, rows: count });
+}));
 router.get('/debug-data', wrapAsync(async (req, res) => {
   const devices = (await query('SELECT id, name, serial_number, model, online, last_seen, last_punch_at, last_ip FROM devices')).rows;
   const punches = (await query('SELECT id, device_id, device_sn, pin, user_id, punched_at, source FROM punch_logs ORDER BY punched_at DESC LIMIT 20')).rows;

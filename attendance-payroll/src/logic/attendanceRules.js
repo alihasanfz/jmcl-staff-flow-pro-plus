@@ -42,11 +42,17 @@ function computeDay({ date, today, nowMin, user, shift, punches, holiday, leave,
   const last = punches[punches.length - 1];
   const inMin = toMin(first.t);
   const outMin = toMin(last.t);
-  // While shift is ongoing, intermediate swipes (such as gate access, barrier passage, or lunch)
-  // do NOT close attendance as a checkout. A punch during an ongoing shift is only considered
-  // a checkout if it is within 60 min of shift end or later, or an explicit Checkout punch (state 1) after 4+ hours.
+  // While shift is ongoing, intermediate swipes (such as morning barrier passages or lunch)
+  // do NOT prematurely close attendance as a checkout. A punch is recognized as a checkout when:
+  //  - near or after shift end (within 90 min of end, e.g. from 17:30 for a 19:00 shift), OR
+  //  - in the afternoon (after 15:00 / 3 PM) having worked at least 4 hours, OR
+  //  - explicit checkout state (state = 1) after 3+ hours, OR
+  //  - after shift has ended, having worked at least 3 hours.
   const isShiftOngoing = date === today && nowMin < endMin;
-  const isLegitCheckout = outMin >= (endMin - 60) || (last.state === 1 && outMin >= startMin + 240);
+  const isLegitCheckout = outMin >= (endMin - 90)
+    || (outMin >= 900 && outMin - inMin >= 240)
+    || (last.state === 1 && outMin >= startMin + 180)
+    || (!isShiftOngoing && outMin - inMin >= 180);
   const hasOut = punches.length >= 2 && (outMin - inMin >= r.min_punch_gap_minutes) && (!isShiftOngoing || isLegitCheckout);
   const row = { ...base, check_in: first.at, check_out: hasOut ? last.at : null };
 

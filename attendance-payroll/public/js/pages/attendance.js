@@ -408,14 +408,21 @@ export async function render(view, state) {
                     <span style="font-weight:700; color:#dc2626; font-family:monospace; display:inline-flex; align-items:center; gap:4px;">
                       🔴 ${r.check_out_local}
                     </span>
-                  ` : r.check_in_local && r.check_in_local !== '—' && r.work_date === today ? html`
-                    <span class="badge" style="background:rgba(16,185,129,0.1); color:#15803d; border:1px solid rgba(16,185,129,0.25); font-weight:600; font-size:11px; white-space:nowrap;">
-                      🟢 At Work (Shift to 07:00 PM)
-                    </span>
-                  ` : r.check_in_local && r.check_in_local !== '—' && r.work_date < today ? html`
-                    <span class="badge" style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; font-size:11px; font-weight:600;">
-                      ⚠️ Missing Checkout
-                    </span>
+                  ` : r.check_in_local && r.check_in_local !== '—' ? html`
+                    ${(() => {
+                      const now = new Date();
+                      const dhakaHour = parseInt(now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Dhaka', hour: '2-digit', hour12: false }), 10);
+                      const isPastShift = r.work_date < today || (r.work_date === today && dhakaHour >= 19);
+                      return isPastShift ? html`
+                        <span class="badge" style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; font-size:11px; font-weight:600;">
+                          ⚠️ Missing Checkout
+                        </span>
+                      ` : html`
+                        <span class="badge" style="background:rgba(16,185,129,0.1); color:#15803d; border:1px solid rgba(16,185,129,0.25); font-weight:600; font-size:11px; white-space:nowrap;">
+                          🟢 At Work (Shift to 07:00 PM)
+                        </span>
+                      `;
+                    })()}
                   ` : html`<span class="muted font-mono">—</span>`}
                 </td>
                 <td class="r time">${fmtHours(r.worked_minutes)}</td>

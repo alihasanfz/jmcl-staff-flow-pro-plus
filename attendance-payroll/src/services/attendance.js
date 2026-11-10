@@ -35,7 +35,8 @@ async function rebuildRange(from, to, { userId = null } = {}) {
                   to_char(punched_at AT TIME ZONE $1, 'YYYY-MM-DD') AS d,
                   to_char(punched_at AT TIME ZONE $1, 'HH24:MI:SS') AS t,
                   punched_at AS at,
-                  device_sn
+                  device_sn,
+                  COALESCE(state, 0) AS state
              FROM punch_logs
             WHERE user_id IS NOT NULL
               AND punched_at >= ($2::date::timestamp AT TIME ZONE $1)
@@ -55,7 +56,7 @@ async function rebuildRange(from, to, { userId = null } = {}) {
   for (const p of punchesRes.rows) {
     const k = `${p.user_id}|${p.d}`;
     if (!punchMap.has(k)) punchMap.set(k, []);
-    punchMap.get(k).push({ t: p.t, at: p.at, device_sn: p.device_sn });
+    punchMap.get(k).push({ t: p.t, at: p.at, device_sn: p.device_sn, state: Number(p.state) });
   }
 
   const upserts = [];
@@ -246,21 +247,23 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
                     AND UPPER(pl.device_sn) = UPPER(${snParam})),
                 to_char(a.check_in AT TIME ZONE $1, 'HH24:MI')
               ) AS check_in_local,
-              (SELECT CASE
-                        WHEN MAX(pl.punched_at) > MIN(pl.punched_at)
-                             AND (
-                               a.work_date < (now() AT TIME ZONE $1)::date
-                               OR EXTRACT(HOUR FROM MAX(pl.punched_at) AT TIME ZONE $1) >= 15
-                               OR MAX(COALESCE(pl.state, 0)) = 1
-                               OR MAX(pl.punched_at) >= MIN(pl.punched_at) + interval '2 hours'
-                             )
-                        THEN to_char(MAX(pl.punched_at) AT TIME ZONE $1, 'HH24:MI')
-                        ELSE NULL
-                      END
-                 FROM punch_logs pl
-                WHERE pl.user_id = a.user_id
-                  AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
-                  AND UPPER(pl.device_sn) = UPPER(${snParam})
+              COALESCE(
+                (SELECT CASE
+                          WHEN MAX(pl.punched_at) > MIN(pl.punched_at)
+                               AND (
+                                 a.work_date < (now() AT TIME ZONE $1)::date
+                                 OR EXTRACT(HOUR FROM MAX(pl.punched_at) AT TIME ZONE $1) >= 15
+                                 OR MAX(COALESCE(pl.state, 0)) = 1
+                                 OR MAX(pl.punched_at) >= MIN(pl.punched_at) + interval '2 hours'
+                               )
+                          THEN to_char(MAX(pl.punched_at) AT TIME ZONE $1, 'HH24:MI')
+                          ELSE NULL
+                        END
+                   FROM punch_logs pl
+                  WHERE pl.user_id = a.user_id
+                    AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
+                    AND UPPER(pl.device_sn) = UPPER(${snParam})),
+                to_char(a.check_out AT TIME ZONE $1, 'HH24:MI')
               ) AS check_out_local,
               a.worked_minutes, a.late_minutes, a.early_out_minutes, a.overtime_minutes,
               a.missing_checkout, a.off_day_work,
@@ -318,44 +321,27 @@ async function fixMorningPunches(targetDate) {
        AND source = 'device'
   `, [d, timezone]);
 
-  // Recalculate attendance for this date: map first punch into on-time presence
-  const { rows: todayPunches } = await query(`
-    SELECT p.user_id, u.name, u.employee_code, p.device_sn, MIN(p.punched_at) AS first_punch
-      FROM punch_logs p
-      JOIN users u ON u.id = p.user_id
-     WHERE to_char(p.punched_at AT TIME ZONE $2, 'YYYY-MM-DD') = $1
-     GROUP BY p.user_id, u.name, u.employee_code, p.device_sn
+  // If first morning punch was between 09:40 AM and 10:05 AM, adjust to 09:25 AM in punch_logs so employees are marked on-time
+  const { rows: lateMorningPunches } = await query(`
+    SELECT DISTINCT ON (user_id) id, user_id, punched_at
+      FROM punch_logs
+     WHERE to_char(punched_at AT TIME ZONE $2, 'YYYY-MM-DD') = $1
+       AND to_char(punched_at AT TIME ZONE $2, 'HH24:MI:SS') > '09:40:00'
+       AND to_char(punched_at AT TIME ZONE $2, 'HH24:MI:SS') <= '10:05:00'
+       AND user_id IS NOT NULL
+     ORDER BY user_id, punched_at ASC
   `, [d, timezone]);
 
-  let updatedCount = 0;
-  for (const tp of todayPunches) {
-    // If the first punch was after 09:40 AM (due to slight difference), adjust to 09:25 AM so they are 100% on time
-    const punchDhakaTime = await query(`SELECT to_char($1::timestamptz AT TIME ZONE $2, 'HH24:MI:SS') as t`, [tp.first_punch, timezone]);
-    let checkInTimestamp = tp.first_punch;
-    if (punchDhakaTime.rows[0] && punchDhakaTime.rows[0].t > '09:40:00') {
-      const adjusted = await query(`SELECT ($1 || ' 09:25:00')::timestamp AT TIME ZONE $2 as adj`, [d, timezone]);
-      checkInTimestamp = adjusted.rows[0].adj;
-    }
-
+  for (const p of lateMorningPunches) {
     await query(`
-      INSERT INTO attendance (user_id, work_date, check_in, check_out, status, late_minutes, early_out_minutes, overtime_minutes, worked_minutes, missing_checkout, device_sn, check_in_device_sn, updated_at)
-      VALUES ($1, $4, $2, NULL, 'present', 0, 0, 0, 0, false, $3, $3, now())
-      ON CONFLICT (user_id, work_date)
-      DO UPDATE SET check_in = EXCLUDED.check_in,
-                    check_out = NULL,
-                    status = 'present',
-                    late_minutes = 0,
-                    early_out_minutes = 0,
-                    overtime_minutes = 0,
-                    worked_minutes = 0,
-                    missing_checkout = false,
-                    device_sn = COALESCE(EXCLUDED.device_sn, attendance.device_sn),
-                    check_in_device_sn = COALESCE(EXCLUDED.check_in_device_sn, attendance.check_in_device_sn),
-                    updated_at = now()
-    `, [tp.user_id, checkInTimestamp, tp.device_sn, d]);
-    updatedCount++;
+      UPDATE punch_logs
+         SET punched_at = ($1 || ' 09:25:00')::timestamp AT TIME ZONE $2
+       WHERE id = $3
+    `, [d, timezone, p.id]);
   }
 
+  // Recalculate attendance cleanly for this date preserving all legitimate morning and evening punches
+  const updatedCount = await rebuildRange(d, d);
   return { shiftedPunches: shiftedPunches || 0, updatedCount, date: d };
 }
 
