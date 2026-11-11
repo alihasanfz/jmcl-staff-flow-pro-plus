@@ -5,7 +5,18 @@ const KIND = (c) => (c.type === 'money' ? 'r' : c.type === 'int' || c.type === '
 const cell = (c, v) => {
   if (v === null || v === undefined || v === '') return '';
   if (c.type === 'money') return fmtMoney(v);
-  if (c.type === 'hours') return (Math.round(((Number(v) || 0) / 60) * 100) / 100).toFixed(2);
+  if (c.type === 'hours') return html`<b style="font-weight:700;">${(Math.round(((Number(v) || 0) / 60) * 100) / 100).toFixed(2)}</b>`;
+  if (c.key === 'check_out_local') {
+    if (v === 'Missing Checkout') {
+      return html`<span style="color:#b91c1c; font-weight:700; white-space:nowrap;">⚠️ Missing Checkout</span>`;
+    }
+    if (v && v !== '—') {
+      return html`<span style="color:#dc2626; font-weight:700;">🔴 ${v}</span>`;
+    }
+  }
+  if (c.key === 'check_in_local' && v && v !== '—') {
+    return html`<span style="color:#15803d; font-weight:700;">🟢 ${v}</span>`;
+  }
   return v;
 };
 

@@ -425,7 +425,7 @@ export async function render(view, state) {
                     })()}
                   ` : html`<span class="muted font-mono">—</span>`}
                 </td>
-                <td class="r time">${fmtHours(r.worked_minutes)}</td>
+                <td class="r time" style="font-weight:700;">${fmtHours(r.worked_minutes)}</td>
                 <td class="r">${fmtMin(r.late_minutes)}</td>
                 <td class="r">${fmtMin(r.early_out_minutes)}</td>
                 <td class="r">${r.overtime_minutes ? html`${fmtMin(r.overtime_minutes)}${r.off_day_work ? html` <span class="small muted">off day</span>` : ''}` : '—'}</td>

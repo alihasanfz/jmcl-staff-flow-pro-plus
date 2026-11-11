@@ -23,20 +23,35 @@ const BUILDERS = {
     async build({ from, to, userId, department, status, deviceSn }) {
       const rows = (await listAttendance({ from, to, userId, department, status, deviceSn }))
         .filter((r) => status || !['weekend', 'holiday'].includes(r.status))
-        .map((r) => ({ ...r, check_in_local: r.check_in_local || '—', check_out_local: r.check_out_local || '—', status: r.status.replace('_', ' ') }));
+        .map((r) => {
+          const hasIn = r.check_in_local && r.check_in_local !== '—';
+          const hasOut = r.check_out_local && r.check_out_local !== '—';
+          let outDisplay = '—';
+          if (hasOut) {
+            outDisplay = r.check_out_local;
+          } else if (hasIn) {
+            outDisplay = 'Missing Checkout';
+          }
+          return {
+            ...r,
+            check_in_local: r.check_in_local || '—',
+            check_out_local: outDisplay,
+            status: r.status.replace('_', ' ')
+          };
+        });
       return {
         columns: [
-          C('work_date', 'Date', 'text', 1.0),
-          C('employee_code', 'Code', 'text', 0.8),
+          C('work_date', 'Date', 'text', 0.95),
+          C('employee_code', 'Code', 'text', 0.75),
           C('name', 'Employee', 'text', 1.7),
           C('department', 'Department', 'text', 1.2),
-          C('device_name', 'Terminal / Machine', 'text', 1.4),
-          C('shift_name', 'Shift', 'text', 1.3),
-          C('check_in_local', 'In Time', 'text', 0.8),
-          C('check_out_local', 'Out Time', 'text', 0.8),
-          C('worked_minutes', 'Worked (h)', 'hours', 0.8, { sum: true }),
+          C('device_name', 'Terminal / Machine', 'text', 1.3),
+          C('shift_name', 'Shift', 'text', 1.1),
+          C('check_in_local', 'In Time', 'text', 0.75),
+          C('check_out_local', 'Out Time', 'text', 1.15),
+          C('worked_minutes', 'Worked (h)', 'hours', 0.85, { sum: true }),
           C('late_minutes', 'Late (min)', 'int', 0.7, { sum: true }),
-          C('status', 'Status', 'text', 0.9)
+          C('status', 'Status', 'text', 0.85)
         ],
         rows,
       };
@@ -239,8 +254,8 @@ async function toXlsx(report, params) {
   report.rows.forEach((r, rIdx) => {
     const rowValues = report.columns.map((c) => {
       const v = r[c.key];
-      if (c.key === 'check_out_local' && (!v || v === '—') && r.check_in_local && r.check_in_local !== '—') {
-        return 'On Duty';
+      if (c.key === 'check_out_local' && (!v || v === '—' || v === 'On Duty') && r.check_in_local && r.check_in_local !== '—') {
+        return 'Missing Checkout';
       }
       return rawValue(c, v);
     });
@@ -264,11 +279,13 @@ async function toXlsx(report, params) {
       if (c.key === 'check_in_local' && cell.value && cell.value !== '—') {
         cell.font = { color: { argb: 'FF15803D' }, bold: true };
       } else if (c.key === 'check_out_local') {
-        if (cell.value === 'On Duty') {
-          cell.font = { color: { argb: 'FF15803D' }, bold: true };
+        if (cell.value === 'Missing Checkout') {
+          cell.font = { color: { argb: 'FFB91C1C' }, bold: true };
         } else if (cell.value && cell.value !== '—') {
           cell.font = { color: { argb: 'FFDC2626' }, bold: true };
         }
+      } else if (c.key === 'worked_minutes' || c.type === 'hours') {
+        cell.font = { bold: true };
       } else if (c.key === 'status') {
         const s = String(cell.value || '').toLowerCase();
         if (s.includes('present')) cell.font = { color: { argb: 'FF15803D' }, bold: true };
@@ -325,19 +342,33 @@ async function toPdf(report, params, res) {
 
   const cell = (text, c, x, y, bold = false) => {
     let color = INK;
-    if (c.key === 'check_in_local' && text && text !== '—') color = '#15803d';
+    let isBold = bold;
+    if (c.key === 'check_in_local' && text && text !== '—') {
+      color = '#15803d';
+      isBold = true;
+    }
     if (c.key === 'check_out_local') {
-      if (text === 'On Duty') color = '#15803d';
-      else if (text && text !== '—') color = '#dc2626';
+      if (text === 'Missing Checkout') {
+        color = '#b91c1c';
+        isBold = true;
+      } else if (text && text !== '—') {
+        color = '#dc2626';
+        isBold = true;
+      }
+    }
+    if (c.key === 'worked_minutes' || c.type === 'hours') {
+      isBold = true;
+      color = '#0f172a';
     }
     if (c.key === 'status') {
       const s = String(text || '').toLowerCase();
       if (s.includes('present')) color = '#15803d';
       else if (s.includes('late')) color = '#b45309';
       else if (s.includes('absent')) color = '#dc2626';
+      else if (s.includes('half')) color = '#d97706';
     }
 
-    doc.font(bold ? f.bold : f.regular).fontSize(fontSize).fillColor(color)
+    doc.font(isBold ? f.bold : f.regular).fontSize(fontSize).fillColor(color)
       .text(text, x + 4, y + 4.5, { width: c.w - 8, height: fontSize + 2, ellipsis: true, align: ['int', 'money', 'hours'].includes(c.type) ? 'right' : 'left', lineBreak: false });
   };
 
@@ -384,8 +415,10 @@ async function toPdf(report, params, res) {
     let x = left;
     for (const c of cols) {
       let val = textValue(c, r[c.key]);
-      if (c.key === 'check_out_local' && (!val || val === '—') && r.check_in_local && r.check_in_local !== '—') {
-        val = 'On Duty';
+      if (c.key === 'check_out_local') {
+        if ((!val || val === '—' || val === 'On Duty') && r.check_in_local && r.check_in_local !== '—') {
+          val = 'Missing Checkout';
+        }
       }
       cell(val, c, x, y);
       x += c.w;
