@@ -6,6 +6,7 @@ import { canEdit } from '../permissions.js';
 export async function render(view, state) {
   // Master administrators can perform destructive actions like delete and reset password
   const isMasterAdmin = ['admin', 'company_admin', 'super_admin'].includes(state.user.role);
+  const isAdmin = isMasterAdmin;
   const canViewPw = isMasterAdmin || ['hr_manager', 'hr_executive', 'hr'].includes(state.user.role);
 
   // Department managers, employees, and staff can NEVER add, edit, or delete employees
@@ -18,6 +19,7 @@ export async function render(view, state) {
   const canDeleteEmployees = isMasterAdmin && canEdit(state.user, 'employees');
 
   const f = { q: '', department: '', active: 'true' };
+  let currentUsers = [];
   
   let shifts = [];
   let departments = [];
@@ -61,9 +63,10 @@ export async function render(view, state) {
 
   const load = async () => {
     const { users } = await get(`/users${qs(f)}`);
+    currentUsers = users || [];
     const container = $('#list');
     
-    if (!users.length) {
+    if (!currentUsers.length) {
       setHTML(container, html`<p class="empty">${t('noData')}</p>`);
       return;
     }
@@ -82,7 +85,7 @@ export async function render(view, state) {
           </tr>
         </thead>
         <tbody>
-          ${users.map((u) => html`
+          ${currentUsers.map((u) => html`
             <tr>
               <td class="nameCell">
                 <b>${u.name}</b>
@@ -101,13 +104,13 @@ export async function render(view, state) {
               <td>${badge(u.active !== false && u.status !== 'inactive' ? 'active' : 'inactive')}</td>
               <td class="r">
                 <div class="action-btns">
-                  <button class="action-btn" data-view="${u.id}">${t('view')}</button>
+                  <button type="button" class="action-btn" data-view="${u.id}">${t('view')}</button>
                   ${canEditEmployees ? html`
-                    <button class="action-btn" data-edit="${u.id}">${icon('edit')} ${t('edit')}</button>
+                    <button type="button" class="action-btn" data-edit="${u.id}">${icon('edit')} ${t('edit')}</button>
                   ` : ''}
                   ${canDeleteEmployees ? html`
-                    <button class="action-btn" data-reset="${u.id}" data-name="${u.name}">Reset</button>
-                    ${u.id !== state.user.id ? html`<button class="action-btn danger" data-del="${u.id}" data-name="${u.name}">${icon('trash')} ${t('delete')}</button>` : ''}
+                    <button type="button" class="action-btn" data-reset="${u.id}" data-name="${u.name}">Reset</button>
+                    ${u.id !== state.user.id ? html`<button type="button" class="action-btn danger" data-del="${u.id}" data-name="${u.name}">${icon('trash')} ${t('delete')}</button>` : ''}
                   ` : ''}
                 </div>
               </td>
@@ -117,40 +120,73 @@ export async function render(view, state) {
       </table>
     `);
 
-    $$('[data-view]').forEach((b) => b.addEventListener('click', () => viewProfile(users.find((u) => String(u.id) === b.dataset.view))));
-    $$('[data-edit]').forEach((b) => b.addEventListener('click', () => edit(users.find((u) => String(u.id) === b.dataset.edit))));
-    $$('[data-reset]').forEach((b) => b.addEventListener('click', async () => {
-      const ok = await confirmDialog('Reset password?', `A temporary password will be generated for ${b.dataset.name}.`, { danger: true });
-      if (!ok) return;
-      try {
-        const r = await post(`/users/${b.dataset.reset}/reset-password`);
-        secretDialog('Temporary password', b.dataset.name, r.temporaryPassword);
-      } catch (e) {
-        toast(e.message, 'bad');
+    container.onclick = async (e) => {
+      const viewBtn = e.target.closest('[data-view]');
+      if (viewBtn) {
+        e.preventDefault();
+        const emp = currentUsers.find((u) => String(u.id) === viewBtn.dataset.view);
+        if (emp) viewProfile(emp);
+        return;
       }
-    }));
-    $$('[data-del]').forEach((b) => b.addEventListener('click', async () => {
-      const ok = await confirmDialog(
-        `${t('delete')} ${b.dataset.name}?`,
-        'Are you sure you want to delete this employee? If attendance or payroll records exist, the employee will be deactivated safely to preserve history.',
-        { confirmLabel: t('delete'), danger: true }
-      );
-      if (!ok) return;
-      try {
-        await del(`/users/${b.dataset.del}`);
-        toast('Employee removed');
-        load();
-      } catch (e) {
-        toast(e.message, 'bad');
+
+      const editBtn = e.target.closest('[data-edit]');
+      if (editBtn) {
+        e.preventDefault();
+        const emp = currentUsers.find((u) => String(u.id) === editBtn.dataset.edit);
+        if (emp) edit(emp);
+        return;
       }
-    }));
+
+      const resetBtn = e.target.closest('[data-reset]');
+      if (resetBtn) {
+        e.preventDefault();
+        const ok = await confirmDialog('Reset password?', `A temporary password will be generated for ${resetBtn.dataset.name}.`, { danger: true });
+        if (!ok) return;
+        try {
+          const r = await post(`/users/${resetBtn.dataset.reset}/reset-password`);
+          secretDialog('Temporary password', resetBtn.dataset.name, r.temporaryPassword);
+        } catch (err) {
+          toast(err.message, 'bad');
+        }
+        return;
+      }
+
+      const delBtn = e.target.closest('[data-del]');
+      if (delBtn) {
+        e.preventDefault();
+        const ok = await confirmDialog(
+          `${t('delete')} ${delBtn.dataset.name}?`,
+          'Are you sure you want to delete this employee? If attendance or payroll records exist, the employee will be deactivated safely to preserve history.',
+          { confirmLabel: t('delete'), danger: true }
+        );
+        if (!ok) return;
+        try {
+          await del(`/users/${delBtn.dataset.del}`);
+          toast('Employee removed');
+          load();
+        } catch (err) {
+          toast(err.message, 'bad');
+        }
+        return;
+      }
+    };
   };
 
   const viewProfile = (u) => {
+    if (!u) {
+      toast('Employee profile not found', 'bad');
+      return;
+    }
+
     modal({
       title: `Employee Profile: ${u.name}`,
       wide: true,
       cancelLabel: t('close'),
+      submitLabel: canEditEmployees ? `${t('edit')} Employee` : undefined,
+      onSubmit: canEditEmployees ? async (form, close) => {
+        close();
+        edit(u);
+      } : undefined,
       body: html`
         <div class="stack">
           <div class="row between" style="border-bottom: 1px solid var(--line); padding-bottom: 14px;">
@@ -194,7 +230,7 @@ export async function render(view, state) {
                 <div class="kv"><dt>Department:</dt><dd>${u.department || '—'}</dd></div>
                 <div class="kv"><dt>Designation:</dt><dd>${u.designation || '—'}</dd></div>
                 <div class="kv"><dt>Shift:</dt><dd>${u.shift_name || 'No Shift Assigned'}</dd></div>
-                <div class="kv"><dt>Overtime:</dt><dd>${u.overtime_eligible !== false ? '<span class="badge online" style="font-size:11px;">OT Eligible (অনুমোদিত)</span>' : '<span class="badge offline" style="font-size:11px;">OT Disabled (বন্ধ)</span>'}</dd></div>
+                <div class="kv"><dt>Overtime:</dt><dd>${u.overtime_eligible !== false ? html`<span class="badge online" style="font-size:11px;">OT Eligible (অনুমোদিত)</span>` : html`<span class="badge offline" style="font-size:11px;">OT Disabled (বন্ধ)</span>`}</dd></div>
                 <div class="kv"><dt>Joined:</dt><dd>${fmtDateLong(u.join_date)}</dd></div>
                 <div class="kv"><dt>Basic Salary:</dt><dd>${fmtMoney(u.base_salary)}</dd></div>
                 <div class="kv"><dt>Allowances:</dt><dd>${fmtMoney(u.allowances)}</dd></div>
@@ -228,7 +264,7 @@ export async function render(view, state) {
 
   const edit = (u) => {
     const isNew = !u;
-    const canRole = isAdmin;
+    const canRole = isMasterAdmin;
 
     modal({
       title: isNew ? 'Quick Add Employee (Name & ID)' : `Edit Employee: ${u.name}`,
@@ -322,7 +358,7 @@ export async function render(view, state) {
                 </select>
               </label>
               <label>Joining Date
-                <input type="date" name="joinDate" value="${u?.join_date || state.meta.today}">
+                <input type="date" name="joinDate" value="${u?.join_date || state.meta?.today || new Date().toISOString().slice(0, 10)}">
               </label>
               <label>Basic Salary (BDT)
                 <input type="number" name="baseSalary" min="0" step="0.01" value="${u?.base_salary ?? 0}">

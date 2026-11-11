@@ -145,9 +145,8 @@ export async function render(view) {
             <select name="defaultShiftId" style="font-weight:600;">
               <option value="">-- Select Default Shift --</option>
               ${shifts.map((s) => html`
-                <option value="${s.id}" ${
-                  (dept?.default_shift_id === s.id || (!dept?.default_shift_id && s.name.toLowerCase().includes(dept?.name ? dept.name.toLowerCase() : 'uface800'))) ? 'selected' : ''
-                }>${s.name} (${s.start_time} - ${s.end_time})</option>
+                <option value="${s.id}" ${(dept?.default_shift_id === s.id || (!dept?.default_shift_id && s.name.toLowerCase().includes(dept?.name ? dept.name.toLowerCase() : 'uface800'))) ? 'selected' : ''
+        }>${s.name} (${s.start_time} - ${s.end_time})</option>
               `)}
             </select>
             <span class="hint">Employees belonging to this department will follow this shift start/end time.</span>

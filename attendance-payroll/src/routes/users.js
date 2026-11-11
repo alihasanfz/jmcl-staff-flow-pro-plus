@@ -107,7 +107,7 @@ router.get('/', wrap(async (req, res) => {
   let where = 'TRUE';
   if (req.query.q) {
     params.push(`%${String(req.query.q).slice(0, 60)}%`);
-    where += ` AND (u.name ILIKE $${params.length} OR u.employee_code ILIKE $${params.length} OR u.email ILIKE $${params.length} OR u.phone ILIKE $${params.length})`;
+    where += ` AND (u.name ILIKE $${params.length} OR u.employee_code ILIKE $${params.length} OR u.device_pin ILIKE $${params.length} OR u.email ILIKE $${params.length} OR u.phone ILIKE $${params.length})`;
   }
   if (req.query.department) {
     params.push(req.query.department);
