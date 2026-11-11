@@ -84,7 +84,7 @@ export async function render(view, state) {
             <th class="r">${t('actions')}</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="emp-tbody">
           ${currentUsers.map((u) => html`
             <tr>
               <td class="nameCell">
@@ -120,6 +120,63 @@ export async function render(view, state) {
       </table>
     `);
 
+    const tbody = $('#emp-tbody', container) || container;
+
+    // Direct event listener attachment (as in roles.js and shifts.js)
+    $$('[data-view]', tbody).forEach((b) => {
+      b.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const emp = currentUsers.find((u) => String(u.id) === b.dataset.view);
+        if (emp) viewProfile(emp);
+      };
+    });
+
+    $$('[data-edit]', tbody).forEach((b) => {
+      b.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const emp = currentUsers.find((u) => String(u.id) === b.dataset.edit);
+        if (emp) edit(emp);
+      };
+    });
+
+    $$('[data-reset]', tbody).forEach((b) => {
+      b.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const ok = await confirmDialog('Reset password?', `A temporary password will be generated for ${b.dataset.name}.`, { danger: true });
+        if (!ok) return;
+        try {
+          const r = await post(`/users/${b.dataset.reset}/reset-password`);
+          secretDialog('Temporary password', b.dataset.name, r.temporaryPassword);
+        } catch (err) {
+          toast(err.message, 'bad');
+        }
+      };
+    });
+
+    $$('[data-del]', tbody).forEach((b) => {
+      b.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const ok = await confirmDialog(
+          `${t('delete')} ${b.dataset.name}?`,
+          'Are you sure you want to delete this employee? If attendance or payroll records exist, the employee will be deactivated safely to preserve history.',
+          { confirmLabel: t('delete'), danger: true }
+        );
+        if (!ok) return;
+        try {
+          await del(`/users/${b.dataset.del}`);
+          toast('Employee removed');
+          load();
+        } catch (err) {
+          toast(err.message, 'bad');
+        }
+      };
+    });
+
+    // Fallback event delegation on container
     container.onclick = async (e) => {
       const viewBtn = e.target.closest('[data-view]');
       if (viewBtn) {
@@ -178,145 +235,152 @@ export async function render(view, state) {
       return;
     }
 
-    modal({
-      title: `Employee Profile: ${u.name}`,
-      wide: true,
-      cancelLabel: t('close'),
-      submitLabel: canEditEmployees ? `${t('edit')} Employee` : undefined,
-      onSubmit: canEditEmployees ? async (form, close) => {
-        close();
-        edit(u);
-      } : undefined,
-      body: html`
-        <div class="stack">
-          <div class="row between" style="border-bottom: 1px solid var(--line); padding-bottom: 14px;">
-            <div>
-              <h2 style="margin-bottom: 4px;">${u.name}</h2>
-              <span class="badge ${u.active ? 'active' : 'inactive'}">${u.active ? 'Active Employee' : 'Inactive'}</span>
-              <span class="badge waiting" style="margin-left: 6px;">${u.department || 'General'}</span>
-            </div>
-            <div style="text-align: right;">
-              <span class="small muted">Employee ID</span>
-              <div style="font-size: 16px; font-weight: 700;">${u.employee_code || u.employee_id || '—'}</div>
-              <span class="small muted">Biometric PIN: <b>${u.device_pin || u.biometric_pin || '—'}</b></span>
-            </div>
-          </div>
-
-          <div class="cols-eq">
-            <div class="panel">
-              <header><b>Personal &amp; Contact Details</b></header>
-              <div class="body stack" style="gap: 8px;">
-                <div class="kv"><dt>Email:</dt><dd>${u.email}</dd></div>
-                <div class="kv"><dt>Phone:</dt><dd>${u.phone || '—'}</dd></div>
-                <div class="kv"><dt>Address:</dt><dd>${u.address || '—'}</dd></div>
-                <div class="kv"><dt>NID Number:</dt><dd>${u.nid_number || '—'}</dd></div>
-                <div class="kv"><dt>Blood Group:</dt><dd>${u.blood_group || '—'}</dd></div>
-                <div class="kv"><dt>Emergency Contact:</dt><dd>${formatEmergencyContact(u.emergency_contact) || '—'}</dd></div>
-                ${canViewPw && u.raw_password ? html`
-                  <div class="kv">
-                    <dt>Password:</dt>
-                    <dd style="display:inline-flex; align-items:center; gap:6px;">
-                      <span class="font-mono" id="profile-emp-pw" data-pw="${esc(u.raw_password)}" style="font-weight:600; letter-spacing:1px;">••••••••</span>
-                      <button type="button" id="btn-toggle-profile-pw" style="background:none; border:none; cursor:pointer; font-size:13px; padding:0 2px;" title="Click to view/hide password">👁️</button>
-                    </dd>
-                  </div>
-                ` : ''}
+    try {
+      modal({
+        title: `Employee Profile: ${u.name || ''}`,
+        wide: true,
+        cancelLabel: t('close'),
+        submitLabel: canEditEmployees ? `${t('edit')} Employee` : undefined,
+        onSubmit: canEditEmployees ? async (form, close) => {
+          close();
+          edit(u);
+        } : undefined,
+        body: html`
+          <div class="stack">
+            <div class="row between" style="border-bottom: 1px solid var(--line); padding-bottom: 14px;">
+              <div>
+                <h2 style="margin-bottom: 4px;">${u.name}</h2>
+                <span class="badge ${u.active ? 'active' : 'inactive'}">${u.active ? 'Active Employee' : 'Inactive'}</span>
+                <span class="badge waiting" style="margin-left: 6px;">${u.department || 'General'}</span>
+              </div>
+              <div style="text-align: right;">
+                <span class="small muted">Employee ID</span>
+                <div style="font-size: 16px; font-weight: 700;">${u.employee_code || u.employee_id || '—'}</div>
+                <span class="small muted">Biometric PIN: <b>${u.device_pin || u.biometric_pin || '—'}</b></span>
               </div>
             </div>
 
-            <div class="panel">
-              <header><b>Employment &amp; Compensation</b></header>
-              <div class="body stack" style="gap: 8px;">
-                <div class="kv"><dt>Department:</dt><dd>${u.department || '—'}</dd></div>
-                <div class="kv"><dt>Designation:</dt><dd>${u.designation || '—'}</dd></div>
-                <div class="kv"><dt>Shift:</dt><dd>${u.shift_name || 'No Shift Assigned'}</dd></div>
-                <div class="kv"><dt>Overtime:</dt><dd>${u.overtime_eligible !== false ? html`<span class="badge online" style="font-size:11px;">OT Eligible (অনুমোদিত)</span>` : html`<span class="badge offline" style="font-size:11px;">OT Disabled (বন্ধ)</span>`}</dd></div>
-                <div class="kv"><dt>Joined:</dt><dd>${fmtDateLong(u.join_date)}</dd></div>
-                <div class="kv"><dt>Basic Salary:</dt><dd>${fmtMoney(u.base_salary)}</dd></div>
-                <div class="kv"><dt>Allowances:</dt><dd>${fmtMoney(u.allowances)}</dd></div>
-                <div class="kv total"><dt>Gross Salary:</dt><dd>${fmtMoney(Number(u.base_salary || 0) + Number(u.allowances || 0))}</dd></div>
+            <div class="cols-eq">
+              <div class="panel">
+                <header><b>Personal &amp; Contact Details</b></header>
+                <div class="body stack" style="gap: 8px;">
+                  <div class="kv"><dt>Email:</dt><dd>${u.email}</dd></div>
+                  <div class="kv"><dt>Phone:</dt><dd>${u.phone || '—'}</dd></div>
+                  <div class="kv"><dt>Address:</dt><dd>${u.address || '—'}</dd></div>
+                  <div class="kv"><dt>NID Number:</dt><dd>${u.nid_number || '—'}</dd></div>
+                  <div class="kv"><dt>Blood Group:</dt><dd>${u.blood_group || '—'}</dd></div>
+                  <div class="kv"><dt>Emergency Contact:</dt><dd>${formatEmergencyContact(u.emergency_contact) || '—'}</dd></div>
+                  ${canViewPw && u.raw_password ? html`
+                    <div class="kv">
+                      <dt>Password:</dt>
+                      <dd style="display:inline-flex; align-items:center; gap:6px;">
+                        <span class="font-mono" id="profile-emp-pw" data-pw="${esc(u.raw_password)}" style="font-weight:600; letter-spacing:1px;">••••••••</span>
+                        <button type="button" id="btn-toggle-profile-pw" style="background:none; border:none; cursor:pointer; font-size:13px; padding:0 2px;" title="Click to view/hide password">👁️</button>
+                      </dd>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+
+              <div class="panel">
+                <header><b>Employment &amp; Compensation</b></header>
+                <div class="body stack" style="gap: 8px;">
+                  <div class="kv"><dt>Department:</dt><dd>${u.department || '—'}</dd></div>
+                  <div class="kv"><dt>Designation:</dt><dd>${u.designation || '—'}</dd></div>
+                  <div class="kv"><dt>Shift:</dt><dd>${u.shift_name || 'No Shift Assigned'}</dd></div>
+                  <div class="kv"><dt>Overtime:</dt><dd>${u.overtime_eligible !== false ? html`<span class="badge online" style="font-size:11px;">OT Eligible (অনুমোদিত)</span>` : html`<span class="badge offline" style="font-size:11px;">OT Disabled (বন্ধ)</span>`}</dd></div>
+                  <div class="kv"><dt>Joined:</dt><dd>${fmtDateLong(u.join_date)}</dd></div>
+                  <div class="kv"><dt>Basic Salary:</dt><dd>${fmtMoney(u.base_salary)}</dd></div>
+                  <div class="kv"><dt>Allowances:</dt><dd>${fmtMoney(u.allowances)}</dd></div>
+                  <div class="kv total"><dt>Gross Salary:</dt><dd>${fmtMoney(Number(u.base_salary || 0) + Number(u.allowances || 0))}</dd></div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      `,
-    });
-    setTimeout(() => {
-      const pwSpan = $('#profile-emp-pw');
-      const toggleBtn = $('#btn-toggle-profile-pw');
-      if (pwSpan && toggleBtn) {
-        toggleBtn.addEventListener('click', () => {
-          if (pwSpan.textContent === '••••••••') {
-            pwSpan.textContent = pwSpan.dataset.pw;
-            pwSpan.style.color = '#0284c7';
-            toggleBtn.textContent = '🙈';
-            toggleBtn.title = 'Click to hide password';
-          } else {
-            pwSpan.textContent = '••••••••';
-            pwSpan.style.color = 'inherit';
-            toggleBtn.textContent = '👁️';
-            toggleBtn.title = 'Click to view password';
-          }
-        });
-      }
-    }, 50);
+        `,
+      });
+
+      setTimeout(() => {
+        const pwSpan = $('#profile-emp-pw');
+        const toggleBtn = $('#btn-toggle-profile-pw');
+        if (pwSpan && toggleBtn) {
+          toggleBtn.addEventListener('click', () => {
+            if (pwSpan.textContent === '••••••••') {
+              pwSpan.textContent = pwSpan.dataset.pw;
+              pwSpan.style.color = '#0284c7';
+              toggleBtn.textContent = '🙈';
+              toggleBtn.title = 'Click to hide password';
+            } else {
+              pwSpan.textContent = '••••••••';
+              pwSpan.style.color = 'inherit';
+              toggleBtn.textContent = '👁️';
+              toggleBtn.title = 'Click to view password';
+            }
+          });
+        }
+      }, 50);
+    } catch (err) {
+      console.error('viewProfile error:', err);
+      toast(err.message, 'bad');
+    }
   };
 
   const edit = (u) => {
     const isNew = !u;
     const canRole = isMasterAdmin;
 
-    modal({
-      title: isNew ? 'Quick Add Employee (Name & ID)' : `Edit Employee: ${u.name}`,
-      submitLabel: isNew ? 'Save Employee' : 'Save Changes',
-      wide: true,
-      body: html`
-        <div class="stack" style="gap:16px;">
-          <!-- Primary Quick Register Box: Name and ID -->
-          <div style="background:var(--paper-2); border:2px solid #2563eb; border-radius:10px; padding:16px; box-shadow:0 2px 8px rgba(37,99,235,0.08);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-              <span style="font-size:14px; font-weight:700; color:#1d4ed8; display:flex; align-items:center; gap:6px;">
-                ${icon('plus')} ${isNew ? 'Quick Add (Enter Name & Machine ID to Save)' : 'Primary Biometric Identity'}
-              </span>
-              <span class="badge online" style="font-size:11px;">Instant Device Sync</span>
+    try {
+      modal({
+        title: isNew ? 'Quick Add Employee (Name & ID)' : `Edit Employee: ${u.name || ''}`,
+        submitLabel: isNew ? 'Save Employee' : 'Save Changes',
+        wide: true,
+        body: html`
+          <div class="stack" style="gap:16px;">
+            <!-- Primary Quick Register Box: Name and ID -->
+            <div style="background:var(--paper-2); border:2px solid #2563eb; border-radius:10px; padding:16px; box-shadow:0 2px 8px rgba(37,99,235,0.08);">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <span style="font-size:14px; font-weight:700; color:#1d4ed8; display:flex; align-items:center; gap:6px;">
+                  ${icon('plus')} ${isNew ? 'Quick Add (Enter Name & Machine ID to Save)' : 'Primary Biometric Identity'}
+                </span>
+                <span class="badge online" style="font-size:11px;">Instant Device Sync</span>
+              </div>
+
+              <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:14px;">
+                <label class="wide" style="font-weight:700;">
+                  Full Name *
+                  <input type="text" name="name" required maxlength="120" value="${u?.name || ''}" placeholder="e.g. Md. Rahim" autofocus style="font-size:15px; font-weight:600;">
+                </label>
+
+                <label style="font-weight:700;">
+                  Biometric PIN / Machine ID *
+                  <input type="text" name="devicePin" inputmode="numeric" pattern="[0-9]{1,9}" value="${u?.device_pin || u?.biometric_pin || ''}" placeholder="e.g. 55" style="font-size:15px; font-weight:700; font-family:monospace; color:var(--primary);">
+                  <span class="hint" style="color:#2563eb; font-weight:600;">Must match numeric ID registered on uFace800 or SenseFace terminal.</span>
+                </label>
+
+                <label style="font-weight:700;">
+                  Employee Code / ID
+                  <input type="text" name="employeeCode" maxlength="32" value="${u?.employee_code || u?.employee_id || ''}" placeholder="Auto: EMP0055">
+                  <span class="hint">Auto-generated from PIN if left blank.</span>
+                </label>
+
+                <label class="wide" style="font-weight:700;">
+                  Work Shift
+                  <select name="shiftId" style="font-weight:600;">
+                    ${shifts.map((s) => html`
+                      <option value="${s.id}" ${
+                        (u?.shift_id === s.id || (!u?.shift_id && s.name && s.name.includes('uFace800'))) ? 'selected' : ''
+                      }>${s.name} (${s.start_time} - ${s.end_time})</option>
+                    `)}
+                  </select>
+                  <span class="hint">Default shift: ZK-uFace800 (09:30 AM – 07:00 PM).</span>
+                </label>
+
+                <label class="check wide" style="margin-top:4px; font-weight:600; display:flex; align-items:center; gap:8px;">
+                  <input type="checkbox" name="overtimeEligible" ${u ? (u.overtime_eligible !== false ? 'checked' : '') : 'checked'} style="transform:scale(1.2);">
+                  <span><b>Overtime Eligible</b> (অভারটাইম কার্যকর — টিক চিহ্ন থাকলে অতিরিক্ত কাজের সময় গণ্য হবে)</span>
+                </label>
+              </div>
             </div>
-
-            <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:14px;">
-              <label class="wide" style="font-weight:700;">
-                Full Name *
-                <input type="text" name="name" required maxlength="120" value="${u?.name || ''}" placeholder="e.g. Md. Rahim" autofocus style="font-size:15px; font-weight:600;">
-              </label>
-
-              <label style="font-weight:700;">
-                Biometric PIN / Machine ID *
-                <input type="text" name="devicePin" inputmode="numeric" pattern="[0-9]{1,9}" value="${u?.device_pin || u?.biometric_pin || ''}" placeholder="e.g. 55" style="font-size:15px; font-weight:700; font-family:monospace; color:var(--primary);">
-                <span class="hint" style="color:#2563eb; font-weight:600;">Must match numeric ID registered on uFace800 or SenseFace terminal.</span>
-              </label>
-
-              <label style="font-weight:700;">
-                Employee Code / ID
-                <input type="text" name="employeeCode" maxlength="32" value="${u?.employee_code || u?.employee_id || ''}" placeholder="Auto: EMP0055">
-                <span class="hint">Auto-generated from PIN if left blank.</span>
-              </label>
-
-              <label class="wide" style="font-weight:700;">
-                Work Shift
-                <select name="shiftId" style="font-weight:600;">
-                  ${shifts.map((s) => html`
-                    <option value="${s.id}" ${
-                      (u?.shift_id === s.id || (!u?.shift_id && s.name.includes('uFace800'))) ? 'selected' : ''
-                    }>${s.name} (${s.start_time} - ${s.end_time})</option>
-                  `)}
-                </select>
-                <span class="hint">Default shift: ZK-uFace800 (09:30 AM – 07:00 PM).</span>
-              </label>
-
-              <label class="check wide" style="margin-top:4px; font-weight:600; display:flex; align-items:center; gap:8px;">
-                <input type="checkbox" name="overtimeEligible" ${u ? (u.overtime_eligible !== false ? 'checked' : '') : 'checked'} style="transform:scale(1.2);">
-                <span><b>Overtime Eligible</b> (অভারটাইম কার্যকর — টিক চিহ্ন থাকলে অতিরিক্ত কাজের সময় গণ্য হবে)</span>
-              </label>
-            </div>
-          </div>
 
           <!-- Collapsible Optional & Profile Details -->
           <details style="border:1px solid var(--line); border-radius:8px; padding:12px 16px; background:var(--paper);" ${!isNew ? 'open' : ''}>
