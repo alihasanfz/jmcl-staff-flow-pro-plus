@@ -67,7 +67,12 @@ function createApp() {
       res.set('Expires', '0');
     },
   }));
-  app.get(/^\/(?!api\/|iclock\/|vendor\/).*/, (req, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(path.join(pub, 'index.html')); });
+  app.get(/^\/(?!api\/|iclock\/|vendor\/).*/, (req, res) => {
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.sendFile(path.join(pub, 'index.html'));
+  });
 
   app.use(errorHandler);
   return app;
