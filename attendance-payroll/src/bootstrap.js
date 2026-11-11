@@ -242,13 +242,17 @@ async function firstRun() {
 
     // 1. One-time restore for punches shifted -2h on 2026-11-11
     try {
-      const restored = await query(`
-        UPDATE punch_logs
-           SET punched_at = punched_at + interval '2 hours'
-         WHERE id >= 77590 AND id <= 77755
+      const { rows } = await query(`
+        SELECT id FROM punch_logs WHERE id >= 77590 AND id <= 77755
       `);
-      if (restored && restored.rowCount) {
-        console.log(`[bootstrap] Restored ${restored.rowCount} punches to true time on 2026-11-11`);
+      for (const row of rows) {
+        try {
+          await query(`UPDATE punch_logs SET punched_at = punched_at + interval '2 hours' WHERE id = $1`, [row.id]);
+        } catch (err) {
+          if (err.code === '23505') {
+            await query(`DELETE FROM punch_logs WHERE id = $1`, [row.id]);
+          }
+        }
       }
     } catch (e) {
       console.warn('[bootstrap] restore punches note:', e.message);

@@ -371,11 +371,25 @@ router.post('/fix-morning-punches', editAttendance, wrap(async (req, res) => {
 
 /** Restore punches that were shifted by -2 hours on 2026-11-11 */
 router.post('/restore-shifted-punches', editAttendance, wrap(async (req, res) => {
-  const result = await query(`
-    UPDATE punch_logs
-       SET punched_at = punched_at + interval '2 hours'
-     WHERE id >= 77590 AND id <= 77755
+  const { rows } = await query(`
+    SELECT id FROM punch_logs WHERE id >= 77590 AND id <= 77755
   `);
+  let shiftedUpdated = 0;
+  let deletedDuplicates = 0;
+  for (const row of rows) {
+    try {
+      await query(`UPDATE punch_logs SET punched_at = punched_at + interval '2 hours' WHERE id = $1`, [row.id]);
+      shiftedUpdated++;
+    } catch (err) {
+      if (err.code === '23505') {
+        await query(`DELETE FROM punch_logs WHERE id = $1`, [row.id]);
+        deletedDuplicates++;
+      } else {
+        throw err;
+      }
+    }
+  }
+
   await query(`
     DELETE FROM punch_logs
      WHERE user_id = 4
@@ -394,7 +408,7 @@ router.post('/restore-shifted-punches', editAttendance, wrap(async (req, res) =>
        AND work_date = '2026-11-11'
   `);
   const rebuilt = await rebuildRange('2026-11-11', '2026-11-11');
-  res.json({ ok: true, shiftedUpdated: result.rowCount, rebuilt });
+  res.json({ ok: true, shiftedUpdated, deletedDuplicates, rebuilt });
 }));
 
 module.exports = router;
