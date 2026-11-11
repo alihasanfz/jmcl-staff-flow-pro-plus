@@ -45,6 +45,80 @@ test('early out and overtime thresholds', () => {
   assert.equal(mk('2026-10-26', ['09:00:00', '23:30:00']).overtime_minutes, 240); // capped
 });
 
+test('store shift starts 08:00 AM and grace is 0 (late after 08:00)', () => {
+  const storeShift = {
+    start_time: '08:00:00',
+    end_time: '17:00:00',
+    grace_minutes: 0,
+    half_day_minutes: 240,
+    full_day_minutes: 480,
+    early_exit_tolerance: 15,
+    overtime_threshold_minutes: 30,
+    max_overtime_minutes: 240,
+    break_duration_minutes: 60,
+  };
+  const onTime = computeDay({
+    date: '2026-10-26', today: '2026-10-26', nowMin: 23 * 60,
+    user: { join_date: '2026-01-01' }, shift: storeShift,
+    punches: [
+      { t: '08:00:00', at: '2026-10-26T08:00:00' },
+      { t: '17:00:00', at: '2026-10-26T17:00:00' },
+    ],
+    holiday: false, leave: null,
+  });
+  assert.equal(onTime.status, 'present');
+  assert.equal(onTime.late_minutes, 0);
+
+  const latePunch = computeDay({
+    date: '2026-10-26', today: '2026-10-26', nowMin: 23 * 60,
+    user: { join_date: '2026-01-01' }, shift: storeShift,
+    punches: [
+      { t: '08:01:00', at: '2026-10-26T08:01:00' },
+      { t: '17:00:00', at: '2026-10-26T17:00:00' },
+    ],
+    holiday: false, leave: null,
+  });
+  assert.equal(latePunch.status, 'late');
+  assert.equal(latePunch.late_minutes, 1);
+});
+
+test('overtime eligibility control at employee and shift level', () => {
+  const noOtUser = computeDay({
+    date: '2026-10-26', today: '2026-10-26', nowMin: 23 * 60,
+    user: { join_date: '2026-01-01', overtime_eligible: false }, shift,
+    punches: [
+      { t: '09:00:00', at: '2026-10-26T09:00:00' },
+      { t: '20:00:00', at: '2026-10-26T20:00:00' },
+    ],
+    holiday: false, leave: null,
+  });
+  assert.equal(noOtUser.overtime_minutes, 0);
+
+  const noOtShift = computeDay({
+    date: '2026-10-26', today: '2026-10-26', nowMin: 23 * 60,
+    user: { join_date: '2026-01-01', overtime_eligible: true },
+    shift: { ...shift, allow_overtime: false },
+    punches: [
+      { t: '09:00:00', at: '2026-10-26T09:00:00' },
+      { t: '20:00:00', at: '2026-10-26T20:00:00' },
+    ],
+    holiday: false, leave: null,
+  });
+  assert.equal(noOtShift.overtime_minutes, 0);
+
+  const otAllowed = computeDay({
+    date: '2026-10-26', today: '2026-10-26', nowMin: 23 * 60,
+    user: { join_date: '2026-01-01', overtime_eligible: true },
+    shift: { ...shift, allow_overtime: true },
+    punches: [
+      { t: '09:00:00', at: '2026-10-26T09:00:00' },
+      { t: '20:00:00', at: '2026-10-26T20:00:00' },
+    ],
+    holiday: false, leave: null,
+  });
+  assert.equal(otAllowed.overtime_minutes, 120);
+});
+
 test('single punch: missing checkout once the day is over', () => {
   const r = mk('2026-10-26', ['09:02:00']);
   assert.equal(r.check_out, null);

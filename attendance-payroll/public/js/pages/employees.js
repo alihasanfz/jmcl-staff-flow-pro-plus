@@ -194,6 +194,7 @@ export async function render(view, state) {
                 <div class="kv"><dt>Department:</dt><dd>${u.department || '—'}</dd></div>
                 <div class="kv"><dt>Designation:</dt><dd>${u.designation || '—'}</dd></div>
                 <div class="kv"><dt>Shift:</dt><dd>${u.shift_name || 'No Shift Assigned'}</dd></div>
+                <div class="kv"><dt>Overtime:</dt><dd>${u.overtime_eligible !== false ? '<span class="badge online" style="font-size:11px;">OT Eligible (অনুমোদিত)</span>' : '<span class="badge offline" style="font-size:11px;">OT Disabled (বন্ধ)</span>'}</dd></div>
                 <div class="kv"><dt>Joined:</dt><dd>${fmtDateLong(u.join_date)}</dd></div>
                 <div class="kv"><dt>Basic Salary:</dt><dd>${fmtMoney(u.base_salary)}</dd></div>
                 <div class="kv"><dt>Allowances:</dt><dd>${fmtMoney(u.allowances)}</dd></div>
@@ -272,6 +273,11 @@ export async function render(view, state) {
                   `)}
                 </select>
                 <span class="hint">Default shift: ZK-uFace800 (09:30 AM – 07:00 PM).</span>
+              </label>
+
+              <label class="check wide" style="margin-top:4px; font-weight:600; display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" name="overtimeEligible" ${u ? (u.overtime_eligible !== false ? 'checked' : '') : 'checked'} style="transform:scale(1.2);">
+                <span><b>Overtime Eligible</b> (অভারটাইম কার্যকর — টিক চিহ্ন থাকলে অতিরিক্ত কাজের সময় গণ্য হবে)</span>
               </label>
             </div>
           </div>
@@ -382,6 +388,7 @@ export async function render(view, state) {
           address: v.address ? v.address.trim() : '',
           emergencyContact: formatEmergencyContact(v.emergency_contact) || '',
           nidNumber: v.nid_number ? v.nid_number.trim() : '',
+          overtimeEligible: form.overtimeEligible ? form.overtimeEligible.checked : true,
           ...(canRole ? { role: v.role } : {}),
         };
 

@@ -372,6 +372,11 @@ export async function render(view) {
                 </div>
                 <span class="small muted" style="font-size:11px; margin-top:3px; display:block;">Click <b>👁️ Show</b> to view current password or verify what you type.</span>
               </label>
+
+              <label style="grid-column: 1 / -1; display:flex; align-items:center; gap:8px; margin-top:4px; background:var(--paper-2, #fff); padding:8px 12px; border-radius:6px; border:1px solid var(--border);">
+                <input type="checkbox" name="overtime_eligible" ${user?.overtime_eligible !== false ? 'checked' : ''} style="cursor:pointer; transform:scale(1.2);">
+                <span style="font-weight:600; font-size:13px; color:var(--text);">Allow Overtime Calculation (অভারটাইম কার্যকর — টিক চিহ্ন থাকলে অতিরিক্ত কাজের সময় গণ্য হবে)</span>
+              </label>
             </div>
           </div>
 
@@ -457,6 +462,7 @@ export async function render(view) {
           role,
           active,
           devicePin,
+          overtimeEligible: form.overtime_eligible ? form.overtime_eligible.checked : true,
           permissions: permsObj,
         };
         if (password) payload.password = password;

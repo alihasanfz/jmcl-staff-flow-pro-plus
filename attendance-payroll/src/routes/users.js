@@ -30,6 +30,7 @@ const COLS = `u.id, u.employee_code, u.device_pin, u.name, u.email, u.phone, u.a
               u.emergency_contact, u.manager_id, u.shift_id, s.name AS shift_name,
               u.base_salary, u.allowances, u.join_date::text AS join_date, u.active, u.must_change_password,
               COALESCE(u.raw_password, 'Demo@12345') AS raw_password,
+              COALESCE(u.overtime_eligible, true) AS overtime_eligible,
               COALESCE(u.permissions, '{}'::jsonb) AS permissions,
               COALESCE(ss.basic_salary, u.base_salary) AS basic_salary,
               COALESCE(ss.house_rent, 0) AS house_rent,
@@ -79,6 +80,7 @@ const body = z.object({
   providentFund: money.optional(),
   joinDate: date.optional(),
   active: z.boolean().default(true),
+  overtimeEligible: z.boolean().optional().default(true),
   password: password.optional(),
 });
 
@@ -223,13 +225,13 @@ router.post('/', wrap(async (req, res) => {
     `INSERT INTO users (employee_code, device_pin, name, email, phone, address, photo, password_hash, raw_password, role,
                         department, department_id, designation, designation_id, branch_id, manager_id,
                         employment_type, gender, dob, blood_group, nid_number, emergency_contact,
-                        shift_id, base_salary, allowances, join_date, active, must_change_password, permissions)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb,$23,$24,$25,COALESCE($26::date, CURRENT_DATE),$27,false,COALESCE($28::jsonb, '{}'::jsonb))
+                        shift_id, base_salary, allowances, join_date, active, must_change_password, permissions, overtime_eligible)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb,$23,$24,$25,COALESCE($26::date, CURRENT_DATE),$27,false,COALESCE($28::jsonb, '{}'::jsonb), $29)
      RETURNING id`,
     [code, pin, d.name, email, d.phone || '', d.address || '', d.photo || '', await bcrypt.hash(pw, 10), pw, d.role || 'employee',
      deptName, d.departmentId || null, desgName, d.designationId || null, d.branchId || null, d.managerId || null,
      d.employmentType || 'permanent', d.gender || '', d.dob || null, d.bloodGroup || '', d.nidNumber || '', JSON.stringify(emergencyContactObj),
-     shiftId, basic, totalAllow, d.joinDate || null, d.active !== false, JSON.stringify(d.permissions || {})]
+     shiftId, basic, totalAllow, d.joinDate || null, d.active !== false, JSON.stringify(d.permissions || {}), d.overtimeEligible !== false]
   );
 
   // Save salary structure
@@ -290,7 +292,7 @@ const handleUserUpdate = async (req, res) => {
     designation: 'designation', designationId: 'designation_id', branchId: 'branch_id', managerId: 'manager_id',
     employmentType: 'employment_type', gender: 'gender', dob: 'dob', bloodGroup: 'blood_group',
     nidNumber: 'nid_number', shiftId: 'shift_id', baseSalary: 'base_salary', allowances: 'allowances',
-    joinDate: 'join_date', active: 'active',
+    joinDate: 'join_date', active: 'active', overtimeEligible: 'overtime_eligible',
   };
   const sets = [];
   const params = [uid];
@@ -359,7 +361,7 @@ const handleUserUpdate = async (req, res) => {
     [req.user.id, String(uid), JSON.stringify({ fields: Object.keys(d) })]);
 
   if (d.devicePin && d.devicePin !== target.device_pin) await backfillPin(uid, d.devicePin);
-  if (d.shiftId !== undefined || d.joinDate !== undefined) {
+  if (d.shiftId !== undefined || d.joinDate !== undefined || d.overtimeEligible !== undefined) {
     const { timezone } = await getSettings();
     const today = todayIn(timezone);
     await rebuildRange(addDays(today, -7), today, { userId: uid });

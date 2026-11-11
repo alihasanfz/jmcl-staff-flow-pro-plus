@@ -57,15 +57,17 @@ function computeDay({ date, today, nowMin, user, shift, punches, holiday, leave,
   const row = { ...base, check_in: first.at, check_out: hasOut ? last.at : null };
 
   const span = hasOut ? outMin - inMin : 0;
+  const allowOt = (shift.allow_overtime !== false) && (user.overtime_eligible !== false);
   if (isOffDay) {
-    return { ...row, status: 'present', off_day_work: true, worked_minutes: span, overtime_minutes: Math.min(span, r.ot_max_minutes * 2) };
+    const otMins = allowOt ? Math.min(span, r.ot_max_minutes * 2) : 0;
+    return { ...row, status: 'present', off_day_work: true, worked_minutes: span, overtime_minutes: otMins };
   }
 
   row.late_minutes = inMin > startMin + shift.grace_minutes ? inMin - startMin : 0;
   if (hasOut) {
     row.worked_minutes = Math.max(0, span - (span > 240 ? shift.break_minutes : 0));
     row.early_out_minutes = outMin < endMin - shift.early_out_grace_minutes ? endMin - outMin : 0;
-    row.overtime_minutes = outMin > endMin + shift.overtime_after_minutes ? Math.min(outMin - endMin, r.ot_max_minutes) : 0;
+    row.overtime_minutes = (allowOt && outMin > endMin + shift.overtime_after_minutes) ? Math.min(outMin - endMin, r.ot_max_minutes) : 0;
   } else {
     row.missing_checkout = dayOver;
   }

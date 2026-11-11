@@ -47,12 +47,77 @@ async function firstRun() {
     `);
   } catch (_) {}
 
-  // Ensure uFace 800 (09:30 AM – 07:00 PM) shift exists
+  // Ensure company shifts exist with precise hours and late rules:
+  // 1. Store (08:00 AM – 05:00 PM) - punch after 08:00 is late (grace_minutes = 0)
+  // 2. Commercial (09:15 AM – 06:45 PM) - starts at 09:15 AM (grace_minutes = 0)
+  // 3. ZK-uFace800 / General (09:30 AM – 07:00 PM) - starts at 09:30 AM (grace_minutes = 10)
   try {
+    await query(`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS allow_overtime boolean NOT NULL DEFAULT true`).catch(() => {});
+    await query(`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS is_night_shift boolean NOT NULL DEFAULT false`).catch(() => {});
+    await query(`ALTER TABLE departments ADD COLUMN IF NOT EXISTS default_shift_id int REFERENCES shifts(id)`).catch(() => {});
+    await query(`ALTER TABLE departments ADD COLUMN IF NOT EXISTS overtime_eligible boolean NOT NULL DEFAULT true`).catch(() => {});
+    await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS overtime_eligible boolean NOT NULL DEFAULT true`).catch(() => {});
+
     await query(`
-      INSERT INTO shifts (name, start_time, end_time, break_minutes, grace_minutes, early_out_grace_minutes, overtime_after_minutes, weekly_off)
-      VALUES ('ZK-uFace800 (09:30 AM – 07:00 PM)', '09:30:00', '19:00:00', 60, 10, 10, 30, '{5}')
-      ON CONFLICT (name) DO UPDATE SET start_time = '09:30:00', end_time = '19:00:00', break_minutes = 60, grace_minutes = 10, early_out_grace_minutes = 10, overtime_after_minutes = 30
+      INSERT INTO shifts (name, start_time, end_time, break_minutes, grace_minutes, early_out_grace_minutes, overtime_after_minutes, weekly_off, allow_overtime, is_night_shift)
+      VALUES 
+        ('Store (08:00 AM – 05:00 PM)', '08:00:00', '17:00:00', 60, 0, 10, 30, '{5}', true, false),
+        ('Commercial (09:15 AM – 06:45 PM)', '09:15:00', '18:45:00', 60, 0, 10, 30, '{5}', false, false),
+        ('ZK-uFace800 (09:30 AM – 07:00 PM)', '09:30:00', '19:00:00', 60, 10, 10, 30, '{5}', true, false)
+      ON CONFLICT (name) DO UPDATE SET 
+        start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time,
+        break_minutes = EXCLUDED.break_minutes, grace_minutes = EXCLUDED.grace_minutes,
+        early_out_grace_minutes = EXCLUDED.early_out_grace_minutes,
+        overtime_after_minutes = EXCLUDED.overtime_after_minutes,
+        weekly_off = EXCLUDED.weekly_off,
+        allow_overtime = EXCLUDED.allow_overtime
+    `);
+
+    // Ensure company departments are configured with default shifts
+    const factoryDepts = [
+      { name: 'Store', code: 'STR', shiftPattern: '%Store%', ot: true },
+      { name: 'Commercial', code: 'COM', shiftPattern: '%Commercial%', ot: false },
+      { name: 'Merchandiser', code: 'MER', shiftPattern: '%09:30%', ot: false },
+      { name: 'Accounts', code: 'ACC', shiftPattern: '%09:30%', ot: false },
+      { name: 'Audit', code: 'AUD', shiftPattern: '%09:30%', ot: false },
+      { name: 'Information Technology', code: 'IT', shiftPattern: '%09:30%', ot: false },
+      { name: 'Wash', code: 'WSH', shiftPattern: '%09:30%', ot: true },
+      { name: 'Purchase', code: 'PUR', shiftPattern: '%09:30%', ot: false },
+      { name: 'General', code: 'GEN', shiftPattern: '%09:30%', ot: true },
+    ];
+    for (const d of factoryDepts) {
+      await query(`
+        INSERT INTO departments (name, code, default_shift_id, overtime_eligible)
+        VALUES ($1, $2, (SELECT id FROM shifts WHERE name LIKE $3 LIMIT 1), $4)
+        ON CONFLICT (name) DO UPDATE SET 
+          code = COALESCE(departments.code, EXCLUDED.code),
+          default_shift_id = (SELECT id FROM shifts WHERE name LIKE $3 LIMIT 1),
+          overtime_eligible = EXCLUDED.overtime_eligible
+      `, [d.name, d.code, d.shiftPattern, d.ot]).catch(() => {});
+    }
+
+    // Assign shifts to employees based on department:
+    // Store -> Store (08:00 AM)
+    await query(`
+      UPDATE users
+         SET shift_id = (SELECT id FROM shifts WHERE name LIKE '%Store%' LIMIT 1),
+             overtime_eligible = true
+       WHERE LOWER(department) LIKE '%store%'
+    `);
+
+    // Commercial -> Commercial (09:15 AM)
+    await query(`
+      UPDATE users
+         SET shift_id = (SELECT id FROM shifts WHERE name LIKE '%Commercial%' LIMIT 1),
+             overtime_eligible = false
+       WHERE LOWER(department) LIKE '%commercial%'
+    `);
+
+    // All other departments -> 09:30 AM Shift
+    await query(`
+      UPDATE users
+         SET shift_id = (SELECT id FROM shifts WHERE name LIKE '%uFace800%' OR name LIKE '%09:30%' LIMIT 1)
+       WHERE LOWER(department) NOT LIKE '%store%' AND LOWER(department) NOT LIKE '%commercial%'
     `);
 
     // Ensure all device schema columns exist
@@ -92,17 +157,15 @@ async function firstRun() {
        WHERE UPPER(serial_number) = 'VDE2251500160'
     `);
 
-    // Assign uFace 800 employees to this shift
+    // Assign primary device SN based on punch history
     await query(`
       UPDATE users
-         SET shift_id = (SELECT id FROM shifts WHERE name LIKE '%uFace800%' LIMIT 1),
-             primary_device_sn = 'RKQ4262500336'
-       WHERE id IN (
+         SET primary_device_sn = 'RKQ4262500336'
+       WHERE primary_device_sn IS NULL AND id IN (
          SELECT DISTINCT user_id FROM punch_logs WHERE UPPER(device_sn) = 'RKQ4262500336' AND user_id IS NOT NULL
        )
     `);
 
-    // Assign SenseFace 7A employees primary_device_sn
     await query(`
       UPDATE users
          SET primary_device_sn = 'VDE2251500160'
@@ -111,7 +174,7 @@ async function firstRun() {
        )
     `);
   } catch (err) {
-    console.warn('[bootstrap] uFace800 shift setup error:', err.message);
+    console.warn('[bootstrap] shift setup error:', err.message);
   }
 
   // Free all users from forced password change

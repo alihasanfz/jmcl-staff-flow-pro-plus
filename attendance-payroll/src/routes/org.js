@@ -37,10 +37,12 @@ const shift = z.object({
   overtimeAfterMinutes: z.coerce.number().int().min(0).max(240).default(30),
   weeklyOff: z.array(z.number().int().min(0).max(6)).max(6).default([5]),
   isNightShift: z.boolean().optional().default(false),
+  allowOvertime: z.boolean().optional().default(true),
 });
 
 const SHIFT_COLS = `id, name, to_char(start_time, 'HH24:MI') AS start_time, to_char(end_time, 'HH24:MI') AS end_time, break_minutes,
-  grace_minutes, early_out_grace_minutes, overtime_after_minutes, weekly_off, COALESCE(is_night_shift, false) AS is_night_shift, (SELECT COUNT(*)::int FROM users u WHERE u.shift_id = shifts.id) AS employees`;
+  grace_minutes, early_out_grace_minutes, overtime_after_minutes, weekly_off, COALESCE(is_night_shift, false) AS is_night_shift,
+  COALESCE(allow_overtime, true) AS allow_overtime, (SELECT COUNT(*)::int FROM users u WHERE u.shift_id = shifts.id) AS employees`;
 
 router.get('/shifts', wrap(async (req, res) => {
   res.json({ shifts: (await query(`SELECT ${SHIFT_COLS} FROM shifts ORDER BY start_time, name`)).rows });
@@ -49,9 +51,9 @@ router.post('/shifts', shiftManager, wrap(async (req, res) => {
   const s = parse(shift, req.body);
   const isNight = s.isNightShift || s.endTime <= s.startTime;
   const { rows: [r] } = await query(
-    `INSERT INTO shifts (name, start_time, end_time, break_minutes, grace_minutes, early_out_grace_minutes, overtime_after_minutes, weekly_off, is_night_shift)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-    [s.name, s.startTime, s.endTime, s.breakMinutes, s.graceMinutes, s.earlyOutGraceMinutes, s.overtimeAfterMinutes, s.weeklyOff, isNight]);
+    `INSERT INTO shifts (name, start_time, end_time, break_minutes, grace_minutes, early_out_grace_minutes, overtime_after_minutes, weekly_off, is_night_shift, allow_overtime)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+    [s.name, s.startTime, s.endTime, s.breakMinutes, s.graceMinutes, s.earlyOutGraceMinutes, s.overtimeAfterMinutes, s.weeklyOff, isNight, s.allowOvertime !== false]);
   res.status(201).json({ id: r.id });
 }));
 router.put('/shifts/:id', shiftManager, wrap(async (req, res) => {
@@ -60,10 +62,18 @@ router.put('/shifts/:id', shiftManager, wrap(async (req, res) => {
   const isNight = s.isNightShift || s.endTime <= s.startTime;
   const { rowCount } = await query(
     `UPDATE shifts SET name=$2, start_time=$3, end_time=$4, break_minutes=$5, grace_minutes=$6, early_out_grace_minutes=$7,
-            overtime_after_minutes=$8, weekly_off=$9, is_night_shift=$10 WHERE id=$1`,
-    [sid, s.name, s.startTime, s.endTime, s.breakMinutes, s.graceMinutes, s.earlyOutGraceMinutes, s.overtimeAfterMinutes, s.weeklyOff, isNight]);
+            overtime_after_minutes=$8, weekly_off=$9, is_night_shift=$10, allow_overtime=$11 WHERE id=$1`,
+    [sid, s.name, s.startTime, s.endTime, s.breakMinutes, s.graceMinutes, s.earlyOutGraceMinutes, s.overtimeAfterMinutes, s.weeklyOff, isNight, s.allowOvertime !== false]);
   if (!rowCount) throw notFound('Shift not found');
-  res.json({ ok: true, note: 'Past attendance keeps its recorded values until you run Recalculate.' });
+  try {
+    const { getSettings } = require('../services/settings');
+    const { todayIn, addDays } = require('../utils/time');
+    const { rebuildRange } = require('../services/attendance');
+    const settings = await getSettings();
+    const today = todayIn(settings.timezone);
+    await rebuildRange(addDays(today, -7), today);
+  } catch (_) {}
+  res.json({ ok: true, note: 'Attendance recalculated with updated shift timings.' });
 }));
 router.delete('/shifts/:id', shiftManager, wrap(async (req, res) => {
   const sid = parse(id, req.params.id);

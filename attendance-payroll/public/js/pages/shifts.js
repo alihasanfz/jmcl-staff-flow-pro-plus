@@ -11,7 +11,7 @@ export async function render(view) {
       <div class="row between">
         <div>
           <h2>${t('shifts')}</h2>
-          <p class="muted">Configure work schedules, start/end hours, overnight shifts, grace periods, and weekly holidays.</p>
+          <p class="muted">Configure work schedules, start/end hours (Store: 08:00 AM, Commercial: 09:15 AM, General: 09:30 AM), grace periods, and overtime eligibility.</p>
         </div>
         <button class="btn primary" id="add-shift">${icon('plus')} ${t('add')} ${t('shift')}</button>
       </div>
@@ -34,13 +34,14 @@ export async function render(view) {
                   <th>Type</th>
                   <th>Break</th>
                   <th>Grace Period</th>
+                  <th>Overtime</th>
                   <th>Weekly Off</th>
                   <th>Employees</th>
                   <th class="r">${t('actions')}</th>
                 </tr>
               </thead>
               <tbody id="shift-tbody">
-                <tr><td colspan="8" class="empty">${t('loading')}</td></tr>
+                <tr><td colspan="9" class="empty">${t('loading')}</td></tr>
               </tbody>
             </table>
           </div>
@@ -88,6 +89,11 @@ export async function render(view) {
             </td>
             <td>${s.break_minutes} min</td>
             <td><span class="small">Late: ${s.grace_minutes}m · Early: ${s.early_out_grace_minutes}m</span></td>
+            <td>
+              <span class="badge ${s.allow_overtime !== false ? 'present' : 'waiting'}" style="font-size:11px; font-weight:600;">
+                ${s.allow_overtime !== false ? 'OT Allowed' : 'No OT'}
+              </span>
+            </td>
             <td><span class="badge weekend">${offStr}</span></td>
             <td><span class="small">${s.employees || 0} employees</span></td>
             <td class="r">
@@ -146,6 +152,10 @@ export async function render(view) {
             <input type="time" name="endTime" required value="${shift?.end_time || '18:00'}">
           </label>
           <label class="wide check" style="margin-top: 4px;">
+            <input type="checkbox" name="allowOvertime" ${shift ? (shift.allow_overtime !== false ? 'checked' : '') : 'checked'}>
+            <span><b>Allow Overtime Calculation</b> (Track overtime after shift end + threshold)</span>
+          </label>
+          <label class="wide check" style="margin-top: 4px;">
             <input type="checkbox" name="isNightShift" ${shift?.is_night_shift ? 'checked' : ''}>
             <span>Night / Cross-Midnight Shift (shift ends the following day)</span>
           </label>
@@ -186,6 +196,7 @@ export async function render(view) {
           overtimeAfterMinutes: parseInt(form.overtimeAfterMinutes.value, 10) || 0,
           weeklyOff: offDays,
           isNightShift: form.isNightShift.checked,
+          allowOvertime: form.allowOvertime.checked,
         };
 
         if (isEdit) {

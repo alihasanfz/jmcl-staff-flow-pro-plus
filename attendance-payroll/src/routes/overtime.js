@@ -73,35 +73,46 @@ router.post('/', manager, wrap(async (req, res) => {
     RETURNING id
   `, [userId, workDate, minutes, hourly, multiplier, amount, req.user.id, note]);
 
+  // Sync with attendance table so reports and daily attendance reflect the approved overtime
+  await query('UPDATE attendance SET overtime_minutes = $3 WHERE user_id = $1 AND work_date = $2', [userId, workDate, minutes]).catch(() => {});
+
   res.status(201).json({ id: r.id, amount });
 }));
 
 router.post('/:id/approve', manager, wrap(async (req, res) => {
   const oid = parse(id, req.params.id);
-  const { rowCount } = await query(`
+  const { rows: [rec] } = await query(`
     UPDATE overtime_records
        SET status = 'approved', approved_by = $2, approved_at = now()
      WHERE id = $1
+    RETURNING user_id, work_date, minutes
   `, [oid, req.user.id]);
-  if (!rowCount) throw notFound('Overtime record not found');
+  if (!rec) throw notFound('Overtime record not found');
+  await query('UPDATE attendance SET overtime_minutes = $3 WHERE user_id = $1 AND work_date = $2',
+    [rec.user_id, rec.work_date, rec.minutes]).catch(() => {});
   res.json({ ok: true });
 }));
 
 router.post('/:id/reject', manager, wrap(async (req, res) => {
   const oid = parse(id, req.params.id);
-  const { rowCount } = await query(`
+  const { rows: [rec] } = await query(`
     UPDATE overtime_records
        SET status = 'rejected', approved_by = $2, approved_at = now()
      WHERE id = $1
+    RETURNING user_id, work_date
   `, [oid, req.user.id]);
-  if (!rowCount) throw notFound('Overtime record not found');
+  if (!rec) throw notFound('Overtime record not found');
+  await query('UPDATE attendance SET overtime_minutes = 0 WHERE user_id = $1 AND work_date = $2',
+    [rec.user_id, rec.work_date]).catch(() => {});
   res.json({ ok: true });
 }));
 
 router.delete('/:id', manager, wrap(async (req, res) => {
   const oid = parse(id, req.params.id);
-  const { rowCount } = await query('DELETE FROM overtime_records WHERE id = $1', [oid]);
-  if (!rowCount) throw notFound('Overtime record not found');
+  const { rows: [rec] } = await query('DELETE FROM overtime_records WHERE id = $1 RETURNING user_id, work_date', [oid]);
+  if (!rec) throw notFound('Overtime record not found');
+  await query('UPDATE attendance SET overtime_minutes = 0 WHERE user_id = $1 AND work_date = $2',
+    [rec.user_id, rec.work_date]).catch(() => {});
   res.json({ ok: true });
 }));
 

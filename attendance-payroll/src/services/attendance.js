@@ -21,11 +21,13 @@ async function rebuildRange(from, to, { userId = null } = {}) {
   if (from > last) return 0;
 
   const [users, shiftsRes, holidaysRes, leavesRes, punchesRes] = await Promise.all([
-    query(`SELECT id, join_date::text AS join_date, COALESCE(shift_id, (SELECT id FROM shifts ORDER BY id LIMIT 1)) AS shift_id
+    query(`SELECT id, join_date::text AS join_date, COALESCE(shift_id, (SELECT id FROM shifts ORDER BY id LIMIT 1)) AS shift_id,
+                  COALESCE(overtime_eligible, true) AS overtime_eligible
              FROM users
             WHERE active AND ($1::int IS NULL OR id = $1)`, [userId]),
     query(`SELECT id, start_time::text AS start_time, end_time::text AS end_time, break_minutes, grace_minutes,
-                  early_out_grace_minutes, overtime_after_minutes, weekly_off FROM shifts`),
+                  early_out_grace_minutes, overtime_after_minutes, weekly_off,
+                  COALESCE(allow_overtime, true) AS allow_overtime FROM shifts`),
     query(`SELECT date::text AS date FROM holidays WHERE date BETWEEN $1 AND $2`, [from, last]),
     query(`SELECT lr.user_id, lr.start_date::text AS s, lr.end_date::text AS e, lt.paid
              FROM leave_requests lr JOIN leave_types lt ON lt.id = lr.leave_type_id
