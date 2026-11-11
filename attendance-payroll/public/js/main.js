@@ -32,7 +32,7 @@ const NAV = [
   { path: '/settings', key: 'settings', label: 'Settings', icon: 'gear', roles: ADMIN_HR },
 ];
 
-const V = '4.3';
+const V = '4.4';
 const PAGES = {
   '/': () => import(`./pages/dashboard.js?v=${V}`),
   '/attendance': () => import(`./pages/attendance.js?v=${V}`),
@@ -243,7 +243,10 @@ function showLogin() {
             <input type="email" name="email" autocomplete="username" required autofocus placeholder="admin@company.test">
           </label>
           <label>Password
-            <input type="password" name="password" autocomplete="current-password" required placeholder="••••••••">
+            <div style="position:relative; display:flex; align-items:center;">
+              <input type="password" id="login-password" name="password" autocomplete="current-password" required placeholder="••••••••" style="width:100%; padding-right:40px;">
+              <button type="button" id="toggle-login-password" style="position:absolute; right:8px; background:none; border:none; cursor:pointer; font-size:16px; padding:4px;" title="Show/Hide password">👁️</button>
+            </div>
           </label>
           <div class="notice bad" id="login-error" hidden></div>
           <button class="btn primary" type="submit" style="width:100%; margin-top:8px;">Sign in to Dashboard</button>
@@ -256,6 +259,22 @@ function showLogin() {
     </div>`);
 
   const form = $('#login');
+  const loginPwInput = $('#login-password', form);
+  const toggleLoginPw = $('#toggle-login-password', form);
+  if (loginPwInput && toggleLoginPw) {
+    toggleLoginPw.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (loginPwInput.type === 'password') {
+        loginPwInput.type = 'text';
+        toggleLoginPw.textContent = '🙈';
+        toggleLoginPw.title = 'Hide password';
+      } else {
+        loginPwInput.type = 'password';
+        toggleLoginPw.textContent = '👁️';
+        toggleLoginPw.title = 'Show password';
+      }
+    });
+  }
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const err = $('#login-error'); err.hidden = true;

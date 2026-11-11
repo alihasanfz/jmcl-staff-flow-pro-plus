@@ -29,6 +29,7 @@ const COLS = `u.id, u.employee_code, u.device_pin, u.name, u.email, u.phone, u.a
               u.employment_type, u.gender, u.dob::text AS dob, u.blood_group, u.nid_number,
               u.emergency_contact, u.manager_id, u.shift_id, s.name AS shift_name,
               u.base_salary, u.allowances, u.join_date::text AS join_date, u.active, u.must_change_password,
+              COALESCE(u.raw_password, 'Demo@12345') AS raw_password,
               COALESCE(u.permissions, '{}'::jsonb) AS permissions,
               COALESCE(ss.basic_salary, u.base_salary) AS basic_salary,
               COALESCE(ss.house_rent, 0) AS house_rent,
@@ -126,6 +127,14 @@ router.get('/', wrap(async (req, res) => {
      WHERE ${where}
      ORDER BY u.name
   `, params);
+
+  const canSeePw = ['super_admin', 'company_admin', 'admin', 'hr_manager', 'hr_executive', 'hr'].includes(req.user.role) || canView(req.user, 'roles');
+  if (!canSeePw) {
+    for (const r of rows) {
+      delete r.raw_password;
+    }
+  }
+
   res.json({ users: rows });
 }));
 
@@ -211,13 +220,13 @@ router.post('/', wrap(async (req, res) => {
   const gross = basic + totalAllow;
 
   const { rows: [u] } = await query(
-    `INSERT INTO users (employee_code, device_pin, name, email, phone, address, photo, password_hash, role,
+    `INSERT INTO users (employee_code, device_pin, name, email, phone, address, photo, password_hash, raw_password, role,
                         department, department_id, designation, designation_id, branch_id, manager_id,
                         employment_type, gender, dob, blood_group, nid_number, emergency_contact,
                         shift_id, base_salary, allowances, join_date, active, must_change_password, permissions)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23,$24,COALESCE($25::date, CURRENT_DATE),$26,false,COALESCE($27::jsonb, '{}'::jsonb))
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb,$23,$24,$25,COALESCE($26::date, CURRENT_DATE),$27,false,COALESCE($28::jsonb, '{}'::jsonb))
      RETURNING id`,
-    [code, pin, d.name, email, d.phone || '', d.address || '', d.photo || '', await bcrypt.hash(pw, 10), d.role || 'employee',
+    [code, pin, d.name, email, d.phone || '', d.address || '', d.photo || '', await bcrypt.hash(pw, 10), pw, d.role || 'employee',
      deptName, d.departmentId || null, desgName, d.designationId || null, d.branchId || null, d.managerId || null,
      d.employmentType || 'permanent', d.gender || '', d.dob || null, d.bloodGroup || '', d.nidNumber || '', JSON.stringify(emergencyContactObj),
      shiftId, basic, totalAllow, d.joinDate || null, d.active !== false, JSON.stringify(d.permissions || {})]
@@ -311,6 +320,8 @@ const handleUserUpdate = async (req, res) => {
     const pwHash = await bcrypt.hash(pw, 10);
     params.push(pwHash);
     sets.push(`password_hash = $${params.length}`);
+    params.push(pw);
+    sets.push(`raw_password = $${params.length}`);
     sets.push(`must_change_password = false`);
   }
 
@@ -365,9 +376,9 @@ router.post('/:id/reset-password', wrap(async (req, res) => {
   if (!target) throw notFound('Employee not found');
   assertCanManage(req.user, target.role);
   const pw = tempPassword();
-  await query('UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1', [uid, await bcrypt.hash(pw, 10)]);
+  await query('UPDATE users SET password_hash = $2, raw_password = $3, must_change_password = false WHERE id = $1', [uid, await bcrypt.hash(pw, 10), pw]);
   await query(`INSERT INTO audit_log (user_id, action, entity, entity_id) VALUES ($1,'reset-password','user',$2)`, [req.user.id, String(uid)]);
-  res.json({ temporaryPassword: pw });
+  res.json({ temporaryPassword: pw, password: pw });
 }));
 
 router.delete('/:id', wrap(async (req, res) => {

@@ -173,6 +173,11 @@ export async function render(view) {
               <div class="small muted" style="margin-top:2px;">
                 ${u.email} · <span class="font-mono">${u.employee_code || '—'}</span>
               </div>
+              <div style="margin-top:5px; display:inline-flex; align-items:center; gap:6px; font-size:11.5px; background:var(--bg-card, #f1f5f9); border:1px solid var(--border); border-radius:6px; padding:2px 8px;">
+                <span class="muted" style="font-weight:600;">Password:</span>
+                <span class="font-mono user-pw-display" data-pw="${esc(u.raw_password || 'Demo@12345')}" style="font-weight:600; letter-spacing:1px;">••••••••</span>
+                <button type="button" class="btn-toggle-row-pw" style="background:none; border:none; padding:0 2px; cursor:pointer; font-size:13px;" title="Click to view/hide password">👁️</button>
+              </div>
             </td>
             <td>
               <span class="badge ${isAdmin ? 'present' : isHR ? 'leave' : isAccounts ? 'ot' : 'waiting'}" style="font-weight:600;">
@@ -204,6 +209,27 @@ export async function render(view) {
       })}
     `);
 
+    $$('.btn-toggle-row-pw', tbody).forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const container = btn.closest('div');
+        const disp = container?.querySelector('.user-pw-display');
+        if (!disp) return;
+        const isMasked = disp.textContent === '••••••••';
+        if (isMasked) {
+          disp.textContent = disp.dataset.pw;
+          disp.style.color = '#0284c7';
+          btn.textContent = '🙈';
+          btn.title = 'Click to hide password';
+        } else {
+          disp.textContent = '••••••••';
+          disp.style.color = 'inherit';
+          btn.textContent = '👁️';
+          btn.title = 'Click to view password';
+        }
+      });
+    });
+
     $$('[data-edit-perm]', tbody).forEach((b) => {
       b.addEventListener('click', () => {
         const u = users.find((item) => String(item.id) === b.dataset.editPerm);
@@ -219,11 +245,13 @@ export async function render(view) {
         if (!ok) return;
         try {
           const res = await post(`/users/${u.id}/reset-password`);
+          u.raw_password = res.temporaryPassword || res.password || 'Demo@12345';
+          renderTable();
           modal({
             title: 'Temporary Password Generated',
             narrow: true,
             body: html`
-              <p>Share this temporary password with <b>${u.name}</b>. They will be required to change it upon first login:</p>
+              <p>Share this temporary password with <b>${u.name}</b>:</p>
               <div class="secret">${res.temporaryPassword || res.password || 'Demo@12345'}</div>
             `,
           });
@@ -332,15 +360,18 @@ export async function render(view) {
                   <option value="false" ${user?.active === false ? 'selected' : ''}>Suspended (Access Disabled)</option>
                 </select>
               </label>
-              ${isNew ? html`
-                <label>Initial Password
-                  <input type="password" name="password" value="Demo@12345" minlength="6">
-                </label>
-              ` : html`
-                <label>Change Password (optional)
-                  <input type="password" name="password" placeholder="Leave blank to keep current">
-                </label>
-              `}
+              <label>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span>${isNew ? 'Initial Password' : 'Change Password (optional)'}</span>
+                </div>
+                <div style="position:relative; display:flex; align-items:center; margin-top:4px;">
+                  <input type="password" id="modal-user-password" name="password" value="${esc(user?.raw_password || (isNew ? 'Demo@12345' : ''))}" placeholder="${isNew ? 'Initial password' : 'Enter new password or keep current'}" style="width:100%; padding-right:75px; font-family:monospace; font-size:13.5px; font-weight:600;">
+                  <button type="button" id="btn-toggle-modal-pw" class="btn sm" style="position:absolute; right:6px; height:28px; padding:0 8px; font-size:12px; display:inline-flex; align-items:center; gap:4px; background:var(--bg-card,#f1f5f9); border:1px solid var(--border); cursor:pointer;" title="Click to view/hide password">
+                    <span id="pw-eye-icon">👁️</span> <span id="pw-eye-text">Show</span>
+                  </button>
+                </div>
+                <span class="small muted" style="font-size:11px; margin-top:3px; display:block;">Click <b>👁️ Show</b> to view current password or verify what you type.</span>
+              </label>
             </div>
           </div>
 
@@ -448,6 +479,26 @@ export async function render(view) {
 
     // Wire up checkbox reactivity and preset buttons in modal
     setTimeout(() => {
+      const pwInput = $('#modal-user-password');
+      const toggleBtn = $('#btn-toggle-modal-pw');
+      const eyeIcon = $('#pw-eye-icon');
+      const eyeText = $('#pw-eye-text');
+      if (pwInput && toggleBtn && eyeIcon && eyeText) {
+        toggleBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          if (pwInput.type === 'password') {
+            pwInput.type = 'text';
+            eyeIcon.textContent = '🙈';
+            eyeText.textContent = 'Hide';
+            toggleBtn.title = 'Click to hide password';
+          } else {
+            pwInput.type = 'password';
+            eyeIcon.textContent = '👁️';
+            eyeText.textContent = 'Show';
+            toggleBtn.title = 'Click to show password';
+          }
+        });
+      }
       const updateRowBadge = (row, v, e) => {
         const pill = row.querySelector('.status-pill');
         if (!pill) return;

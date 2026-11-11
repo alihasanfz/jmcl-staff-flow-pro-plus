@@ -6,6 +6,7 @@ import { canEdit } from '../permissions.js';
 export async function render(view, state) {
   // Master administrators can perform destructive actions like delete and reset password
   const isMasterAdmin = ['admin', 'company_admin', 'super_admin'].includes(state.user.role);
+  const canViewPw = isMasterAdmin || ['hr_manager', 'hr_executive', 'hr'].includes(state.user.role);
 
   // Department managers, employees, and staff can NEVER add, edit, or delete employees
   const isRestrictedRole = ['dept_manager', 'employee', 'staff'].includes(state.user.role);
@@ -175,6 +176,15 @@ export async function render(view, state) {
                 <div class="kv"><dt>NID Number:</dt><dd>${u.nid_number || '—'}</dd></div>
                 <div class="kv"><dt>Blood Group:</dt><dd>${u.blood_group || '—'}</dd></div>
                 <div class="kv"><dt>Emergency Contact:</dt><dd>${formatEmergencyContact(u.emergency_contact) || '—'}</dd></div>
+                ${canViewPw && u.raw_password ? html`
+                  <div class="kv">
+                    <dt>Password:</dt>
+                    <dd style="display:inline-flex; align-items:center; gap:6px;">
+                      <span class="font-mono" id="profile-emp-pw" data-pw="${esc(u.raw_password)}" style="font-weight:600; letter-spacing:1px;">••••••••</span>
+                      <button type="button" id="btn-toggle-profile-pw" style="background:none; border:none; cursor:pointer; font-size:13px; padding:0 2px;" title="Click to view/hide password">👁️</button>
+                    </dd>
+                  </div>
+                ` : ''}
               </div>
             </div>
 
@@ -194,6 +204,25 @@ export async function render(view, state) {
         </div>
       `,
     });
+    setTimeout(() => {
+      const pwSpan = $('#profile-emp-pw');
+      const toggleBtn = $('#btn-toggle-profile-pw');
+      if (pwSpan && toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+          if (pwSpan.textContent === '••••••••') {
+            pwSpan.textContent = pwSpan.dataset.pw;
+            pwSpan.style.color = '#0284c7';
+            toggleBtn.textContent = '🙈';
+            toggleBtn.title = 'Click to hide password';
+          } else {
+            pwSpan.textContent = '••••••••';
+            pwSpan.style.color = 'inherit';
+            toggleBtn.textContent = '👁️';
+            toggleBtn.title = 'Click to view password';
+          }
+        });
+      }
+    }, 50);
   };
 
   const edit = (u) => {
@@ -306,10 +335,24 @@ export async function render(view, state) {
               </label>
               ${isNew ? html`
                 <label class="wide">Initial Password
-                  <input type="text" name="password" minlength="8" value="Demo@12345">
-                  <span class="hint">Default password is Demo@12345.</span>
+                  <div style="position:relative; display:flex; align-items:center; margin-top:4px;">
+                    <input type="password" id="emp-modal-pw" name="password" minlength="4" value="Demo@12345" style="width:100%; padding-right:75px; font-family:monospace; font-size:13.5px; font-weight:600;">
+                    <button type="button" id="btn-toggle-emp-modal-pw" class="btn sm" style="position:absolute; right:6px; height:28px; padding:0 8px; font-size:12px; display:inline-flex; align-items:center; gap:4px; background:var(--bg-card,#f1f5f9); border:1px solid var(--border); cursor:pointer;" title="Click to view/hide password">
+                      <span id="emp-pw-eye">👁️</span> <span id="emp-pw-text">Show</span>
+                    </button>
+                  </div>
+                  <span class="hint">Default password is Demo@12345. Click 👁️ Show to view.</span>
                 </label>
               ` : html`
+                <label class="wide">Login Password (optional)
+                  <div style="position:relative; display:flex; align-items:center; margin-top:4px;">
+                    <input type="password" id="emp-modal-pw" name="password" value="${esc(u?.raw_password || 'Demo@12345')}" placeholder="Enter new password or leave as is" style="width:100%; padding-right:75px; font-family:monospace; font-size:13.5px; font-weight:600;">
+                    <button type="button" id="btn-toggle-emp-modal-pw" class="btn sm" style="position:absolute; right:6px; height:28px; padding:0 8px; font-size:12px; display:inline-flex; align-items:center; gap:4px; background:var(--bg-card,#f1f5f9); border:1px solid var(--border); cursor:pointer;" title="Click to view/hide password">
+                      <span id="emp-pw-eye">👁️</span> <span id="emp-pw-text">Show</span>
+                    </button>
+                  </div>
+                  <span class="hint">Click 👁️ Show to view current password or verify what you type.</span>
+                </label>
                 <label class="check" style="align-self:end">
                   <input type="checkbox" name="active" ${u.active !== false ? 'checked' : ''}> Active Employee
                 </label>
@@ -349,7 +392,9 @@ export async function render(view, state) {
           await load();
           if (r.temporaryPassword) secretDialog('Employee Created', v.name, r.temporaryPassword);
         } else {
-          await patch(`/users/${u.id}`, { ...body, active: v.active });
+          const patchBody = { ...body, active: v.active };
+          if (v.password) patchBody.password = v.password;
+          await patch(`/users/${u.id}`, patchBody);
           close();
           toast('Employee profile updated successfully');
           load();
@@ -357,7 +402,7 @@ export async function render(view, state) {
       },
     });
 
-    // Smart auto-fill listeners
+    // Smart auto-fill listeners and password toggle
     setTimeout(() => {
       const pinInput = document.querySelector('input[name="devicePin"]');
       const codeInput = document.querySelector('input[name="employeeCode"]');
@@ -372,6 +417,27 @@ export async function render(view, state) {
             if (emailInput && (!emailInput.value || emailInput.value.endsWith('@company.local'))) {
               emailInput.value = `emp${val}@company.local`;
             }
+          }
+        });
+      }
+
+      const empPwInput = $('#emp-modal-pw');
+      const empToggleBtn = $('#btn-toggle-emp-modal-pw');
+      const empEye = $('#emp-pw-eye');
+      const empText = $('#emp-pw-text');
+      if (empPwInput && empToggleBtn && empEye && empText) {
+        empToggleBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          if (empPwInput.type === 'password') {
+            empPwInput.type = 'text';
+            empEye.textContent = '🙈';
+            empText.textContent = 'Hide';
+            empToggleBtn.title = 'Click to hide password';
+          } else {
+            empPwInput.type = 'password';
+            empEye.textContent = '👁️';
+            empText.textContent = 'Show';
+            empToggleBtn.title = 'Click to show password';
           }
         });
       }

@@ -40,7 +40,7 @@ router.post('/change-password', authenticate, wrap(async (req, res) => {
   if (!(await bcrypt.compare(currentPassword, u.password_hash))) throw new HttpError(400, 'Current password is incorrect');
   if (newPassword === currentPassword) throw bad('Choose a password different from the current one');
   if (newPassword.toLowerCase() === u.email.toLowerCase()) throw bad('Password cannot be your email address');
-  await query('UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1', [req.user.id, await bcrypt.hash(newPassword, 10)]);
+  await query('UPDATE users SET password_hash = $2, raw_password = $3, must_change_password = false WHERE id = $1', [req.user.id, await bcrypt.hash(newPassword, 10), newPassword]);
   res.json({ ok: true });
 }));
 

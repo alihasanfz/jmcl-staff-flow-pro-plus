@@ -116,8 +116,10 @@ async function firstRun() {
 
   // Free all users from forced password change
   await query('UPDATE users SET must_change_password = false WHERE must_change_password = true').catch(() => {});
-  // Ensure users permissions column exists
+  // Ensure users permissions and raw_password columns exist
   await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions jsonb NOT NULL DEFAULT '{}'").catch(() => {});
+  await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS raw_password text").catch(() => {});
+  await query("UPDATE users SET raw_password = 'Demo@12345' WHERE raw_password IS NULL").catch(() => {});
   // Ensure all active users have a valid shift assigned
   await query('UPDATE users SET shift_id = (SELECT id FROM shifts ORDER BY id LIMIT 1) WHERE shift_id IS NULL AND active = true').catch(() => {});
 
