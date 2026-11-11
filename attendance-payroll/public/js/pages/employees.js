@@ -4,8 +4,18 @@ import { t } from '../i18n.js';
 import { canEdit } from '../permissions.js';
 
 export async function render(view, state) {
-  const isAdmin = ['admin', 'company_admin', 'super_admin'].includes(state.user.role);
-  const canEditEmployees = canEdit(state.user, 'employees');
+  // Master administrators can perform destructive actions like delete and reset password
+  const isMasterAdmin = ['admin', 'company_admin', 'super_admin'].includes(state.user.role);
+
+  // Department managers, employees, and staff can NEVER add, edit, or delete employees
+  const isRestrictedRole = ['dept_manager', 'employee', 'staff'].includes(state.user.role);
+
+  // Can only edit/add if NOT a restricted role AND has edit permission for employees
+  const canEditEmployees = !isRestrictedRole && canEdit(state.user, 'employees') && ['super_admin', 'company_admin', 'admin', 'hr_manager', 'hr_executive', 'hr'].includes(state.user.role);
+
+  // Can only delete if master admin AND has edit rights
+  const canDeleteEmployees = isMasterAdmin && canEdit(state.user, 'employees');
+
   const f = { q: '', department: '', active: 'true' };
   
   let shifts = [];
@@ -93,8 +103,10 @@ export async function render(view, state) {
                   <button class="action-btn" data-view="${u.id}">${t('view')}</button>
                   ${canEditEmployees ? html`
                     <button class="action-btn" data-edit="${u.id}">${icon('edit')} ${t('edit')}</button>
-                    ${isAdmin ? html`<button class="action-btn" data-reset="${u.id}" data-name="${u.name}">Reset</button>` : ''}
-                    ${isAdmin && u.id !== state.user.id ? html`<button class="action-btn danger" data-del="${u.id}" data-name="${u.name}">${icon('trash')} ${t('delete')}</button>` : ''}
+                  ` : ''}
+                  ${canDeleteEmployees ? html`
+                    <button class="action-btn" data-reset="${u.id}" data-name="${u.name}">Reset</button>
+                    ${u.id !== state.user.id ? html`<button class="action-btn danger" data-del="${u.id}" data-name="${u.name}">${icon('trash')} ${t('delete')}</button>` : ''}
                   ` : ''}
                 </div>
               </td>

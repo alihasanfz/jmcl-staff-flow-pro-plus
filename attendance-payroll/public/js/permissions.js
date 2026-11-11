@@ -77,6 +77,29 @@ export const PRESETS = {
       settings: { view: false, edit: false },
     },
   },
+  dept_manager: {
+    label: 'Department Manager',
+    icon: 'people',
+    perms: {
+      overview: { view: true, edit: false },
+      attendance: { view: true, edit: true },
+      live_attendance: { view: true, edit: false },
+      employees: { view: true, edit: false },
+      departments: { view: false, edit: false },
+      designations: { view: false, edit: false },
+      shifts: { view: false, edit: false },
+      leave: { view: true, edit: true },
+      holidays: { view: true, edit: false },
+      payroll: { view: false, edit: false },
+      overtime: { view: true, edit: true },
+      reports: { view: true, edit: false },
+      devices: { view: false, edit: false },
+      roles: { view: false, edit: false },
+      notifications: { view: true, edit: true },
+      audit_logs: { view: false, edit: false },
+      settings: { view: false, edit: false },
+    },
+  },
   clear: {
     label: 'No Access (Clear)',
     icon: 'slash',
@@ -122,6 +145,7 @@ export function getUserPermission(user, moduleKey) {
   // 3. Fall back to role defaults
   const presetKey = user.role.startsWith('hr') ? 'hr_manager' :
                     user.role.startsWith('account') ? 'accounts' :
+                    user.role === 'dept_manager' ? 'dept_manager' :
                     ['admin', 'super_admin', 'company_admin'].includes(user.role) ? 'full_admin' : null;
 
   if (presetKey && PRESETS[presetKey]) {

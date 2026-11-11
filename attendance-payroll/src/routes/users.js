@@ -83,7 +83,7 @@ const body = z.object({
 
 function assertCanManage(actor, targetRole, newRole) {
   if (['super_admin', 'company_admin', 'admin'].includes(actor.role) || canEdit(actor, 'roles')) return;
-  if (canEdit(actor, 'employees') || ['hr_manager', 'hr_executive', 'hr', 'dept_manager'].includes(actor.role)) {
+  if (!['dept_manager', 'employee', 'staff'].includes(actor.role) && canEdit(actor, 'employees') && ['hr_manager', 'hr_executive', 'hr'].includes(actor.role)) {
     if (!['staff', 'employee'].includes(targetRole) || (newRole && !['staff', 'employee'].includes(newRole))) {
       throw forbidden('You can only manage Staff/Employee accounts');
     }
