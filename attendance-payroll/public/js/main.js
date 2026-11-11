@@ -32,7 +32,7 @@ const NAV = [
   { path: '/settings', key: 'settings', label: 'Settings', icon: 'gear', roles: ADMIN_HR },
 ];
 
-const V = '4.8';
+const V = '4.9';
 const PAGES = {
   '/': () => import(`./pages/dashboard.js?v=${V}`),
   '/attendance': () => import(`./pages/attendance.js?v=${V}`),
@@ -365,7 +365,7 @@ function showTopLiveAlert(n) {
       return;
     }
     banner.remove();
-    if (n.id) await post(`/notifications/${n.id}/read`).catch(() => {});
+    if (n.id) await post(`/notifications/${n.id}/read`).catch(() => { });
     refreshBell();
     navigate(n.url || '/attendance?tab=punches');
   });
@@ -449,10 +449,10 @@ async function drawNotifications(pop) {
     </header>
     <div class="notif-body-list">
       ${notifications.length ? notifications.map((n) => {
-        const isGate = n.type === 'gate-access' || (n.title && n.title.includes('🚪'));
-        const isPunch = n.type === 'punch-sync' || (n.title && n.title.includes('🏢'));
-        const iconEmoji = isGate ? '🚪' : (isPunch ? '🏢' : (n.severity === 'critical' ? '🚨' : '⚠️'));
-        return html`
+    const isGate = n.type === 'gate-access' || (n.title && n.title.includes('🚪'));
+    const isPunch = n.type === 'punch-sync' || (n.title && n.title.includes('🏢'));
+    const iconEmoji = isGate ? '🚪' : (isPunch ? '🏢' : (n.severity === 'critical' ? '🚨' : '⚠️'));
+    return html`
           <div class="notif ${n.severity || 'info'} ${n.type || (isGate ? 'gate-access' : (isPunch ? 'punch-sync' : ''))} ${n.read_at ? 'read' : ''}" data-id="${n.id}" data-url="${n.url || ''}" tabindex="0" role="button">
             <div class="notif-icon-box">
               ${iconEmoji}
@@ -465,7 +465,7 @@ async function drawNotifications(pop) {
             <span class="dot"></span>
           </div>
         `;
-      }) : html`<div class="empty" style="padding:32px 16px;">No notifications yet.</div>`}
+  }) : html`<div class="empty" style="padding:32px 16px;">No notifications yet.</div>`}
     </div>
     <footer>
       <a href="/notifications" class="small" style="font-weight:700; color:var(--primary); text-decoration:none;" id="view-all-notifs">

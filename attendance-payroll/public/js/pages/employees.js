@@ -549,6 +549,10 @@ export async function render(view, state) {
         });
       }
     }, 50);
+    } catch (err) {
+      console.error('edit error:', err);
+      toast(err.message, 'bad');
+    }
   };
 
   // Export to CSV
