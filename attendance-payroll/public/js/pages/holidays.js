@@ -156,11 +156,11 @@ export async function render(view) {
     });
   }
 
-  $('#add-holiday').addEventListener('click', openHolidayModal);
-  $('#holiday-year').addEventListener('change', load);
-  $('#holiday-search').addEventListener('input', renderTable);
+  $('#add-holiday')?.addEventListener('click', openHolidayModal);
+  $('#holiday-year')?.addEventListener('change', load);
+  $('#holiday-search')?.addEventListener('input', renderTable);
 
-  $('#load-bd-preset').addEventListener('click', async () => {
+  $('#load-bd-preset')?.addEventListener('click', async () => {
     const yr = $('#holiday-year').value;
     const ok = await confirmDialog(
       'Load Bangladesh Public Holidays?',

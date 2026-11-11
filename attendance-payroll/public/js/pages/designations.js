@@ -179,9 +179,9 @@ export async function render(view) {
     });
   }
 
-  $('#add-desig').addEventListener('click', () => openDesigModal());
-  $('#desig-search').addEventListener('input', renderTable);
-  $('#desig-dept-filter').addEventListener('change', renderTable);
+  $('#add-desig')?.addEventListener('click', () => openDesigModal());
+  $('#desig-search')?.addEventListener('input', renderTable);
+  $('#desig-dept-filter')?.addEventListener('change', renderTable);
 
   load();
 }

@@ -445,7 +445,7 @@ export async function render(view, state) {
     </div>
   `);
 
-  $('#filters').addEventListener('submit', (e) => {
+  $('#filters')?.addEventListener('submit', (e) => {
     e.preventDefault();
     Object.assign(f, {
       q: e.target.q.value,
@@ -455,8 +455,8 @@ export async function render(view, state) {
     load();
   });
 
-  $('#export-emp').addEventListener('click', exportEmployees);
-  $('#add-emp').addEventListener('click', () => edit(null));
+  $('#export-emp')?.addEventListener('click', exportEmployees);
+  $('#add-emp')?.addEventListener('click', () => edit(null));
 
   await load();
 }

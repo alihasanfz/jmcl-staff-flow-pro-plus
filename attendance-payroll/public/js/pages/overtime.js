@@ -174,11 +174,11 @@ export async function render(view) {
     });
   }
 
-  $('#ot-month').addEventListener('change', load);
-  $('#ot-search').addEventListener('input', renderTable);
-  $('#ot-status-filter').addEventListener('change', renderTable);
+  $('#ot-month')?.addEventListener('change', load);
+  $('#ot-search')?.addEventListener('input', renderTable);
+  $('#ot-status-filter')?.addEventListener('change', renderTable);
 
-  $('#add-ot').addEventListener('click', async () => {
+  $('#add-ot')?.addEventListener('click', async () => {
     let users = [];
     try {
       const uRes = await get('/users');

@@ -147,7 +147,7 @@ export async function render(view) {
     });
   }
 
-  $('#mark-all-read').addEventListener('click', async () => {
+  $('#mark-all-read')?.addEventListener('click', async () => {
     try {
       await post('/notifications/read-all');
       toast('All notifications marked as read');

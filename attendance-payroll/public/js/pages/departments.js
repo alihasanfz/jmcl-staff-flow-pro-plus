@@ -155,8 +155,8 @@ export async function render(view) {
     });
   }
 
-  $('#add-dept').addEventListener('click', () => openDeptModal());
-  $('#dept-search').addEventListener('input', renderTable);
+  $('#add-dept')?.addEventListener('click', () => openDeptModal());
+  $('#dept-search')?.addEventListener('input', renderTable);
 
   load();
 }

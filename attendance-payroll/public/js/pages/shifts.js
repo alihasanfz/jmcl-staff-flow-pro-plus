@@ -201,8 +201,8 @@ export async function render(view) {
     });
   }
 
-  $('#add-shift').addEventListener('click', () => openShiftModal());
-  $('#shift-search').addEventListener('input', renderTable);
+  $('#add-shift')?.addEventListener('click', () => openShiftModal());
+  $('#shift-search')?.addEventListener('input', renderTable);
 
   load();
 }

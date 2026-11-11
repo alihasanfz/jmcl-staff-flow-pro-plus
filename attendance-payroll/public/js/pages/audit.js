@@ -140,9 +140,9 @@ export async function render(view) {
     });
   }
 
-  $('#refresh-audit').addEventListener('click', load);
-  $('#audit-entity-filter').addEventListener('change', load);
-  $('#audit-search').addEventListener('input', renderTable);
+  $('#refresh-audit')?.addEventListener('click', load);
+  $('#audit-entity-filter')?.addEventListener('change', load);
+  $('#audit-search')?.addEventListener('input', renderTable);
 
   load();
 }

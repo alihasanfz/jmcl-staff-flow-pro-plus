@@ -549,13 +549,13 @@ export async function render(view) {
     }, 50);
   }
 
-  $('#add-user').addEventListener('click', () => {
+  $('#add-user')?.addEventListener('click', () => {
     openPermissionsModal({ role: 'employee', active: true, permissions: {} }, true);
   });
 
-  $('#user-search').addEventListener('input', renderTable);
-  $('#user-role-filter').addEventListener('change', renderTable);
-  $('#user-access-filter').addEventListener('change', renderTable);
+  $('#user-search')?.addEventListener('input', renderTable);
+  $('#user-role-filter')?.addEventListener('change', renderTable);
+  $('#user-access-filter')?.addEventListener('change', renderTable);
 
   load();
 }
