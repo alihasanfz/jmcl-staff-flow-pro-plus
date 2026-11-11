@@ -249,7 +249,21 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
                     AND UPPER(pl.device_sn) = UPPER(${snParam})),
                 to_char(a.check_in AT TIME ZONE $1, 'HH24:MI')
               ) AS check_in_local,
-              to_char(a.check_out AT TIME ZONE $1, 'HH24:MI') AS check_out_local,
+              COALESCE(
+                to_char(a.check_out AT TIME ZONE $1, 'HH24:MI'),
+                (SELECT to_char(MAX(pl.punched_at) AT TIME ZONE $1, 'HH24:MI')
+                   FROM punch_logs pl
+                  WHERE pl.user_id = a.user_id
+                    AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
+                    AND UPPER(pl.device_sn) = UPPER(${snParam})
+                    AND pl.punched_at >= (
+                      SELECT MIN(pl2.punched_at) + interval '15 minutes'
+                        FROM punch_logs pl2
+                       WHERE pl2.user_id = a.user_id
+                         AND to_char(pl2.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
+                         AND UPPER(pl2.device_sn) = UPPER(${snParam})
+                    ))
+              ) AS check_out_local,
               a.worked_minutes, a.late_minutes, a.early_out_minutes, a.overtime_minutes,
               a.missing_checkout, a.off_day_work,
               COALESCE(
@@ -276,7 +290,20 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
   const { rows } = await query(
     `SELECT a.id, a.user_id, u.name, u.employee_code, u.department, a.work_date::text AS work_date, a.status,
             to_char(a.check_in AT TIME ZONE $1, 'HH24:MI') AS check_in_local,
-            to_char(a.check_out AT TIME ZONE $1, 'HH24:MI') AS check_out_local,
+            COALESCE(
+              to_char(a.check_out AT TIME ZONE $1, 'HH24:MI'),
+              (SELECT to_char(MAX(pl.punched_at) AT TIME ZONE $1, 'HH24:MI')
+                 FROM punch_logs pl
+                WHERE pl.user_id = a.user_id
+                  AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
+                  AND to_char(pl.punched_at AT TIME ZONE $1, 'HH24:MI') >= '15:00'
+                  AND pl.punched_at >= (
+                    SELECT MIN(pl2.punched_at) + interval '15 minutes'
+                      FROM punch_logs pl2
+                     WHERE pl2.user_id = a.user_id
+                       AND to_char(pl2.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
+                  ))
+            ) AS check_out_local,
             a.worked_minutes, a.late_minutes, a.early_out_minutes, a.overtime_minutes,
             a.missing_checkout, a.off_day_work, a.punch_count, s.name AS shift_name,
             COALESCE(d.name, a.check_in_device_sn, a.device_sn, '—') AS device_name,

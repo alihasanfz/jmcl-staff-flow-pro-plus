@@ -454,11 +454,11 @@ async function handleGetRequest(req, res) {
   // Auto-sync disabled: Machine hardware clock is NEVER modified automatically.
   // Time sync only occurs if manually triggered by an administrator from the Web UI.
 
-  // Periodic device log flush check every 15 minutes to guarantee all punches in machine memory are pushed
+  // Periodic device log flush check every 10 minutes to guarantee all punches in machine memory are pushed
   const lastCheck = lastCheckCmd.get(snKey) || 0;
-  if (now - lastCheck >= 900000) { // 15 minutes
+  if (now - lastCheck >= 600000) { // 10 minutes
     lastCheckCmd.set(snKey, now);
-    queueDeviceCommand(d.serial_number, 'CHECK');
+    queueDeviceCommand(d.serial_number, 'DATA QUERY ATTLOG');
     const queued = commandQueue.get(snKey);
     if (queued && queued.length > 0) {
       const nextCmd = queued.shift();
