@@ -1,7 +1,7 @@
 'use strict';
 const router = require('express').Router();
-const { wrap, parse, bad } = require('../utils/http');
-const { requireRole } = require('../middleware/auth');
+const { wrap, parse, bad, forbidden } = require('../utils/http');
+const { requireRole, canView, canEdit } = require('../middleware/auth');
 const { getSettings, updateSettings } = require('../services/settings');
 const { isValidTimezone } = require('../utils/time');
 const { query } = require('../db');
@@ -24,9 +24,9 @@ const patch = z.object({
   }).partial(),
 }).partial();
 
-router.get('/', requireRole('admin', 'hr'), wrap(async (req, res) => res.json({ settings: await getSettings() })));
+router.get('/', (req, res, next) => (canView(req.user, 'settings') || ['admin', 'hr', 'company_admin', 'super_admin'].includes(req.user.role) ? next() : next(forbidden('Your role cannot access this'))), wrap(async (req, res) => res.json({ settings: await getSettings() })));
 
-router.put('/', requireRole('admin'), wrap(async (req, res) => {
+router.put('/', (req, res, next) => (canEdit(req.user, 'settings') || ['admin', 'company_admin', 'super_admin'].includes(req.user.role) ? next() : next(forbidden('Your role cannot access this'))), wrap(async (req, res) => {
   const p = parse(patch, req.body);
   if (!Object.keys(p).length) throw bad('Nothing to update');
   const current = await getSettings();
@@ -42,7 +42,7 @@ router.put('/', requireRole('admin'), wrap(async (req, res) => {
   res.json({ settings, note: 'Changes apply to new calculations. Use Recalculate on the Attendance page to refresh past days.' });
 }));
 
-router.get('/audit', requireRole('admin'), wrap(async (req, res) => {
+router.get('/audit', (req, res, next) => (canView(req.user, 'settings') || canView(req.user, 'audit_logs') || ['admin', 'company_admin', 'super_admin'].includes(req.user.role) ? next() : next(forbidden('Your role cannot access this'))), wrap(async (req, res) => {
   const { rows } = await query(
     `SELECT l.id, l.at, l.action, l.entity, l.entity_id, l.detail, u.name AS actor FROM audit_log l LEFT JOIN users u ON u.id = l.user_id
       ORDER BY l.at DESC LIMIT 100`);

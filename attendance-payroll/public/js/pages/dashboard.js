@@ -7,7 +7,9 @@ const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)')
 const toMin = (hhmm) => { const [h, m] = (hhmm || '00:00').split(':').map(Number); return h * 60 + m; };
 
 export async function render(view, state) {
-  return state.user.role === 'staff' ? renderStaff(view, state) : renderManager(view, state);
+  const hasCustomOverview = Boolean(state.user?.permissions?.overview?.view);
+  const isSelfService = (state.user?.role === 'staff' || state.user?.role === 'employee') && !hasCustomOverview;
+  return isSelfService ? renderStaff(view, state) : renderManager(view, state);
 }
 
 /* ======================= Admin / HR Manager Analytics Dashboard ======================= */

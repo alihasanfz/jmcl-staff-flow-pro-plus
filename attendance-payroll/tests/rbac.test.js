@@ -71,3 +71,18 @@ test('RBAC: Custom permissions grant specific write access', () => {
   assert.equal(canEdit(customUser, 'devices'), false);
 });
 
+test('RBAC: Department Manager role and custom permissions access', () => {
+  const deptMgr = {
+    role: 'dept_manager',
+    permissions: {
+      overview: { view: true, edit: true },
+      employees: { view: true, edit: false },
+    },
+  };
+  assert.equal(canView(deptMgr, 'overview'), true);
+  assert.equal(canEdit(deptMgr, 'overview'), true);
+  assert.equal(canView(deptMgr, 'employees'), true);
+  assert.equal(canEdit(deptMgr, 'employees'), false);
+  assert.equal(canView(deptMgr, 'attendance'), true);
+});
+

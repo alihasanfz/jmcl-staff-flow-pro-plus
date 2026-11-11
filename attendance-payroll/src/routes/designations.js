@@ -1,11 +1,16 @@
 'use strict';
 const router = require('express').Router();
 const { query } = require('../db');
-const { wrap, parse, notFound } = require('../utils/http');
-const { requireRole } = require('../middleware/auth');
+const { wrap, parse, notFound, forbidden } = require('../utils/http');
+const { requireRole, canEdit } = require('../middleware/auth');
 const { z, id } = require('./schemas');
 
-const manager = requireRole('super_admin', 'company_admin', 'admin', 'hr_manager', 'hr');
+const manager = (req, res, next) => {
+  if (canEdit(req.user, 'designations') || ['super_admin', 'company_admin', 'admin', 'hr_manager', 'hr'].includes(req.user.role)) {
+    return next();
+  }
+  return next(forbidden('Your role cannot access this'));
+};
 
 const designationSchema = z.object({
   name: z.string().trim().min(1).max(80),

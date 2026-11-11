@@ -43,7 +43,7 @@ const subSchema = z.object({
   keys: z.object({ p256dh: z.string().min(10).max(200), auth: z.string().min(10).max(100) }),
 });
 
-router.post('/push/subscribe', requireRole('admin', 'hr'), wrap(async (req, res) => {
+router.post('/push/subscribe', wrap(async (req, res) => {
   const s = parse(subSchema, req.body);
   // A device re-subscribing under a different account moves the subscription to the current user.
   await query(
@@ -64,7 +64,7 @@ router.get('/push/status', wrap(async (req, res) => {
   res.json({ subscriptions: c.n });
 }));
 
-router.post('/push/test', requireRole('admin', 'hr'), wrap(async (req, res) => {
+router.post('/push/test', wrap(async (req, res) => {
   const { rows: [c] } = await query('SELECT COUNT(*)::int AS n FROM push_subscriptions WHERE user_id = $1', [req.user.id]);
   if (!c.n) throw bad('Turn on notifications on this device first');
   await notifyUsers([req.user.id], {

@@ -8,7 +8,12 @@ const { getSettings } = require('../services/settings');
 const { addDays, todayIn, diffDays, monthRange, isMonth } = require('../utils/time');
 const { z, date, time, id } = require('./schemas');
 
-const manager = requireRole('admin', 'hr');
+const manager = (req, res, next) => {
+  if (canView(req.user, 'attendance') || isManager(req.user) || ['super_admin', 'company_admin', 'admin', 'hr_manager', 'hr', 'dept_manager'].includes(req.user.role)) {
+    return next();
+  }
+  return next(forbidden('Your role cannot access this'));
+};
 const editAttendance = requirePermission('attendance', 'edit');
 
 /** Staff only ever see their own records; managers or users with attendance view permission may filter by employee. */
@@ -272,7 +277,7 @@ router.put('/:id', editAttendance, wrap(async (req, res) => {
 }));
 
 /** Delete an attendance record directly */
-router.delete('/:id', manager, wrap(async (req, res) => {
+router.delete('/:id', editAttendance, wrap(async (req, res) => {
   const attId = parse(id, req.params.id);
   const { timezone } = await getSettings();
   const { rows: [att] } = await query('SELECT * FROM attendance WHERE id = $1', [attId]);

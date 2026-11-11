@@ -1,11 +1,20 @@
 'use strict';
 const router = require('express').Router();
 const { query } = require('../db');
-const { wrap, parse, notFound, bad } = require('../utils/http');
-const { requireRole, isManager } = require('../middleware/auth');
+const { wrap, parse, notFound, bad, forbidden } = require('../utils/http');
+const { requireRole, isManager, canEdit } = require('../middleware/auth');
 const { z, id, date, money } = require('./schemas');
 
-const manager = requireRole('super_admin', 'company_admin', 'admin', 'hr_manager', 'hr', 'accounts_manager');
+const manager = (req, res, next) => {
+  if (
+    canEdit(req.user, 'overtime') ||
+    isManager(req.user) ||
+    ['super_admin', 'company_admin', 'admin', 'hr_manager', 'hr', 'accounts_manager', 'dept_manager'].includes(req.user.role)
+  ) {
+    return next();
+  }
+  return next(forbidden('Your role cannot access this'));
+};
 
 router.get('/', wrap(async (req, res) => {
   const isMgr = isManager(req.user);

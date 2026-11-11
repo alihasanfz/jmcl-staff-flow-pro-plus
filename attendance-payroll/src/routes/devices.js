@@ -9,8 +9,8 @@ const router = require('express').Router();
 const net = require('net');
 const os = require('os');
 const { query } = require('../db');
-const { wrap, parse, notFound, bad } = require('../utils/http');
-const { requireRole } = require('../middleware/auth');
+const { wrap, parse, notFound, bad, forbidden } = require('../utils/http');
+const { requireRole, canView } = require('../middleware/auth');
 const { probeDevice } = require('../services/deviceProbe');
 const { pollDevice } = require('../services/devicePoller');
 const { ingestPunches } = require('../services/attendance');
@@ -20,7 +20,12 @@ const { parseAttLog } = require('../logic/adms');
 const { toLocalString, todayIn } = require('../utils/time');
 const { z, id } = require('./schemas');
 
-router.use(requireRole('admin'));
+router.use((req, res, next) => {
+  if (canView(req.user, 'devices') || ['super_admin', 'company_admin', 'admin'].includes(req.user.role)) {
+    return next();
+  }
+  return next(forbidden('Your role cannot access this'));
+});
 
 const HOST_RE = /^(?=.{1,253}$)([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
 const host = z.string().trim().max(253).refine((h) => net.isIP(h) !== 0 || HOST_RE.test(h), 'must be an IP address or hostname');

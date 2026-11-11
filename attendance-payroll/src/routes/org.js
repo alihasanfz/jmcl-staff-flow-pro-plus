@@ -2,11 +2,30 @@
 // Shifts, holidays and leave types: reference data shared by attendance, leave and payroll.
 const router = require('express').Router();
 const { query } = require('../db');
-const { wrap, parse, notFound, conflict } = require('../utils/http');
-const { requireRole } = require('../middleware/auth');
+const { wrap, parse, notFound, conflict, forbidden } = require('../utils/http');
+const { requireRole, canEdit } = require('../middleware/auth');
 const { z, date, time, id } = require('./schemas');
 
-const manager = requireRole('admin', 'hr');
+const shiftManager = (req, res, next) => {
+  if (canEdit(req.user, 'shifts') || ['super_admin', 'company_admin', 'admin', 'hr_manager', 'hr'].includes(req.user.role)) {
+    return next();
+  }
+  return next(forbidden('Your role cannot access this'));
+};
+
+const holidayManager = (req, res, next) => {
+  if (canEdit(req.user, 'holidays') || ['super_admin', 'company_admin', 'admin', 'hr_manager', 'hr'].includes(req.user.role)) {
+    return next();
+  }
+  return next(forbidden('Your role cannot access this'));
+};
+
+const leaveTypeManager = (req, res, next) => {
+  if (canEdit(req.user, 'leave') || ['super_admin', 'company_admin', 'admin'].includes(req.user.role)) {
+    return next();
+  }
+  return next(forbidden('Your role cannot access this'));
+};
 
 /* ---------- shifts ---------- */
 const shift = z.object({
@@ -26,7 +45,7 @@ const SHIFT_COLS = `id, name, to_char(start_time, 'HH24:MI') AS start_time, to_c
 router.get('/shifts', wrap(async (req, res) => {
   res.json({ shifts: (await query(`SELECT ${SHIFT_COLS} FROM shifts ORDER BY start_time, name`)).rows });
 }));
-router.post('/shifts', manager, wrap(async (req, res) => {
+router.post('/shifts', shiftManager, wrap(async (req, res) => {
   const s = parse(shift, req.body);
   const isNight = s.isNightShift || s.endTime <= s.startTime;
   const { rows: [r] } = await query(
@@ -35,7 +54,7 @@ router.post('/shifts', manager, wrap(async (req, res) => {
     [s.name, s.startTime, s.endTime, s.breakMinutes, s.graceMinutes, s.earlyOutGraceMinutes, s.overtimeAfterMinutes, s.weeklyOff, isNight]);
   res.status(201).json({ id: r.id });
 }));
-router.put('/shifts/:id', manager, wrap(async (req, res) => {
+router.put('/shifts/:id', shiftManager, wrap(async (req, res) => {
   const sid = parse(id, req.params.id);
   const s = parse(shift, req.body);
   const isNight = s.isNightShift || s.endTime <= s.startTime;
@@ -46,7 +65,7 @@ router.put('/shifts/:id', manager, wrap(async (req, res) => {
   if (!rowCount) throw notFound('Shift not found');
   res.json({ ok: true, note: 'Past attendance keeps its recorded values until you run Recalculate.' });
 }));
-router.delete('/shifts/:id', manager, wrap(async (req, res) => {
+router.delete('/shifts/:id', shiftManager, wrap(async (req, res) => {
   const sid = parse(id, req.params.id);
   const { rows: [c] } = await query('SELECT COUNT(*)::int AS n FROM users WHERE shift_id = $1', [sid]);
   if (c.n) throw conflict(`${c.n} employee(s) are assigned to this shift. Move them first.`);
@@ -62,12 +81,12 @@ router.get('/holidays', wrap(async (req, res) => {
   const { rows } = await query(`SELECT date::text AS date, name FROM holidays WHERE EXTRACT(YEAR FROM date) = $1 ORDER BY date`, [year]);
   res.json({ holidays: rows });
 }));
-router.post('/holidays', manager, wrap(async (req, res) => {
+router.post('/holidays', holidayManager, wrap(async (req, res) => {
   const h = parse(z.object({ date, name: z.string().trim().min(1).max(100) }), req.body);
   await query('INSERT INTO holidays (date, name) VALUES ($1,$2) ON CONFLICT (date) DO UPDATE SET name = EXCLUDED.name', [h.date, h.name]);
   res.status(201).json({ ok: true });
 }));
-router.delete('/holidays/:date', manager, wrap(async (req, res) => {
+router.delete('/holidays/:date', holidayManager, wrap(async (req, res) => {
   const d = parse(date, req.params.date);
   await query('DELETE FROM holidays WHERE date = $1', [d]);
   res.json({ ok: true });
@@ -83,12 +102,12 @@ const leaveType = z.object({
 router.get('/leave-types', wrap(async (req, res) => {
   res.json({ leaveTypes: (await query('SELECT id, name, annual_quota, paid, active FROM leave_types ORDER BY id')).rows });
 }));
-router.post('/leave-types', requireRole('admin'), wrap(async (req, res) => {
+router.post('/leave-types', leaveTypeManager, wrap(async (req, res) => {
   const t = parse(leaveType, req.body);
   const { rows: [r] } = await query('INSERT INTO leave_types (name, annual_quota, paid, active) VALUES ($1,$2,$3,$4) RETURNING id', [t.name, t.annualQuota, t.paid, t.active]);
   res.status(201).json({ id: r.id });
 }));
-router.put('/leave-types/:id', requireRole('admin'), wrap(async (req, res) => {
+router.put('/leave-types/:id', leaveTypeManager, wrap(async (req, res) => {
   const tid = parse(id, req.params.id);
   const t = parse(leaveType, req.body);
   const { rowCount } = await query('UPDATE leave_types SET name=$2, annual_quota=$3, paid=$4, active=$5 WHERE id=$1', [tid, t.name, t.annualQuota, t.paid, t.active]);
@@ -100,7 +119,7 @@ router.put('/leave-types/:id', requireRole('admin'), wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-router.delete('/leave-types/:id', requireRole('admin'), wrap(async (req, res) => {
+router.delete('/leave-types/:id', leaveTypeManager, wrap(async (req, res) => {
   const tid = parse(id, req.params.id);
   const { rows: [c] } = await query('SELECT COUNT(*)::int AS n FROM leave_requests WHERE leave_type_id = $1', [tid]);
   if (c.n) throw conflict(`${c.n} leave request(s) exist for this leave type. Cannot delete.`);

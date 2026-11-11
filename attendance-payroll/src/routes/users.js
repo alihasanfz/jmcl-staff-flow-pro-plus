@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { query } = require('../db');
 const { wrap, parse, bad, forbidden, notFound } = require('../utils/http');
-const { requireRole, isManager, canEdit } = require('../middleware/auth');
+const { requireRole, isManager, canEdit, canView } = require('../middleware/auth');
 const { MODULES } = require('../logic/permissions');
 const { ensureBalances } = require('./../services/leave');
 const { backfillPin, rebuildRange } = require('../services/attendance');
@@ -12,7 +12,17 @@ const { todayIn, addDays } = require('../utils/time');
 const { getSettings } = require('../services/settings');
 const { z, date, id, money, password } = require('./schemas');
 
-router.use(requireRole('super_admin', 'company_admin', 'admin', 'hr_manager', 'hr_executive', 'hr'));
+router.use((req, res, next) => {
+  if (
+    canView(req.user, 'employees') ||
+    canView(req.user, 'roles') ||
+    isManager(req.user) ||
+    ['super_admin', 'company_admin', 'admin', 'hr_manager', 'hr_executive', 'hr', 'dept_manager'].includes(req.user.role)
+  ) {
+    return next();
+  }
+  return next(forbidden('Your role cannot access this'));
+});
 
 const COLS = `u.id, u.employee_code, u.device_pin, u.name, u.email, u.phone, u.address, u.photo, u.role,
               u.department, u.department_id, u.designation, u.designation_id, u.branch_id,
@@ -73,9 +83,13 @@ const body = z.object({
 
 function assertCanManage(actor, targetRole, newRole) {
   if (['super_admin', 'company_admin', 'admin'].includes(actor.role) || canEdit(actor, 'roles')) return;
-  if (!['staff', 'employee'].includes(targetRole) || (newRole && !['staff', 'employee'].includes(newRole))) {
-    throw forbidden('HR can only manage Staff/Employee accounts');
+  if (canEdit(actor, 'employees') || ['hr_manager', 'hr_executive', 'hr', 'dept_manager'].includes(actor.role)) {
+    if (!['staff', 'employee'].includes(targetRole) || (newRole && !['staff', 'employee'].includes(newRole))) {
+      throw forbidden('You can only manage Staff/Employee accounts');
+    }
+    return;
   }
+  throw forbidden('You do not have permission to manage accounts');
 }
 
 function assertCanManagePermissions(actor) {

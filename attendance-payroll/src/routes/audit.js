@@ -1,10 +1,10 @@
 'use strict';
 const router = require('express').Router();
 const { query } = require('../db');
-const { wrap } = require('../utils/http');
-const { requireRole } = require('../middleware/auth');
+const { wrap, forbidden } = require('../utils/http');
+const { requireRole, canView } = require('../middleware/auth');
 
-router.get('/', requireRole('admin', 'hr', 'company_admin', 'super_admin'), wrap(async (req, res) => {
+router.get('/', (req, res, next) => (canView(req.user, 'audit_logs') || ['admin', 'hr', 'company_admin', 'super_admin'].includes(req.user.role) ? next() : next(forbidden('Your role cannot access this'))), wrap(async (req, res) => {
   const { entity, action, limit = 100, offset = 0 } = req.query;
   const conditions = [];
   const params = [];

@@ -2,9 +2,16 @@
 const router = require('express').Router();
 const { query } = require('../db');
 const { wrap, parse, forbidden } = require('../utils/http');
-const { requireRole, isManager } = require('../middleware/auth');
+const { requireRole, isManager, canEdit } = require('../middleware/auth');
 const leave = require('../services/leave');
 const { z, date, id } = require('./schemas');
+
+const leaveReviewer = (req, res, next) => {
+  if (canEdit(req.user, 'leave') || isManager(req.user) || ['super_admin', 'company_admin', 'admin', 'hr_manager', 'hr', 'dept_manager'].includes(req.user.role)) {
+    return next();
+  }
+  return next(forbidden('Your role cannot access this'));
+};
 
 router.get('/balances', wrap(async (req, res) => {
   const uid = isManager(req.user) && req.query.userId ? parse(id, req.query.userId) : req.user.id;
@@ -38,10 +45,10 @@ router.post('/requests', wrap(async (req, res) => {
 }));
 
 const noteSchema = z.object({ note: z.string().trim().max(300).optional() });
-router.post('/requests/:id/approve', requireRole('admin', 'hr'), wrap(async (req, res) => {
+router.post('/requests/:id/approve', leaveReviewer, wrap(async (req, res) => {
   res.json(await leave.review(parse(id, req.params.id), req.user, 'approved', parse(noteSchema, req.body ?? {}).note));
 }));
-router.post('/requests/:id/reject', requireRole('admin', 'hr'), wrap(async (req, res) => {
+router.post('/requests/:id/reject', leaveReviewer, wrap(async (req, res) => {
   res.json(await leave.review(parse(id, req.params.id), req.user, 'rejected', parse(noteSchema, req.body ?? {}).note));
 }));
 router.post('/requests/:id/cancel', wrap(async (req, res) => {

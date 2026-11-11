@@ -1,13 +1,21 @@
 'use strict';
 const router = require('express').Router();
-const { wrap, parse, bad } = require('../utils/http');
-const { requireRole } = require('../middleware/auth');
+const { wrap, parse, bad, forbidden } = require('../utils/http');
+const { requireRole, canView } = require('../middleware/auth');
 const { REPORT_TYPES, buildReport, toXlsx, toPdf } = require('../services/reports');
 const { getSettings } = require('../services/settings');
 const { addDays, todayIn, diffDays } = require('../utils/time');
 const { z, date, month, id } = require('./schemas');
 
-router.use(requireRole('admin', 'hr'));
+router.use((req, res, next) => {
+  if (
+    canView(req.user, 'reports') ||
+    ['super_admin', 'company_admin', 'admin', 'hr_manager', 'hr_executive', 'hr', 'dept_manager', 'accounts_manager'].includes(req.user.role)
+  ) {
+    return next();
+  }
+  return next(forbidden('Your role cannot access this'));
+});
 
 router.get('/types', (req, res) => res.json({ types: REPORT_TYPES }));
 

@@ -2,7 +2,7 @@
 const router = require('express').Router();
 const { query } = require('../db');
 const { wrap, parse, forbidden, notFound, bad } = require('../utils/http');
-const { requireRole, isManager } = require('../middleware/auth');
+const { requireRole, isManager, canView } = require('../middleware/auth');
 const payroll = require('../services/payroll');
 const { payslipPdf } = require('../services/reports');
 const { z, month, id, money } = require('./schemas');
@@ -19,20 +19,28 @@ router.get('/my-payslips', wrap(async (req, res) => {
 router.get('/payslips/:id', wrap(async (req, res) => {
   const p = await payroll.getPayslip(parse(id, req.params.id));
   // Same response for "missing" and "not yours" so ids cannot be probed.
-  if (!p || (!isManager(req.user) && (p.user_id !== req.user.id || p.run_status !== 'finalized'))) throw notFound('Payslip not found');
+  if (!p || (!isManager(req.user) && !canView(req.user, 'payroll') && (p.user_id !== req.user.id || p.run_status !== 'finalized'))) throw notFound('Payslip not found');
   res.json({ payslip: p });
 }));
 
 router.get('/payslips/:id/pdf', wrap(async (req, res) => {
   const p = await payroll.getPayslip(parse(id, req.params.id));
-  if (!p || (!isManager(req.user) && (p.user_id !== req.user.id || p.run_status !== 'finalized'))) throw notFound('Payslip not found');
+  if (!p || (!isManager(req.user) && !canView(req.user, 'payroll') && (p.user_id !== req.user.id || p.run_status !== 'finalized'))) throw notFound('Payslip not found');
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="payslip-${p.month}-${p.employee_code}.pdf"`);
   await payslipPdf(p, res);
 }));
 
 /* ---------- management ---------- */
-router.use(requireRole('admin', 'hr'));
+router.use((req, res, next) => {
+  if (
+    canView(req.user, 'payroll') ||
+    ['super_admin', 'company_admin', 'admin', 'hr_manager', 'hr', 'accounts_manager'].includes(req.user.role)
+  ) {
+    return next();
+  }
+  return next(forbidden('Your role cannot access this'));
+});
 
 router.get('/runs', wrap(async (req, res) => {
   const { rows } = await query(
