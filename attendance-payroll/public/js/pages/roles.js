@@ -256,7 +256,6 @@ export async function render(view) {
    * Permissions and Role Editor Modal
    */
   function openPermissionsModal(user, isNew = false) {
-    const isSuper = user && ['super_admin', 'company_admin'].includes(user.role);
     let currentPerms = (user && user.permissions && typeof user.permissions === 'object') ? { ...user.permissions } : {};
 
     // Helper to evaluate current state of a module
@@ -272,8 +271,8 @@ export async function render(view) {
     const renderPermRows = () => {
       return MODULES.map((m) => {
         const p = getModPerm(m.key);
-        const statusText = isSuper ? 'Master Admin' : (!p.view ? 'No Access' : (p.edit ? 'Full Access' : 'View Only'));
-        const statusClass = isSuper ? 'present' : (!p.view ? 'muted' : (p.edit ? 'present' : 'waiting'));
+        const statusText = !p.view ? 'No Access' : (p.edit ? 'Full Access' : 'View Only');
+        const statusClass = !p.view ? 'muted' : (p.edit ? 'present' : 'waiting');
 
         return html`
           <tr data-mod-row="${m.key}">
@@ -284,10 +283,10 @@ export async function render(view) {
               <div class="small muted" style="margin-top:2px; font-size:11px;">${m.desc}</div>
             </td>
             <td style="text-align:center; vertical-align:middle;">
-              <input type="checkbox" class="perm-cb perm-view" data-mod="${m.key}" data-type="view" ${p.view || isSuper ? 'checked' : ''} ${isSuper ? 'disabled' : ''} style="cursor:pointer; transform:scale(1.2);">
+              <input type="checkbox" class="perm-cb perm-view" data-mod="${m.key}" data-type="view" ${p.view ? 'checked' : ''} style="cursor:pointer; transform:scale(1.2);">
             </td>
             <td style="text-align:center; vertical-align:middle;">
-              <input type="checkbox" class="perm-cb perm-edit" data-mod="${m.key}" data-type="edit" ${p.edit || isSuper ? 'checked' : ''} ${(!p.view && !isSuper) ? 'disabled' : ''} ${isSuper ? 'disabled' : ''} style="cursor:pointer; transform:scale(1.2);">
+              <input type="checkbox" class="perm-cb perm-edit" data-mod="${m.key}" data-type="edit" ${p.edit ? 'checked' : ''} ${!p.view ? 'disabled' : ''} style="cursor:pointer; transform:scale(1.2);">
             </td>
             <td style="padding:10px 12px; text-align:center; vertical-align:middle;">
               <span class="badge ${statusClass} status-pill" style="font-size:11px; font-weight:600;">
@@ -375,12 +374,6 @@ export async function render(view) {
                 </button>
               </div>
             </div>
-
-            ${isSuper ? html`
-              <div class="notice" style="background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; padding:8px 12px; border-radius:6px; font-size:12px; margin-bottom:12px;">
-                <b>Super Administrator Protection:</b> This account is a master system administrator. Super administrators always retain complete system permissions.
-              </div>
-            ` : ''}
 
             <div class="table-wrap" style="max-height:360px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
               <table style="margin:0; width:100%; border-collapse:collapse;">

@@ -238,8 +238,11 @@ const handleUserUpdate = async (req, res) => {
   const uid = parse(id, req.params.id);
   const { rows: [target] } = await query('SELECT id, role, device_pin FROM users WHERE id = $1', [uid]);
   if (!target) throw notFound('Employee not found');
-  const d = parse(body.omit({ password: true }).partial(), req.body);
-  if (d.role !== undefined || d.permissions !== undefined) {
+  const updateBody = body.extend({
+    password: z.string().trim().min(1).optional().or(z.literal('').transform(() => undefined)),
+  });
+  const d = parse(updateBody.partial(), req.body);
+  if (d.role !== undefined || d.permissions !== undefined || req.body.password) {
     assertCanManagePermissions(req.user);
   } else {
     assertCanManage(req.user, target.role, d.role);
@@ -285,6 +288,16 @@ const handleUserUpdate = async (req, res) => {
   if (d.permissions !== undefined) {
     params.push(JSON.stringify(d.permissions || {}));
     sets.push(`permissions = $${params.length}::jsonb`);
+  }
+
+  // Handle password update if supplied
+  if (req.body.password && typeof req.body.password === 'string' && req.body.password.trim()) {
+    const pw = req.body.password.trim();
+    if (pw.length < 4) throw bad('Password must be at least 4 characters');
+    const pwHash = await bcrypt.hash(pw, 10);
+    params.push(pwHash);
+    sets.push(`password_hash = $${params.length}`);
+    sets.push(`must_change_password = false`);
   }
 
   if (sets.length) {
@@ -343,21 +356,28 @@ router.post('/:id/reset-password', wrap(async (req, res) => {
   res.json({ temporaryPassword: pw });
 }));
 
-router.delete('/:id', requireRole('super_admin', 'company_admin', 'admin'), wrap(async (req, res) => {
+router.delete('/:id', wrap(async (req, res) => {
   const uid = parse(id, req.params.id);
+  assertCanManagePermissions(req.user);
   if (uid === req.user.id) throw forbidden('You cannot delete your own account');
   const { rows: [target] } = await query('SELECT id, name FROM users WHERE id = $1', [uid]);
   if (!target) throw notFound('Employee not found');
 
-  await query('DELETE FROM payslips WHERE user_id = $1', [uid]);
-  await query('DELETE FROM salary_structures WHERE user_id = $1', [uid]);
-  await query('DELETE FROM overtime_records WHERE user_id = $1', [uid]);
-  await query('UPDATE leave_requests SET reviewed_by = NULL WHERE reviewed_by = $1', [uid]);
-  await query('UPDATE adjustments SET created_by = NULL WHERE created_by = $1', [uid]);
-  await query('UPDATE payroll_runs SET generated_by = NULL WHERE generated_by = $1', [uid]);
-  await query('UPDATE payroll_runs SET finalized_by = NULL WHERE finalized_by = $1', [uid]);
-  const { rowCount } = await query('DELETE FROM users WHERE id = $1', [uid]);
-  if (!rowCount) throw notFound('Employee not found');
+  try {
+    await query('DELETE FROM payslips WHERE user_id = $1', [uid]);
+    await query('DELETE FROM salary_structures WHERE user_id = $1', [uid]);
+    await query('DELETE FROM overtime_records WHERE user_id = $1', [uid]);
+    await query('DELETE FROM manual_punches WHERE user_id = $1', [uid]);
+    await query('UPDATE leave_requests SET reviewed_by = NULL WHERE reviewed_by = $1', [uid]);
+    await query('UPDATE adjustments SET created_by = NULL WHERE created_by = $1', [uid]);
+    await query('UPDATE payroll_runs SET generated_by = NULL WHERE generated_by = $1', [uid]);
+    await query('UPDATE payroll_runs SET finalized_by = NULL WHERE finalized_by = $1', [uid]);
+    await query('UPDATE users SET manager_id = NULL WHERE manager_id = $1', [uid]);
+    await query('DELETE FROM users WHERE id = $1', [uid]);
+  } catch (err) {
+    // If foreign key constraint prevents hard delete (e.g. historical punch logs), deactivate safely
+    await query('UPDATE users SET active = false, permissions = \'{}\'::jsonb WHERE id = $1', [uid]);
+  }
 
   await query(`INSERT INTO audit_log (user_id, action, entity, entity_id, detail) VALUES ($1,'delete','user',$2,$3::jsonb)`,
     [req.user.id, String(uid), JSON.stringify({ name: target.name })]);

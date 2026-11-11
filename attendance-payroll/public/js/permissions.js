@@ -91,14 +91,9 @@ function normalizeKey(k) {
 export function getUserPermission(user, moduleKey) {
   if (!user) return { view: false, edit: false };
 
-  // Super admins always have full access across the entire system
-  if (['super_admin', 'company_admin'].includes(user.role)) {
-    return { view: true, edit: true };
-  }
-
   const normKey = normalizeKey(moduleKey);
 
-  // 1. Check custom user permissions if configured
+  // 1. Check custom user permissions if configured (takes top precedence)
   const custom = user.permissions;
   if (custom && typeof custom === 'object') {
     let match = custom[moduleKey];
@@ -119,7 +114,12 @@ export function getUserPermission(user, moduleKey) {
     }
   }
 
-  // 2. Fall back to role defaults
+  // 2. Administrators default to full access if no custom override
+  if (['super_admin', 'company_admin', 'admin'].includes(user.role)) {
+    return { view: true, edit: true };
+  }
+
+  // 3. Fall back to role defaults
   const presetKey = user.role.startsWith('hr') ? 'hr_manager' :
                     user.role.startsWith('account') ? 'accounts' :
                     ['admin', 'super_admin', 'company_admin'].includes(user.role) ? 'full_admin' : null;
