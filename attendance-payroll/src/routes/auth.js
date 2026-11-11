@@ -18,6 +18,7 @@ const loginLimiter = rateLimit({
 const publicUser = (u) => ({
   id: u.id, name: u.name, email: u.email, role: u.role, employeeCode: u.employee_code,
   department: u.department, designation: u.designation, mustChangePassword: false,
+  permissions: u.permissions || {},
 });
 
 router.post('/login', loginLimiter, wrap(async (req, res) => {

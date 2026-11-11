@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const config = require('../config');
 const { query } = require('../db');
 const { HttpError, forbidden } = require('../utils/http');
+const { getUserPermission, canView, canEdit, DEFAULT_ROLE_PERMISSIONS, MODULES } = require('../logic/permissions');
 
 let secret = null;
 const setSecret = (s) => { secret = s; };
@@ -33,9 +34,10 @@ async function authenticate(req, res, next) {
     try { payload = jwt.verify(token, secret); } catch { throw new HttpError(401, 'Your session has expired. Please sign in again'); }
 
     const { rows: [user] } = await query(
-      `SELECT id, employee_code, name, email, role, department, designation, shift_id, active, must_change_password
+      `SELECT id, employee_code, name, email, role, department, designation, shift_id, active, must_change_password, permissions
          FROM users WHERE id = $1`, [payload.sub]);
     if (!user || !user.active) throw new HttpError(401, 'Account not found or deactivated');
+    user.permissions = user.permissions || {};
     req.user = user;
     next();
   } catch (err) { next(err); }
@@ -64,6 +66,34 @@ const requireRole = (...roles) => (req, res, next) => {
   return matches ? next() : next(forbidden('Your role cannot access this'));
 };
 
+/**
+ * Middleware requiring specific module permission:
+ * - action 'view': requires view permission
+ * - action 'edit': requires edit permission (blocks view-only users from writing)
+ */
+const requirePermission = (moduleKey, action = 'view') => (req, res, next) => {
+  if (!req.user) return next(new HttpError(401, 'Please sign in'));
+  if (action === 'edit') {
+    if (canEdit(req.user, moduleKey)) return next();
+    return next(forbidden(`You have view-only access. You do not have permission to create, edit or delete in ${moduleKey}.`));
+  }
+  if (canView(req.user, moduleKey)) return next();
+  return next(forbidden(`You do not have permission to view ${moduleKey}.`));
+};
+
 const isManager = (user) => ROLE_GROUPS.manager.includes(user.role);
 
-module.exports = { setSecret, issueSession, clearSession, authenticate, passwordGate, requireRole, isManager, COOKIE };
+module.exports = {
+  setSecret,
+  issueSession,
+  clearSession,
+  authenticate,
+  passwordGate,
+  requireRole,
+  requirePermission,
+  canView,
+  canEdit,
+  getUserPermission,
+  isManager,
+  COOKIE,
+};

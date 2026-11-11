@@ -2,9 +2,11 @@
 import { get, post, put, del, qs } from '../api.js';
 import { html, setHTML, $, $$, fmtDate, fmtHours, fmtMin, badge, toast, modal, formValues, confirmDialog, addDays, icon } from '../ui.js';
 import { t } from '../i18n.js';
+import { canEdit, canView } from '../permissions.js';
 
 export async function render(view, state) {
-  const isMgr = ['admin', 'company_admin', 'super_admin', 'hr_manager', 'hr_executive', 'hr', 'accounts_manager', 'dept_manager'].includes(state.user.role);
+  const isMgr = ['admin', 'company_admin', 'super_admin', 'hr_manager', 'hr_executive', 'hr', 'accounts_manager', 'dept_manager'].includes(state.user.role) || canView(state.user, 'attendance');
+  const canEditAttendance = canEdit(state.user, 'attendance');
   const today = state.meta.today;
   // Default to today so single-date daily attendance is shown immediately
   const f = { from: today, to: today, userId: '', department: '', status: '', deviceSn: '' };
@@ -30,6 +32,11 @@ export async function render(view, state) {
   const shell = () => {
     setHTML(view, html`
       <div class="stack">
+        ${!canEditAttendance && isMgr ? html`
+          <div class="notice" style="background:#fffbeb; border:1px solid #fef3c7; color:#92400e; padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+            ${icon('eye')} <span><b>View-Only Access:</b> You have permission to view attendance and download reports (PDF/Excel), but editing records or recalculating is restricted.</span>
+          </div>
+        ` : ''}
         <!-- Dedicated Machine Selector / Multi-Terminal Tabs -->
         <div class="terminal-nav-wrap" style="background:var(--bg-panel, #fff); border:1px solid var(--border, #e2e8f0); border-radius:12px; padding:12px 16px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,0.03);">
           <div class="row between" style="gap:12px; flex-wrap:wrap; align-items:center;">
@@ -89,7 +96,7 @@ export async function render(view, state) {
               <button type="button" class="btn sm ${f.from === addDays(today, -6) ? 'primary' : ''}" id="btn-quick-7d" style="border-radius:16px; padding:3px 10px; font-size:12px;">
                 Last 7 Days
               </button>
-              ${tab === 'daily' ? html`
+              ${tab === 'daily' && canEditAttendance ? html`
                 <button class="btn primary sm" id="add-att-btn" style="border-radius:16px; padding:3px 12px; font-size:12px; margin-left:8px;">${icon('plus')} Add Record</button>
               ` : ''}
             </div>
@@ -151,12 +158,14 @@ export async function render(view, state) {
             <button class="btn" type="button" id="download-excel" style="background:#f0fdf4; color:#166534; border-color:#bbf7d0; font-weight:600; display:inline-flex; align-items:center; gap:5px;" title="Export attendance to Excel (.xlsx)">
               ${icon('download')} Export Excel
             </button>
-            <button class="btn" type="button" id="fix-morning-btn" style="background:#fef3c7; color:#92400e; border-color:#fde68a; font-weight:600; display:inline-flex; align-items:center; gap:5px;" title="Auto-calibrate today's punches that occurred before machine clock was synced">
-              ${icon('clock')} Fix Today Punches (09:00–10:00 AM)
-            </button>
-            <button class="btn" type="button" id="recalc" title="Recompute attendance from the raw punches for this date range">
-              ${icon('clock')} Recalculate
-            </button>
+            ${canEditAttendance ? html`
+              <button class="btn" type="button" id="fix-morning-btn" style="background:#fef3c7; color:#92400e; border-color:#fde68a; font-weight:600; display:inline-flex; align-items:center; gap:5px;" title="Auto-calibrate today's punches that occurred before machine clock was synced">
+                ${icon('clock')} Fix Today Punches (09:00–10:00 AM)
+              </button>
+              <button class="btn" type="button" id="recalc" title="Recompute attendance from the raw punches for this date range">
+                ${icon('clock')} Recalculate
+              </button>
+            ` : ''}
           ` : ''}
         </form>
 
@@ -461,8 +470,10 @@ export async function render(view, state) {
                       <button class="action-btn" data-pdf-row="${r.user_id}" data-date="${r.work_date}" title="Download individual attendance PDF for ${r.name}" style="color:#0284c7; border-color:#bae6fd; background:#f0f9ff; font-weight:600;">
                         ${icon('download')} PDF
                       </button>
-                      <button class="action-btn" data-edit-att="${r.id}">${icon('edit')} Edit</button>
-                      <button class="action-btn danger" data-del-att="${r.id}" data-name="${r.name}" data-date="${r.work_date}">${icon('trash')} Delete</button>
+                      ${canEditAttendance ? html`
+                        <button class="action-btn" data-edit-att="${r.id}">${icon('edit')} Edit</button>
+                        <button class="action-btn danger" data-del-att="${r.id}" data-name="${r.name}" data-date="${r.work_date}">${icon('trash')} Delete</button>
+                      ` : ''}
                     </div>
                   </td>
                 ` : ''}

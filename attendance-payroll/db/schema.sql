@@ -341,6 +341,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS dob date;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS blood_group text DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS nid_number text DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS bank_info jsonb NOT NULL DEFAULT '{}';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions jsonb NOT NULL DEFAULT '{}';
 
 -- Expand user roles
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;

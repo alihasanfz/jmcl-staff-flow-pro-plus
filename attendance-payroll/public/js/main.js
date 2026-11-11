@@ -3,6 +3,7 @@ import { api, get, post, setAuthHandlers } from './api.js';
 import { html, setHTML, $, $$, esc, icon, toast, modal, ago } from './ui.js';
 import { pushState, enablePush, disablePush } from './push.js';
 import { t, getLang, setLang } from './i18n.js';
+import { canView, canEdit, getUserPermission } from './permissions.js';
 
 const app = $('#app');
 export const state = { user: null, meta: null };
@@ -14,7 +15,7 @@ const ADMIN_ONLY = ['admin', 'company_admin', 'super_admin'];
 const NAV = [
   { path: '/', key: 'overview', label: 'Overview', icon: 'home', roles: ALL_ROLES },
   { path: '/attendance', key: 'attendance', label: 'Attendance', icon: 'clock', roles: ALL_ROLES },
-  { path: '/live-attendance', key: 'liveAttendance', label: 'Live Attendance', icon: 'live', roles: ['admin', 'company_admin', 'super_admin', 'hr_manager', 'hr_executive', 'hr', 'dept_manager'] },
+  { path: '/live-attendance', key: 'live_attendance', label: 'Live Attendance', icon: 'live', roles: ['admin', 'company_admin', 'super_admin', 'hr_manager', 'hr_executive', 'hr', 'dept_manager'] },
   { path: '/employees', key: 'employees', label: 'Employees', icon: 'people', roles: ADMIN_HR },
   { path: '/departments', key: 'departments', label: 'Departments', icon: 'department', roles: ADMIN_HR },
   { path: '/designations', key: 'designations', label: 'Designations', icon: 'designation', roles: ADMIN_HR },
@@ -27,11 +28,11 @@ const NAV = [
   { path: '/devices', key: 'devices', label: 'Biometric Devices', icon: 'device', roles: ADMIN_ONLY },
   { path: '/roles', key: 'roles', label: 'Users & Roles', icon: 'role', roles: ADMIN_ONLY },
   { path: '/notifications', key: 'notifications', label: 'Notifications', icon: 'bell', roles: ALL_ROLES },
-  { path: '/audit-logs', key: 'auditLogs', label: 'Audit Logs', icon: 'audit', roles: ['admin', 'company_admin', 'super_admin', 'hr_manager'] },
+  { path: '/audit-logs', key: 'audit_logs', label: 'Audit Logs', icon: 'audit', roles: ['admin', 'company_admin', 'super_admin', 'hr_manager'] },
   { path: '/settings', key: 'settings', label: 'Settings', icon: 'gear', roles: ADMIN_HR },
 ];
 
-const V = '3.8';
+const V = '3.9';
 const PAGES = {
   '/': () => import(`./pages/dashboard.js?v=${V}`),
   '/attendance': () => import(`./pages/attendance.js?v=${V}`),
@@ -94,10 +95,17 @@ async function render() {
   if (!state.user) return showLogin();
 
   const uRole = state.user.role;
-  const nav = NAV.filter((n) => n.roles.includes(uRole));
+  const nav = NAV.filter((n) => canView(state.user, n.key) || (n.key === 'overview'));
   let path = location.pathname.replace(/\/$/, '') || '/';
   const item = nav.find((n) => n.path === path);
-  if (!item) { path = '/'; history.replaceState({}, '', '/'); }
+  if (!item) {
+    const rawItem = NAV.find((n) => n.path === path);
+    if (rawItem && !canView(state.user, rawItem.key)) {
+      toast(`Access Denied: You do not have permission to view ${rawItem.label}`, 'bad');
+    }
+    path = '/';
+    history.replaceState({}, '', '/');
+  }
 
   if (!$('.shell')) buildShell(nav);
   $$('.nav a').forEach((a) => (a.getAttribute('href') === path ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));

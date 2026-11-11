@@ -2,16 +2,17 @@
 const router = require('express').Router();
 const { query, tx } = require('../db');
 const { wrap, parse, bad, notFound } = require('../utils/http');
-const { requireRole, isManager } = require('../middleware/auth');
+const { requireRole, isManager, requirePermission, canView } = require('../middleware/auth');
 const { listAttendance, rebuildRange } = require('../services/attendance');
 const { getSettings } = require('../services/settings');
 const { addDays, todayIn, diffDays, monthRange, isMonth } = require('../utils/time');
 const { z, date, time, id } = require('./schemas');
 
 const manager = requireRole('admin', 'hr');
+const editAttendance = requirePermission('attendance', 'edit');
 
-/** Staff only ever see their own records; managers may filter by employee. */
-const scopeUser = (req) => (isManager(req.user) ? (req.query.userId ? parse(id, req.query.userId) : null) : req.user.id);
+/** Staff only ever see their own records; managers or users with attendance view permission may filter by employee. */
+const scopeUser = (req) => ((isManager(req.user) || canView(req.user, 'attendance')) ? (req.query.userId ? parse(id, req.query.userId) : null) : req.user.id);
 
 router.get('/live', wrap(async (req, res) => {
   const { timezone } = await getSettings();
@@ -134,7 +135,7 @@ router.get('/punches', manager, wrap(async (req, res) => {
 }));
 
 /** Add or record manual attendance */
-router.post('/manual', manager, wrap(async (req, res) => {
+router.post('/manual', editAttendance, wrap(async (req, res) => {
   const userId = parse(id, req.body.userId);
   const dateVal = parse(date, req.body.date);
   const status = req.body.status || 'present';
@@ -206,7 +207,7 @@ router.post('/manual', manager, wrap(async (req, res) => {
 }));
 
 /** Edit an existing attendance record directly */
-router.put('/:id', manager, wrap(async (req, res) => {
+router.put('/:id', editAttendance, wrap(async (req, res) => {
   const attId = parse(id, req.params.id);
   const { timezone } = await getSettings();
   const { rows: [att] } = await query('SELECT * FROM attendance WHERE id = $1', [attId]);
@@ -294,7 +295,7 @@ router.delete('/:id', manager, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-router.delete('/manual/:userId/:date', manager, wrap(async (req, res) => {
+router.delete('/manual/:userId/:date', editAttendance, wrap(async (req, res) => {
   const uid = parse(id, req.params.userId);
   const d = parse(date, req.params.date);
   const { timezone } = await getSettings();
@@ -313,7 +314,7 @@ router.delete('/manual/:userId/:date', manager, wrap(async (req, res) => {
 }));
 
 /** Recompute derived attendance, e.g. after changing shifts, holidays or settings. */
-router.post('/recalculate', manager, wrap(async (req, res) => {
+router.post('/recalculate', editAttendance, wrap(async (req, res) => {
   const b = parse(z.object({ from: date, to: date }), req.body);
   if (b.from > b.to) throw bad('"from" must not be after "to"');
   if (diffDays(b.from, b.to) > 92) throw bad('Recalculate up to 93 days at a time');
@@ -322,7 +323,7 @@ router.post('/recalculate', manager, wrap(async (req, res) => {
 }));
 
 /** Correct morning punches and attendance when machine time was skewed earlier in the day */
-router.post('/fix-morning-punches', manager, wrap(async (req, res) => {
+router.post('/fix-morning-punches', editAttendance, wrap(async (req, res) => {
   const { fixMorningPunches } = require('../services/attendance');
   const result = await fixMorningPunches(req.body.date);
   res.json({

@@ -4,7 +4,8 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { query } = require('../db');
 const { wrap, parse, bad, forbidden, notFound } = require('../utils/http');
-const { requireRole, isManager } = require('../middleware/auth');
+const { requireRole, isManager, canEdit } = require('../middleware/auth');
+const { MODULES } = require('../logic/permissions');
 const { ensureBalances } = require('./../services/leave');
 const { backfillPin, rebuildRange } = require('../services/attendance');
 const { todayIn, addDays } = require('../utils/time');
@@ -18,6 +19,7 @@ const COLS = `u.id, u.employee_code, u.device_pin, u.name, u.email, u.phone, u.a
               u.employment_type, u.gender, u.dob::text AS dob, u.blood_group, u.nid_number,
               u.emergency_contact, u.manager_id, u.shift_id, s.name AS shift_name,
               u.base_salary, u.allowances, u.join_date::text AS join_date, u.active, u.must_change_password,
+              COALESCE(u.permissions, '{}'::jsonb) AS permissions,
               COALESCE(ss.basic_salary, u.base_salary) AS basic_salary,
               COALESCE(ss.house_rent, 0) AS house_rent,
               COALESCE(ss.medical_allowance, 0) AS medical_allowance,
@@ -41,6 +43,7 @@ const body = z.object({
     'accounts_manager', 'dept_manager',
     'employee', 'staff'
   ]).default('employee'),
+  permissions: z.any().optional().default({}),
   department: z.string().trim().max(80).default('General'),
   departmentId: id.nullable().optional(),
   designation: z.string().trim().max(80).default('Staff'),
@@ -69,10 +72,15 @@ const body = z.object({
 });
 
 function assertCanManage(actor, targetRole, newRole) {
-  if (['super_admin', 'company_admin', 'admin'].includes(actor.role)) return;
+  if (['super_admin', 'company_admin', 'admin'].includes(actor.role) || canEdit(actor, 'roles')) return;
   if (!['staff', 'employee'].includes(targetRole) || (newRole && !['staff', 'employee'].includes(newRole))) {
     throw forbidden('HR can only manage Staff/Employee accounts');
   }
+}
+
+function assertCanManagePermissions(actor) {
+  if (['super_admin', 'company_admin', 'admin'].includes(actor.role) || canEdit(actor, 'roles')) return;
+  throw forbidden('Only administrators can configure user roles and custom permissions');
 }
 
 const tempPassword = () => `Tmp-${crypto.randomBytes(6).toString('base64url')}`;
@@ -112,9 +120,17 @@ router.get('/departments', wrap(async (req, res) => {
   res.json({ departments: rows.map((r) => r.department) });
 }));
 
+router.get('/meta/modules', wrap(async (req, res) => {
+  res.json({ modules: MODULES });
+}));
+
 router.post('/', wrap(async (req, res) => {
   const d = parse(body, req.body);
-  assertCanManage(req.user, 'staff', d.role);
+  if ((d.role && !['staff', 'employee'].includes(d.role)) || (d.permissions && Object.keys(d.permissions).length > 0)) {
+    assertCanManagePermissions(req.user);
+  } else {
+    assertCanManage(req.user, 'staff', d.role);
+  }
   const pw = d.password || 'Demo@12345';
 
   // Smart derivation of Device PIN and Employee Code
@@ -184,13 +200,13 @@ router.post('/', wrap(async (req, res) => {
     `INSERT INTO users (employee_code, device_pin, name, email, phone, address, photo, password_hash, role,
                         department, department_id, designation, designation_id, branch_id, manager_id,
                         employment_type, gender, dob, blood_group, nid_number, emergency_contact,
-                        shift_id, base_salary, allowances, join_date, active, must_change_password)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23,$24,COALESCE($25::date, CURRENT_DATE),$26,false)
+                        shift_id, base_salary, allowances, join_date, active, must_change_password, permissions)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23,$24,COALESCE($25::date, CURRENT_DATE),$26,false,COALESCE($27::jsonb, '{}'::jsonb))
      RETURNING id`,
     [code, pin, d.name, email, d.phone || '', d.address || '', d.photo || '', await bcrypt.hash(pw, 10), d.role || 'employee',
      deptName, d.departmentId || null, desgName, d.designationId || null, d.branchId || null, d.managerId || null,
      d.employmentType || 'permanent', d.gender || '', d.dob || null, d.bloodGroup || '', d.nidNumber || '', JSON.stringify(emergencyContactObj),
-     shiftId, basic, totalAllow, d.joinDate || null, d.active !== false]
+     shiftId, basic, totalAllow, d.joinDate || null, d.active !== false, JSON.stringify(d.permissions || {})]
   );
 
   // Save salary structure
@@ -218,12 +234,16 @@ router.post('/', wrap(async (req, res) => {
   res.status(201).json({ id: u.id, temporaryPassword: d.password ? undefined : pw, matchedPunches: matched });
 }));
 
-router.patch('/:id', wrap(async (req, res) => {
+const handleUserUpdate = async (req, res) => {
   const uid = parse(id, req.params.id);
   const { rows: [target] } = await query('SELECT id, role, device_pin FROM users WHERE id = $1', [uid]);
   if (!target) throw notFound('Employee not found');
   const d = parse(body.omit({ password: true }).partial(), req.body);
-  assertCanManage(req.user, target.role, d.role);
+  if (d.role !== undefined || d.permissions !== undefined) {
+    assertCanManagePermissions(req.user);
+  } else {
+    assertCanManage(req.user, target.role, d.role);
+  }
   if (uid === req.user.id && (d.active === false || (d.role && d.role !== req.user.role))) {
     throw forbidden('You cannot deactivate or change the role of your own account');
   }
@@ -261,6 +281,10 @@ router.patch('/:id', wrap(async (req, res) => {
     }
     params.push(JSON.stringify(ec));
     sets.push(`emergency_contact = $${params.length}::jsonb`);
+  }
+  if (d.permissions !== undefined) {
+    params.push(JSON.stringify(d.permissions || {}));
+    sets.push(`permissions = $${params.length}::jsonb`);
   }
 
   if (sets.length) {
@@ -303,7 +327,10 @@ router.patch('/:id', wrap(async (req, res) => {
     await rebuildRange(addDays(today, -7), today, { userId: uid });
   }
   res.json({ ok: true });
-}));
+};
+
+router.patch('/:id', wrap(handleUserUpdate));
+router.put('/:id', wrap(handleUserUpdate));
 
 router.post('/:id/reset-password', wrap(async (req, res) => {
   const uid = parse(id, req.params.id);

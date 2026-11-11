@@ -1,9 +1,11 @@
 import { get, post, patch, put, del, qs } from '../api.js';
 import { html, setHTML, $, $$, fmtMoney, fmtDateLong, badge, toast, modal, formValues, confirmDialog, icon } from '../ui.js';
 import { t } from '../i18n.js';
+import { canEdit } from '../permissions.js';
 
 export async function render(view, state) {
   const isAdmin = ['admin', 'company_admin', 'super_admin'].includes(state.user.role);
+  const canEditEmployees = canEdit(state.user, 'employees');
   const f = { q: '', department: '', active: 'true' };
   
   let shifts = [];
@@ -89,9 +91,11 @@ export async function render(view, state) {
               <td class="r">
                 <div class="action-btns">
                   <button class="action-btn" data-view="${u.id}">${t('view')}</button>
-                  <button class="action-btn" data-edit="${u.id}">${icon('edit')} ${t('edit')}</button>
-                  ${isAdmin ? html`<button class="action-btn" data-reset="${u.id}" data-name="${u.name}">Reset</button>` : ''}
-                  ${isAdmin && u.id !== state.user.id ? html`<button class="action-btn danger" data-del="${u.id}" data-name="${u.name}">${icon('trash')} ${t('delete')}</button>` : ''}
+                  ${canEditEmployees ? html`
+                    <button class="action-btn" data-edit="${u.id}">${icon('edit')} ${t('edit')}</button>
+                    ${isAdmin ? html`<button class="action-btn" data-reset="${u.id}" data-name="${u.name}">Reset</button>` : ''}
+                    ${isAdmin && u.id !== state.user.id ? html`<button class="action-btn danger" data-del="${u.id}" data-name="${u.name}">${icon('trash')} ${t('delete')}</button>` : ''}
+                  ` : ''}
                 </div>
               </td>
             </tr>
@@ -396,6 +400,11 @@ export async function render(view, state) {
 
   setHTML(view, html`
     <div class="stack">
+      ${!canEditEmployees ? html`
+        <div class="notice" style="background:#fffbeb; border:1px solid #fef3c7; color:#92400e; padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+          ${icon('eye')} <span><b>View-Only Access:</b> You have permission to view employee profiles and details, but adding, editing, or deleting employees is restricted.</span>
+        </div>
+      ` : ''}
       <div class="row between">
         <div>
           <h2>${t('employees')}</h2>
@@ -403,7 +412,7 @@ export async function render(view, state) {
         </div>
         <div class="row">
           <button class="btn" id="export-emp">${icon('download')} ${t('exportCsv')}</button>
-          <button class="btn primary" id="add-emp">${icon('plus')} ${t('addEmployee')}</button>
+          ${canEditEmployees ? html`<button class="btn primary" id="add-emp">${icon('plus')} ${t('addEmployee')}</button>` : ''}
         </div>
       </div>
 
