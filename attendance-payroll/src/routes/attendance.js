@@ -144,11 +144,15 @@ router.post('/manual', editAttendance, wrap(async (req, res) => {
   const userId = parse(id, req.body.userId);
   const dateVal = parse(date, req.body.date);
   const status = req.body.status || 'present';
-  const checkIn = req.body.checkIn || null;
-  const checkOut = req.body.checkOut || null;
-  const overtimeMinutes = parseInt(req.body.overtimeMinutes, 10) || 0;
+  const rawCheckIn = req.body.checkIn ? String(req.body.checkIn).trim() : null;
+  const checkIn = (rawCheckIn && rawCheckIn !== '00:00' && rawCheckIn !== '00') ? rawCheckIn : null;
+  const rawCheckOut = req.body.checkOut ? String(req.body.checkOut).trim() : null;
+  const checkOut = (rawCheckOut && rawCheckOut !== '00:00' && rawCheckOut !== '00') ? rawCheckOut : null;
+
+  const overtimeMinutes = checkOut ? (parseInt(req.body.overtimeMinutes, 10) || 0) : 0;
   const lateMinutes = parseInt(req.body.lateMinutes, 10) || 0;
-  const earlyOutMinutes = parseInt(req.body.earlyOutMinutes, 10) || 0;
+  const earlyOutMinutes = checkOut ? (parseInt(req.body.earlyOutMinutes, 10) || 0) : 0;
+  const workedMinutes = checkOut ? (req.body.workedMinutes ? parseInt(req.body.workedMinutes, 10) : 480) : null;
   const reason = (req.body.reason || 'Manual entry').trim();
 
   const { timezone } = await getSettings();
@@ -197,7 +201,7 @@ router.post('/manual', editAttendance, wrap(async (req, res) => {
       [
         u.id, dateVal, u.shift_id, cinTs, coutTs,
         (checkIn ? 1 : 0) + (checkOut ? 1 : 0),
-        req.body.workedMinutes ? parseInt(req.body.workedMinutes, 10) : 480,
+        workedMinutes,
         lateMinutes, earlyOutMinutes, timezone, overtimeMinutes, status
       ]
     );
@@ -222,30 +226,52 @@ router.put('/:id', editAttendance, wrap(async (req, res) => {
   const dateStr = att.work_date.toISOString ? att.work_date.toISOString().slice(0, 10) : String(att.work_date).slice(0, 10);
 
   const status = req.body.status || att.status;
-  const checkIn = req.body.checkIn !== undefined ? req.body.checkIn : null;
-  const checkOut = req.body.checkOut !== undefined ? req.body.checkOut : null;
-  const overtimeMinutes = req.body.overtimeMinutes !== undefined ? parseInt(req.body.overtimeMinutes, 10) : att.overtime_minutes;
-  const lateMinutes = req.body.lateMinutes !== undefined ? parseInt(req.body.lateMinutes, 10) : att.late_minutes;
-  const earlyOutMinutes = req.body.earlyOutMinutes !== undefined ? parseInt(req.body.earlyOutMinutes, 10) : att.early_out_minutes;
-  const workedMinutes = req.body.workedMinutes !== undefined ? parseInt(req.body.workedMinutes, 10) : att.worked_minutes;
+
+  const hasCheckInProp = req.body.checkIn !== undefined;
+  const rawCheckIn = hasCheckInProp && req.body.checkIn ? String(req.body.checkIn).trim() : null;
+  const cleanCheckIn = (rawCheckIn && rawCheckIn !== '00:00' && rawCheckIn !== '00') ? rawCheckIn : null;
+
+  const hasCheckOutProp = req.body.checkOut !== undefined;
+  const rawCheckOut = hasCheckOutProp && req.body.checkOut ? String(req.body.checkOut).trim() : null;
+  const cleanCheckOut = (rawCheckOut && rawCheckOut !== '00:00' && rawCheckOut !== '00') ? rawCheckOut : null;
+
+  const clearCheckIn = hasCheckInProp && cleanCheckIn === null;
+  const clearCheckOut = hasCheckOutProp && cleanCheckOut === null;
+
+  const overtimeMinutes = (cleanCheckOut && req.body.overtimeMinutes !== undefined)
+    ? parseInt(req.body.overtimeMinutes, 10)
+    : (clearCheckOut ? 0 : att.overtime_minutes);
+
+  const lateMinutes = req.body.lateMinutes !== undefined
+    ? parseInt(req.body.lateMinutes, 10)
+    : att.late_minutes;
+
+  const earlyOutMinutes = (cleanCheckOut && req.body.earlyOutMinutes !== undefined)
+    ? parseInt(req.body.earlyOutMinutes, 10)
+    : (clearCheckOut ? 0 : att.early_out_minutes);
+
+  const workedMinutes = (cleanCheckOut && req.body.workedMinutes !== undefined)
+    ? parseInt(req.body.workedMinutes, 10)
+    : (clearCheckOut ? null : att.worked_minutes);
+
   const reason = (req.body.reason || 'Manual edit').trim();
 
-  const cinTs = checkIn ? `${dateStr} ${checkIn.length === 5 ? checkIn + ':00' : checkIn}` : null;
-  const coutTs = checkOut ? `${dateStr} ${checkOut.length === 5 ? checkOut + ':00' : checkOut}` : null;
+  const cinTs = cleanCheckIn ? `${dateStr} ${cleanCheckIn.length === 5 ? cleanCheckIn + ':00' : cleanCheckIn}` : null;
+  const coutTs = cleanCheckOut ? `${dateStr} ${cleanCheckOut.length === 5 ? cleanCheckOut + ':00' : cleanCheckOut}` : null;
 
   await tx(async (db) => {
-    if (checkIn || checkOut) {
+    if (hasCheckInProp || hasCheckOutProp) {
       await db.query(
         `DELETE FROM punch_logs WHERE user_id = $1
             AND punched_at >= ($2::date::timestamp AT TIME ZONE $3) AND punched_at < (($2::date + 1)::timestamp AT TIME ZONE $3)`,
         [att.user_id, dateStr, timezone]);
-      if (checkIn && u) {
+      if (cinTs && u) {
         await db.query(
           `INSERT INTO punch_logs (device_sn, pin, user_id, punched_at, state, source)
            VALUES ('MANUAL', $1, $2, ($3::timestamp AT TIME ZONE $4), 0, 'manual') ON CONFLICT DO NOTHING`,
           [u.device_pin, u.id, cinTs, timezone]);
       }
-      if (checkOut && u) {
+      if (coutTs && u) {
         await db.query(
           `INSERT INTO punch_logs (device_sn, pin, user_id, punched_at, state, source)
            VALUES ('MANUAL', $1, $2, ($3::timestamp AT TIME ZONE $4), 1, 'manual') ON CONFLICT DO NOTHING`,
@@ -256,20 +282,25 @@ router.put('/:id', editAttendance, wrap(async (req, res) => {
     await db.query(
       `UPDATE attendance
           SET status = $2,
-              check_in = CASE WHEN $3::text IS NOT NULL THEN ($3::timestamp AT TIME ZONE $4) ELSE check_in END,
-              check_out = CASE WHEN $5::text IS NOT NULL THEN ($5::timestamp AT TIME ZONE $4) ELSE check_out END,
+              check_in = CASE WHEN $3::text IS NOT NULL THEN ($3::timestamp AT TIME ZONE $4) WHEN $10::boolean = true THEN NULL ELSE check_in END,
+              check_out = CASE WHEN $5::text IS NOT NULL THEN ($5::timestamp AT TIME ZONE $4) WHEN $11::boolean = true THEN NULL ELSE check_out END,
               overtime_minutes = $6,
               late_minutes = $7,
               early_out_minutes = $8,
               worked_minutes = $9,
+              punch_count = (CASE WHEN $3::text IS NOT NULL THEN 1 WHEN $10::boolean = true THEN 0 ELSE (CASE WHEN check_in IS NOT NULL THEN 1 ELSE 0 END) END)
+                          + (CASE WHEN $5::text IS NOT NULL THEN 1 WHEN $11::boolean = true THEN 0 ELSE (CASE WHEN check_out IS NOT NULL THEN 1 ELSE 0 END) END),
               updated_at = now()
         WHERE id = $1`,
-      [attId, status, cinTs, timezone, coutTs, overtimeMinutes, lateMinutes, earlyOutMinutes, workedMinutes]
+      [
+        attId, status, cinTs, timezone, coutTs, overtimeMinutes, lateMinutes, earlyOutMinutes, workedMinutes,
+        clearCheckIn, clearCheckOut
+      ]
     );
 
     await db.query(
       `INSERT INTO audit_log (user_id, action, entity, entity_id, detail) VALUES ($1,'edit-attendance','attendance',$2,$3::jsonb)`,
-      [req.user.id, String(attId), JSON.stringify({ userId: att.user_id, date: dateStr, status, checkIn, checkOut, reason })]
+      [req.user.id, String(attId), JSON.stringify({ userId: att.user_id, date: dateStr, status, checkIn: cleanCheckIn, checkOut: cleanCheckOut, reason })]
     );
   });
 

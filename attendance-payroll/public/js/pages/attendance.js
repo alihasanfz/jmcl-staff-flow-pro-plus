@@ -553,7 +553,13 @@ export async function render(view, state) {
             <input type="time" name="checkIn" value="09:00">
           </label>
           <label>Check-out Time
-            <input type="time" name="checkOut" value="18:00">
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input type="time" name="checkOut" id="add-modal-checkout-time" value="" style="flex:1;">
+              <button type="button" class="btn sm" id="btn-clear-add-checkout" style="font-size:11px; padding:4px 8px; white-space:nowrap; background:var(--bg-card,#f1f5f9); border:1px solid var(--border); font-weight:600;" title="Click to clear Out Time">
+                Clear (00)
+              </button>
+            </div>
+            <span class="hint" style="font-size:11px;">Optional — leave blank if employee has not punched out yet.</span>
           </label>
           <label>Overtime Minutes
             <input type="number" name="overtimeMinutes" min="0" step="15" value="0">
@@ -568,13 +574,17 @@ export async function render(view, state) {
       `,
       onSubmit: async (form, close) => {
         const v = formValues(form);
+        const rawIn = (v.checkIn || '').trim();
+        const rawOut = (v.checkOut || '').trim();
+        const cleanIn = (!rawIn || rawIn === '00:00' || rawIn === '00') ? null : rawIn;
+        const cleanOut = (!rawOut || rawOut === '00:00' || rawOut === '00') ? null : rawOut;
         await post('/attendance/manual', {
           userId: Number(v.userId),
           date: v.date,
           status: v.status,
-          checkIn: v.checkIn || null,
-          checkOut: v.checkOut || null,
-          overtimeMinutes: Number(v.overtimeMinutes || 0),
+          checkIn: cleanIn,
+          checkOut: cleanOut,
+          overtimeMinutes: cleanOut ? Number(v.overtimeMinutes || 0) : 0,
           lateMinutes: Number(v.lateMinutes || 0),
           reason: v.reason,
         });
@@ -583,9 +593,19 @@ export async function render(view, state) {
         load();
       },
     });
+
+    setTimeout(() => {
+      const btn = $('#btn-clear-add-checkout');
+      if (btn) btn.onclick = (e) => { e.preventDefault(); const inp = $('#add-modal-checkout-time'); if (inp) inp.value = ''; };
+    }, 50);
   }
 
   function openEditModal(rec) {
+    const hasIn = rec.check_in_local && rec.check_in_local !== '—';
+    const hasOut = rec.check_out_local && rec.check_out_local !== '—';
+    const initIn = hasIn ? rec.check_in_local : '';
+    const initOut = hasOut ? rec.check_out_local : '';
+
     modal({
       title: `Edit Attendance: ${rec.name} (${fmtDate(rec.work_date)})`,
       submitLabel: 'Save Changes',
@@ -611,10 +631,17 @@ export async function render(view, state) {
             <input type="text" disabled value="${rec.shift_name || 'No Shift'}">
           </label>
           <label>Check-in Time
-            <input type="time" name="checkIn" value="${rec.check_in_local || '09:00'}">
+            <input type="time" name="checkIn" id="modal-checkin-time" value="${initIn}">
+            <span class="hint" style="font-size:11px;">Clear or leave empty if not checked in.</span>
           </label>
           <label>Check-out Time
-            <input type="time" name="checkOut" value="${rec.check_out_local || '18:00'}">
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input type="time" name="checkOut" id="modal-checkout-time" value="${initOut}" style="flex:1;">
+              <button type="button" class="btn sm" id="btn-clear-checkout" style="font-size:11px; padding:4px 8px; white-space:nowrap; background:var(--bg-card,#f1f5f9); border:1px solid var(--border); font-weight:600;" title="Click to clear Out Time (00)">
+                ❌ Clear (00)
+              </button>
+            </div>
+            <span class="hint" style="font-size:11px; color:#2563eb;">Leave empty, 00, or click Clear (00) if employee has not punched out yet.</span>
           </label>
           <label>Overtime Minutes
             <input type="number" name="overtimeMinutes" min="0" step="15" value="${rec.overtime_minutes || 0}">
@@ -629,11 +656,17 @@ export async function render(view, state) {
       `,
       onSubmit: async (form, close) => {
         const v = formValues(form);
+        const rawIn = (v.checkIn || '').trim();
+        const rawOut = (v.checkOut || '').trim();
+
+        const cleanIn = (!rawIn || rawIn === '00:00' || rawIn === '00') ? null : rawIn;
+        const cleanOut = (!rawOut || rawOut === '00:00' || rawOut === '00') ? null : rawOut;
+
         await put(`/attendance/${rec.id}`, {
           status: v.status,
-          checkIn: v.checkIn || null,
-          checkOut: v.checkOut || null,
-          overtimeMinutes: Number(v.overtimeMinutes || 0),
+          checkIn: cleanIn,
+          checkOut: cleanOut,
+          overtimeMinutes: cleanOut ? Number(v.overtimeMinutes || 0) : 0,
           lateMinutes: Number(v.lateMinutes || 0),
           reason: v.reason,
         });
@@ -642,6 +675,20 @@ export async function render(view, state) {
         load();
       },
     });
+
+    setTimeout(() => {
+      const btn = $('#btn-clear-checkout');
+      if (btn) {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const coInput = $('#modal-checkout-time');
+          if (coInput) {
+            coInput.value = '';
+            toast('Check-out Time cleared (00)', 'info');
+          }
+        });
+      }
+    }, 50);
   }
 
   shell();
