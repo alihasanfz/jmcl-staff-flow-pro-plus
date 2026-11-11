@@ -187,3 +187,4 @@ export function getPermissionSummary(user) {
   }
   return { type: 'staff', label: 'Staff Self-Service', color: 'waiting' };
 }
+

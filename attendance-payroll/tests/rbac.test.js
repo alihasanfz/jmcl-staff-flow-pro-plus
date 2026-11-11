@@ -70,3 +70,4 @@ test('RBAC: Custom permissions grant specific write access', () => {
   assert.equal(canView(customUser, 'devices'), true);
   assert.equal(canEdit(customUser, 'devices'), false);
 });
+

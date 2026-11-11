@@ -296,11 +296,12 @@ export async function render(view) {
             </td>
           </tr>
         `;
-      }).join('');
+      });
     };
 
     modal({
       title: isNew ? 'Add New User Account & Set Permissions' : `Edit Permissions & Role: ${user.name}`,
+      wide: true,
       submitLabel: t('save'),
       body: html`
         <div class="stack" style="gap:16px; max-width:820px;">
@@ -521,6 +522,17 @@ export async function render(view) {
       $('#preset-hr')?.addEventListener('click', () => applyPresetMap(PRESETS.hr_manager.perms));
       $('#preset-acc')?.addEventListener('click', () => applyPresetMap(PRESETS.accounts.perms));
       $('#preset-clear')?.addEventListener('click', () => applyPresetMap(PRESETS.clear.perms));
+
+      $('#modal-role-select')?.addEventListener('change', (e) => {
+        const selRole = e.target.value;
+        if (['super_admin', 'company_admin', 'admin'].includes(selRole)) {
+          applyPresetMap(PRESETS.full_admin.perms);
+        } else if (selRole.startsWith('hr')) {
+          applyPresetMap(PRESETS.hr_manager.perms);
+        } else if (selRole.startsWith('account')) {
+          applyPresetMap(PRESETS.accounts.perms);
+        }
+      });
 
       $('#toggle-all-view')?.addEventListener('change', (e) => {
         const val = e.target.checked;
