@@ -33,7 +33,8 @@ router.get('/:type', wrap(async (req, res) => {
   const report = await buildReport(req.params.type, params);
   if (q.format === 'json') return res.json({ ...report, params: { from, to, month: q.month } });
 
-  const base = `${report.type}-${q.month || `${from}_${to}`}`;
+  const empSlug = (params.userId && report.rows.length) ? `-${report.rows[0].employee_code || report.rows[0].name}`.replace(/[^a-zA-Z0-9_-]/g, '_') : '';
+  const base = `${report.type}-${q.month || `${from}_${to}`}${empSlug}`;
   if (q.format === 'xlsx') {
     const buf = await toXlsx(report, params);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

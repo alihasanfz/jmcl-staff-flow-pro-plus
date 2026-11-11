@@ -220,7 +220,8 @@ async function toXlsx(report, params) {
   const metaCell = ws.getCell(3, 1);
   const termLabel = params.deviceSn ? `Terminal: ${params.deviceSn === 'RKQ4262500336' ? 'ZK-uFace 800' : params.deviceSn === 'VDE2251500160' ? 'SenseFace 7A' : params.deviceSn}` : 'All Terminals';
   const dhakaTime = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: 'short', year: 'numeric' });
-  metaCell.value = [report.subtitle || periodLabel(params), termLabel, params.department ? `Department: ${params.department}` : null,
+  const empLabel = (params.userId && report.rows.length) ? `Employee: ${report.rows[0].name} (${report.rows[0].employee_code || ''})` : null;
+  metaCell.value = [report.subtitle || periodLabel(params), empLabel, termLabel, params.department ? `Department: ${params.department}` : null,
     `Total Records: ${report.rows.length}`, `Printed: ${dhakaTime} (Dhaka Time)`].filter(Boolean).join('   |   ');
   metaCell.font = { bold: false, size: 9.5, color: { argb: 'FF475569' } };
   metaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
@@ -393,8 +394,10 @@ async function toPdf(report, params, res) {
   // Meta info strip
   const termLabel = params.deviceSn ? `Terminal: ${params.deviceSn === 'RKQ4262500336' ? 'ZK-uFace 800' : params.deviceSn === 'VDE2251500160' ? 'SenseFace 7A' : params.deviceSn}` : 'All Terminals';
   const dhakaTime = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short', year: 'numeric' });
+  const empLabel = (params.userId && report.rows.length) ? `Employee: ${report.rows[0].name} (${report.rows[0].employee_code || ''})` : null;
   doc.fontSize(8).fillColor(MUTED).text([
     report.subtitle || periodLabel(params),
+    empLabel,
     termLabel,
     params.department ? `Dept: ${params.department}` : null,
     `Total: ${report.rows.length} records`,

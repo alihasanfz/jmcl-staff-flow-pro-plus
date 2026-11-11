@@ -188,6 +188,18 @@ export async function render(view, state) {
       load();
     });
 
+    $$('#filters select, #filters input[type=date]').forEach((el) => {
+      el.addEventListener('change', () => {
+        const form = $('#filters');
+        if (form) {
+          Object.assign(f, formValues(form));
+          for (const k of ['userId', 'department', 'status', 'deviceSn']) f[k] = f[k] || '';
+          shell();
+          load();
+        }
+      });
+    });
+
     $('#btn-quick-today')?.addEventListener('click', () => {
       f.from = today; f.to = today;
       shell(); load();
@@ -204,24 +216,37 @@ export async function render(view, state) {
       shell(); load();
     });
 
+    const getReportParams = () => {
+      const form = $('#filters');
+      const vals = form ? formValues(form) : {};
+      const targetFrom = vals.from || f.from || f.to || today;
+      const targetTo = vals.to || f.to || f.from || today;
+      const uId = vals.userId !== undefined ? vals.userId : f.userId;
+      const dept = vals.department !== undefined ? vals.department : f.department;
+      const st = vals.status !== undefined ? vals.status : f.status;
+      const dev = vals.deviceSn !== undefined ? vals.deviceSn : f.deviceSn;
+      return { targetFrom, targetTo, uId, dept, st, dev };
+    };
+
     $('#download-pdf')?.addEventListener('click', () => {
-      // Strictly download for the selected single date or chosen date range
-      const targetFrom = f.from || f.to || today;
-      const targetTo = f.to || f.from || today;
+      // Download report for selected employee (if chosen) or all employees
+      const { targetFrom, targetTo, uId, dept, st, dev } = getReportParams();
       const url = `/api/reports/attendance?format=pdf&from=${encodeURIComponent(targetFrom)}&to=${encodeURIComponent(targetTo)}`
-        + (f.department ? `&department=${encodeURIComponent(f.department)}` : '')
-        + (f.status ? `&status=${encodeURIComponent(f.status)}` : '')
-        + (f.deviceSn ? `&deviceSn=${encodeURIComponent(f.deviceSn)}` : '');
+        + (uId ? `&userId=${encodeURIComponent(uId)}` : '')
+        + (dept ? `&department=${encodeURIComponent(dept)}` : '')
+        + (st ? `&status=${encodeURIComponent(st)}` : '')
+        + (dev ? `&deviceSn=${encodeURIComponent(dev)}` : '');
       window.open(url, '_blank');
     });
 
     $('#download-excel')?.addEventListener('click', () => {
-      const targetFrom = f.from || f.to || today;
-      const targetTo = f.to || f.from || today;
+      // Export Excel for selected employee (if chosen) or all employees
+      const { targetFrom, targetTo, uId, dept, st, dev } = getReportParams();
       const url = `/api/reports/attendance?format=xlsx&from=${encodeURIComponent(targetFrom)}&to=${encodeURIComponent(targetTo)}`
-        + (f.department ? `&department=${encodeURIComponent(f.department)}` : '')
-        + (f.status ? `&status=${encodeURIComponent(f.status)}` : '')
-        + (f.deviceSn ? `&deviceSn=${encodeURIComponent(f.deviceSn)}` : '');
+        + (uId ? `&userId=${encodeURIComponent(uId)}` : '')
+        + (dept ? `&department=${encodeURIComponent(dept)}` : '')
+        + (st ? `&status=${encodeURIComponent(st)}` : '')
+        + (dev ? `&deviceSn=${encodeURIComponent(dev)}` : '');
       window.open(url, '_blank');
     });
 
@@ -433,6 +458,9 @@ export async function render(view, state) {
                 ${isMgr ? html`
                   <td class="r">
                     <div class="action-btns">
+                      <button class="action-btn" data-pdf-row="${r.user_id}" data-date="${r.work_date}" title="Download individual attendance PDF for ${r.name}" style="color:#0284c7; border-color:#bae6fd; background:#f0f9ff; font-weight:600;">
+                        ${icon('download')} PDF
+                      </button>
                       <button class="action-btn" data-edit-att="${r.id}">${icon('edit')} Edit</button>
                       <button class="action-btn danger" data-del-att="${r.id}" data-name="${r.name}" data-date="${r.work_date}">${icon('trash')} Delete</button>
                     </div>
@@ -443,6 +471,18 @@ export async function render(view, state) {
           </tbody>
         </table>
       `);
+
+      $$('[data-pdf-row]', box).forEach((b) => {
+        b.addEventListener('click', () => {
+          const uId = b.dataset.pdfRow;
+          const dt = b.dataset.date;
+          const targetFrom = f.from || dt || today;
+          const targetTo = f.to || dt || today;
+          const url = `/api/reports/attendance?format=pdf&from=${encodeURIComponent(targetFrom)}&to=${encodeURIComponent(targetTo)}&userId=${encodeURIComponent(uId)}`
+            + (f.deviceSn ? `&deviceSn=${encodeURIComponent(f.deviceSn)}` : '');
+          window.open(url, '_blank');
+        });
+      });
 
       $$('[data-edit-att]', box).forEach((b) => {
         b.addEventListener('click', () => {
