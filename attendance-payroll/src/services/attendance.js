@@ -296,38 +296,9 @@ async function fixMorningPunches(targetDate) {
   const { timezone } = await getSettings();
   const d = targetDate || todayIn(timezone);
 
-  // Shift morning device punches recorded between 10:00 AM and 01:00 PM Dhaka time by -2 hours so they fall into 09:00 - 10:00 AM
-  const { rowCount: shiftedPunches } = await query(`
-    UPDATE punch_logs
-       SET punched_at = punched_at - interval '2 hours'
-     WHERE to_char(punched_at AT TIME ZONE $2, 'YYYY-MM-DD') = $1
-       AND to_char(punched_at AT TIME ZONE $2, 'HH24:MI:SS') >= '10:00:00'
-       AND to_char(punched_at AT TIME ZONE $2, 'HH24:MI:SS') <= '13:00:00'
-       AND source = 'device'
-  `, [d, timezone]);
-
-  // If first morning punch was between 09:40 AM and 10:05 AM, adjust to 09:25 AM in punch_logs so employees are marked on-time
-  const { rows: lateMorningPunches } = await query(`
-    SELECT DISTINCT ON (user_id) id, user_id, punched_at
-      FROM punch_logs
-     WHERE to_char(punched_at AT TIME ZONE $2, 'YYYY-MM-DD') = $1
-       AND to_char(punched_at AT TIME ZONE $2, 'HH24:MI:SS') > '09:40:00'
-       AND to_char(punched_at AT TIME ZONE $2, 'HH24:MI:SS') <= '10:05:00'
-       AND user_id IS NOT NULL
-     ORDER BY user_id, punched_at ASC
-  `, [d, timezone]);
-
-  for (const p of lateMorningPunches) {
-    await query(`
-      UPDATE punch_logs
-         SET punched_at = ($1 || ' 09:25:00')::timestamp AT TIME ZONE $2
-       WHERE id = $3
-    `, [d, timezone, p.id]);
-  }
-
-  // Recalculate attendance cleanly for this date preserving all legitimate morning and evening punches
+  // Recalculate attendance cleanly from raw punches without mutating original device punch logs
   const updatedCount = await rebuildRange(d, d);
-  return { shiftedPunches: shiftedPunches || 0, updatedCount, date: d };
+  return { shiftedPunches: 0, updatedCount, date: d };
 }
 
 module.exports = { rebuildRange, ingestPunches, backfillPin, listAttendance, addDays, fixMorningPunches };

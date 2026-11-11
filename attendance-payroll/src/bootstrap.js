@@ -236,14 +236,53 @@ async function firstRun() {
   try {
     const { getSettings } = require('./services/settings');
     const { todayIn, addDays } = require('./utils/time');
-    const { rebuildRange, fixMorningPunches } = require('./services/attendance');
+    const { rebuildRange } = require('./services/attendance');
     const settings = await getSettings();
     const today = todayIn(settings.timezone);
+
+    // 1. One-time restore for punches shifted -2h on 2026-11-11
+    try {
+      const restored = await query(`
+        UPDATE punch_logs
+           SET punched_at = punched_at + interval '2 hours'
+         WHERE id >= 77590 AND id <= 77755
+           AND to_char(punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = '2026-11-11'
+           AND to_char(punched_at AT TIME ZONE $1, 'HH24:MI:SS') < '10:00:00'
+      `, [settings.timezone]);
+      if (restored.rowCount) {
+        console.log(`[bootstrap] Restored ${restored.rowCount} punches to true time on 2026-11-11`);
+      }
+    } catch (e) {
+      console.warn('[bootstrap] restore punches note:', e.message);
+    }
+
+    // 2. Remove accidental manual checkout for Md. Biplob (user_id 4)
+    try {
+      await query(`
+        DELETE FROM punch_logs
+         WHERE user_id = 4
+           AND source = 'manual'
+           AND state = 1
+           AND to_char(punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = '2026-11-11'
+      `, [settings.timezone]);
+      await query(`
+        UPDATE attendance
+           SET check_out = NULL,
+               worked_minutes = 0,
+               early_out_minutes = 0,
+               overtime_minutes = 0,
+               missing_checkout = false,
+               punch_count = 1
+         WHERE user_id = 4
+           AND work_date = '2026-11-11'
+      `);
+    } catch (e) {
+      console.warn('[bootstrap] clean biplob note:', e.message);
+    }
+
     const from = addDays(today, -30);
     const count = await rebuildRange(from, today);
     console.log(`[bootstrap] Rebuilt attendance for recent period (${count} days processed)`);
-    const fixRes = await fixMorningPunches(today);
-    console.log(`[bootstrap] Morning punches fixed:`, fixRes);
   } catch (err) {
     console.warn('[bootstrap] initial attendance rebuild error:', err.message);
   }

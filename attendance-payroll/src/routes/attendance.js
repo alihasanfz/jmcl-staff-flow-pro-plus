@@ -152,7 +152,7 @@ router.post('/manual', editAttendance, wrap(async (req, res) => {
   const overtimeMinutes = checkOut ? (parseInt(req.body.overtimeMinutes, 10) || 0) : 0;
   const lateMinutes = parseInt(req.body.lateMinutes, 10) || 0;
   const earlyOutMinutes = checkOut ? (parseInt(req.body.earlyOutMinutes, 10) || 0) : 0;
-  const workedMinutes = checkOut ? (req.body.workedMinutes ? parseInt(req.body.workedMinutes, 10) : 480) : null;
+  const workedMinutes = checkOut ? (req.body.workedMinutes ? parseInt(req.body.workedMinutes, 10) : 480) : 0;
   const reason = (req.body.reason || 'Manual entry').trim();
 
   const { timezone } = await getSettings();
@@ -252,7 +252,7 @@ router.put('/:id', editAttendance, wrap(async (req, res) => {
 
   const workedMinutes = (cleanCheckOut && req.body.workedMinutes !== undefined)
     ? parseInt(req.body.workedMinutes, 10)
-    : (clearCheckOut ? null : att.worked_minutes);
+    : (clearCheckOut ? 0 : (att.worked_minutes || 0));
 
   const reason = (req.body.reason || 'Manual edit').trim();
 

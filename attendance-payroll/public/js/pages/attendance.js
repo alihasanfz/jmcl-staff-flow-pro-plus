@@ -159,9 +159,6 @@ export async function render(view, state) {
               ${icon('download')} Export Excel
             </button>
             ${canEditAttendance ? html`
-              <button class="btn" type="button" id="fix-morning-btn" style="background:#fef3c7; color:#92400e; border-color:#fde68a; font-weight:600; display:inline-flex; align-items:center; gap:5px;" title="Auto-calibrate today's punches that occurred before machine clock was synced">
-                ${icon('clock')} Fix Today Punches (09:00–10:00 AM)
-              </button>
               <button class="btn" type="button" id="recalc" title="Recompute attendance from the raw punches for this date range">
                 ${icon('clock')} Recalculate
               </button>
