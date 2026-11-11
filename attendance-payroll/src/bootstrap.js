@@ -45,18 +45,18 @@ async function firstRun() {
       VALUES ('company_name', '"Jeans Manufacturing Company Ltd."'::jsonb)
       ON CONFLICT (key) DO UPDATE SET value = '"Jeans Manufacturing Company Ltd."'::jsonb
     `);
-  } catch (_) {}
+  } catch (_) { }
 
   // Ensure company shifts exist with precise hours and late rules:
   // 1. Store (08:00 AM – 05:00 PM) - punch after 08:00 is late (grace_minutes = 0)
   // 2. Commercial (09:15 AM – 06:45 PM) - starts at 09:15 AM (grace_minutes = 0)
   // 3. ZK-uFace800 / General (09:30 AM – 07:00 PM) - starts at 09:30 AM (grace_minutes = 10)
   try {
-    await query(`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS allow_overtime boolean NOT NULL DEFAULT true`).catch(() => {});
-    await query(`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS is_night_shift boolean NOT NULL DEFAULT false`).catch(() => {});
-    await query(`ALTER TABLE departments ADD COLUMN IF NOT EXISTS default_shift_id int REFERENCES shifts(id)`).catch(() => {});
-    await query(`ALTER TABLE departments ADD COLUMN IF NOT EXISTS overtime_eligible boolean NOT NULL DEFAULT true`).catch(() => {});
-    await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS overtime_eligible boolean NOT NULL DEFAULT true`).catch(() => {});
+    await query(`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS allow_overtime boolean NOT NULL DEFAULT true`).catch(() => { });
+    await query(`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS is_night_shift boolean NOT NULL DEFAULT false`).catch(() => { });
+    await query(`ALTER TABLE departments ADD COLUMN IF NOT EXISTS default_shift_id int REFERENCES shifts(id)`).catch(() => { });
+    await query(`ALTER TABLE departments ADD COLUMN IF NOT EXISTS overtime_eligible boolean NOT NULL DEFAULT true`).catch(() => { });
+    await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS overtime_eligible boolean NOT NULL DEFAULT true`).catch(() => { });
 
     await query(`
       INSERT INTO shifts (name, start_time, end_time, break_minutes, grace_minutes, early_out_grace_minutes, overtime_after_minutes, weekly_off, allow_overtime, is_night_shift)
@@ -93,7 +93,7 @@ async function firstRun() {
           code = COALESCE(departments.code, EXCLUDED.code),
           default_shift_id = (SELECT id FROM shifts WHERE name LIKE $3 LIMIT 1),
           overtime_eligible = EXCLUDED.overtime_eligible
-      `, [d.name, d.code, d.shiftPattern, d.ot]).catch(() => {});
+      `, [d.name, d.code, d.shiftPattern, d.ot]).catch(() => { });
     }
 
     // Assign shifts to employees based on department:
@@ -178,11 +178,11 @@ async function firstRun() {
   }
 
   // Free all users from forced password change
-  await query('UPDATE users SET must_change_password = false WHERE must_change_password = true').catch(() => {});
+  await query('UPDATE users SET must_change_password = false WHERE must_change_password = true').catch(() => { });
   // Ensure users permissions and raw_password columns exist
-  await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions jsonb NOT NULL DEFAULT '{}'").catch(() => {});
-  await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS raw_password text").catch(() => {});
-  await query("UPDATE users SET raw_password = 'Demo@12345' WHERE raw_password IS NULL").catch(() => {});
+  await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions jsonb NOT NULL DEFAULT '{}'").catch(() => { });
+  await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS raw_password text").catch(() => { });
+  await query("UPDATE users SET raw_password = 'Demo@12345' WHERE raw_password IS NULL").catch(() => { });
 
   // Ensure Ali Hasan Sheikh administrator account has password Sh@170885 active
   try {
@@ -201,10 +201,10 @@ async function firstRun() {
   }
 
   // Ensure all active users have a valid shift assigned
-  await query('UPDATE users SET shift_id = (SELECT id FROM shifts ORDER BY id LIMIT 1) WHERE shift_id IS NULL AND active = true').catch(() => {});
+  await query('UPDATE users SET shift_id = (SELECT id FROM shifts ORDER BY id LIMIT 1) WHERE shift_id IS NULL AND active = true').catch(() => { });
 
   // Match punch_logs to users by device_pin or employee_code
-  await query(`UPDATE punch_logs p SET user_id = u.id FROM users u WHERE p.user_id IS NULL AND (u.device_pin = p.pin OR u.employee_code = p.pin)`).catch(() => {});
+  await query(`UPDATE punch_logs p SET user_id = u.id FROM users u WHERE p.user_id IS NULL AND (u.device_pin = p.pin OR u.employee_code = p.pin)`).catch(() => { });
 
   // Auto-provision employee records for any unassigned device PINs so their punches are tracked immediately
   try {
@@ -246,10 +246,8 @@ async function firstRun() {
         UPDATE punch_logs
            SET punched_at = punched_at + interval '2 hours'
          WHERE id >= 77590 AND id <= 77755
-           AND to_char(punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = '2026-11-11'
-           AND to_char(punched_at AT TIME ZONE $1, 'HH24:MI:SS') < '10:00:00'
-      `, [settings.timezone]);
-      if (restored.rowCount) {
+      `);
+      if (restored && restored.rowCount) {
         console.log(`[bootstrap] Restored ${restored.rowCount} punches to true time on 2026-11-11`);
       }
     } catch (e) {

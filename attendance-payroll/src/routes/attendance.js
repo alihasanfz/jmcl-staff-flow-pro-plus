@@ -369,4 +369,32 @@ router.post('/fix-morning-punches', editAttendance, wrap(async (req, res) => {
   });
 }));
 
+/** Restore punches that were shifted by -2 hours on 2026-11-11 */
+router.post('/restore-shifted-punches', editAttendance, wrap(async (req, res) => {
+  const result = await query(`
+    UPDATE punch_logs
+       SET punched_at = punched_at + interval '2 hours'
+     WHERE id >= 77590 AND id <= 77755
+  `);
+  await query(`
+    DELETE FROM punch_logs
+     WHERE user_id = 4
+       AND source = 'manual'
+       AND state = 1
+  `);
+  await query(`
+    UPDATE attendance
+       SET check_out = NULL,
+           worked_minutes = 0,
+           early_out_minutes = 0,
+           overtime_minutes = 0,
+           missing_checkout = false,
+           punch_count = 1
+     WHERE user_id = 4
+       AND work_date = '2026-11-11'
+  `);
+  const rebuilt = await rebuildRange('2026-11-11', '2026-11-11');
+  res.json({ ok: true, shiftedUpdated: result.rowCount, rebuilt });
+}));
+
 module.exports = router;
