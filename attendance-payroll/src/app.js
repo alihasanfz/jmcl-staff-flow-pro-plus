@@ -27,6 +27,11 @@ function createApp() {
   const adms = require('./routes/adms');
   app.use('/iclock', adms);
   app.use('/api/adms', adms);
+  app.use('/cdata', (req, res, next) => { req.url = '/cdata' + (req.url === '/' ? '' : req.url); adms(req, res, next); });
+  app.use('/cdata.aspx', (req, res, next) => { req.url = '/cdata.aspx' + (req.url === '/' ? '' : req.url); adms(req, res, next); });
+  app.use('/getrequest', (req, res, next) => { req.url = '/getrequest' + (req.url === '/' ? '' : req.url); adms(req, res, next); });
+  app.use('/devicecmd', (req, res, next) => { req.url = '/devicecmd' + (req.url === '/' ? '' : req.url); adms(req, res, next); });
+  app.use('/ping', (req, res, next) => { req.url = '/ping' + (req.url === '/' ? '' : req.url); adms(req, res, next); });
 
   app.use(express.json({ limit: '200kb' }));
   app.use(cookieParser());

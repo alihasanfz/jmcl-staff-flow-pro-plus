@@ -32,10 +32,24 @@ function parseAttLog(body) {
       m = CSV_RE.exec(line);
       separator = /,/;
     }
+    // Also try DD-MM-YYYY or DD/MM/YYYY date formats used by some firmware
+    if (!m) {
+      const altLineRe = /^(\S+)[\t ]+(\d{2}[-/]\d{2}[-/]\d{4})[ T](\d{2}:\d{2}:\d{2})(.*)$/;
+      const altCsvRe = /^(\S+),(\d{2}[-/]\d{2}[-/]\d{4})[ T,](\d{2}:\d{2}:\d{2})(.*)$/;
+      m = altLineRe.exec(line);
+      if (!m) {
+        m = altCsvRe.exec(line);
+        separator = /,/;
+      }
+    }
     if (!m) { rejected++; continue; }
 
-    const [, pin, dateRaw, time, rest] = m;
-    const date = dateRaw.replace(/\//g, '-');
+    let [, pin, dateRaw, time, rest] = m;
+    let date = dateRaw.replace(/\//g, '-');
+    const dmy = /^(\d{2})-(\d{2})-(\d{4})$/.exec(date);
+    if (dmy) {
+      date = `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+    }
     const [h, mi, s] = time.split(':').map(Number);
     if (!isDate(date) || h > 23 || mi > 59 || s > 59 || pin.length > 32) { rejected++; continue; }
 
@@ -54,9 +68,10 @@ function parseAttLog(body) {
 
 /** Plain-text handshake body returned for GET /iclock/cdata (device options). */
 function handshakeResponse(serial, attlogStamp) {
+  const stamp = (!attlogStamp || attlogStamp === '9999' || attlogStamp === '0') ? 'None' : attlogStamp;
   return [
     `GET OPTION FROM: ${serial}`,
-    `ATTLOGSTAMP=${attlogStamp || 'None'}`,
+    `ATTLOGSTAMP=${stamp}`,
     'OPERLOGSTAMP=9999',
     'ATTPHOTOSTAMP=None',
     'ErrorDelay=5',

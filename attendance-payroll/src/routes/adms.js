@@ -22,8 +22,9 @@ const { todayIn } = require('../utils/time');
 const router = express.Router();
 router.use(express.text({ type: () => true, limit: '2mb' }));
 
-// Ensure all registered biometric devices are active and approved
+// Ensure all registered biometric devices are active and approved, and reset any bogus attlog_stamp
 query('UPDATE devices SET approved = true WHERE approved = false').catch(() => {});
+query("UPDATE devices SET attlog_stamp = 'None' WHERE attlog_stamp = '9999' OR attlog_stamp = '0'").catch(() => {});
 
 const text = (res, body = 'OK', status = 200) => res.status(status).type('text/plain').send(body);
 
@@ -50,7 +51,13 @@ function logDebounced(key, msg, intervalMs = 30000) {
 }
 
 async function identify(req, res) {
-  const sn = getParam(req.query, 'SN').trim();
+  let sn = getParam(req.query, 'SN').trim();
+  if (!sn && req.headers['sn']) sn = String(req.headers['sn']).trim();
+  if (!sn && req.headers['x-serial-number']) sn = String(req.headers['x-serial-number']).trim();
+  if (!sn && typeof req.body === 'string') {
+    const m = req.body.match(/SN=([A-Za-z0-9_.-]+)/i);
+    if (m) sn = m[1].trim();
+  }
   const ip = stripIp(req.ip);
   const ua = req.get('user-agent') || 'ZKTeco-Terminal';
 
@@ -226,7 +233,7 @@ async function backfillRecentPunchesToCloud() {
     let syncedCount = 0;
     for (const [sn, lines] of bySn.entries()) {
       const body = lines.join('\n') + '\n';
-      const targetUrl = new URL(`/iclock/cdata?SN=${encodeURIComponent(sn)}&table=ATTLOG&Stamp=9999`, CLOUD_SYNC_TARGET);
+      const targetUrl = new URL(`/iclock/cdata?SN=${encodeURIComponent(sn)}&table=ATTLOG`, CLOUD_SYNC_TARGET);
       const client = targetUrl.protocol === 'https:' ? https : http;
       await new Promise((resolve) => {
         const req = client.request(targetUrl, {
@@ -287,7 +294,8 @@ async function handleHandshake(req, res) {
   if (!d) return;
   forwardToCloud(req);
   console.log(`[adms] Handshake response sent to ${d.serial_number} (${d.name})`);
-  text(res, handshakeResponse(d.serial_number, d.attlog_stamp));
+  const effectiveStamp = (!d.attlog_stamp || d.attlog_stamp === '9999' || d.attlog_stamp === '0') ? 'None' : d.attlog_stamp;
+  text(res, handshakeResponse(d.serial_number, effectiveStamp));
 }
 
 async function handleUpload(req, res) {
@@ -390,7 +398,7 @@ async function handleUpload(req, res) {
   }
 
   const stamp = getParam(req.query, 'Stamp');
-  if (stamp) {
+  if (stamp && stamp !== '9999' && stamp !== '0') {
     await query('UPDATE devices SET last_seen = now(), last_punch_at = now(), attlog_stamp = $2, online = true WHERE id = $1', [d.id, stamp.slice(0, 40)]);
   } else {
     await query('UPDATE devices SET last_seen = now(), last_punch_at = now(), online = true WHERE id = $1', [d.id]);
