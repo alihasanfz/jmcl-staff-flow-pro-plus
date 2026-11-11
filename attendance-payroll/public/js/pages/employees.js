@@ -1,5 +1,5 @@
 import { get, post, patch, put, del, qs } from '../api.js';
-import { html, setHTML, $, $$, fmtMoney, fmtDateLong, badge, toast, modal, formValues, confirmDialog, icon } from '../ui.js';
+import { html, setHTML, $, $$, esc, fmtMoney, fmtDateLong, badge, toast, modal, formValues, confirmDialog, icon } from '../ui.js';
 import { t } from '../i18n.js';
 import { canEdit } from '../permissions.js';
 
