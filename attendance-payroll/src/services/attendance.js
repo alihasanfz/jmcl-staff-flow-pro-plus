@@ -296,7 +296,7 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
                  FROM punch_logs pl
                 WHERE pl.user_id = a.user_id
                   AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
-                  AND to_char(pl.punched_at AT TIME ZONE $1, 'HH24:MI') >= '15:00'
+                  AND to_char(pl.punched_at AT TIME ZONE $1, 'HH24:MI') >= '12:00'
                   AND pl.punched_at >= (
                     SELECT MIN(pl2.punched_at) + interval '15 minutes'
                       FROM punch_logs pl2

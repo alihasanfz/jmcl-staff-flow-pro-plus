@@ -66,12 +66,11 @@ function parseAttLog(body) {
   return { records, rejected };
 }
 
-/** Plain-text handshake body returned for GET /iclock/cdata (device options). */
+/** Plain-text handshake body returned for GET /iclock/cdata (device options). Always return ATTLOGSTAMP=None so terminal dumps unsynced punches. */
 function handshakeResponse(serial, attlogStamp) {
-  const stamp = (!attlogStamp || attlogStamp === '9999' || attlogStamp === '0') ? 'None' : attlogStamp;
   return [
     `GET OPTION FROM: ${serial}`,
-    `ATTLOGSTAMP=${stamp}`,
+    'ATTLOGSTAMP=None',
     'OPERLOGSTAMP=9999',
     'ATTPHOTOSTAMP=None',
     'ErrorDelay=5',

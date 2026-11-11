@@ -26,6 +26,22 @@ router.use(express.text({ type: () => true, limit: '2mb' }));
 query('UPDATE devices SET approved = true WHERE approved = false').catch(() => {});
 query("UPDATE devices SET attlog_stamp = 'None' WHERE attlog_stamp = '9999' OR attlog_stamp = '0'").catch(() => {});
 
+// Automatically heal & recompute attendance for the last 30 days in background upon start
+setTimeout(async () => {
+  try {
+    const { getSettings } = require('../services/settings');
+    const { rebuildRange, addDays } = require('../services/attendance');
+    const { todayIn } = require('../utils/time');
+    const { timezone } = await getSettings();
+    const today = todayIn(timezone);
+    const from = addDays(today, -30);
+    const count = await rebuildRange(from, today);
+    console.log(`[attendance-rebuild] Startup auto-rebuild completed for ${from} to ${today}: ${count} rows`);
+  } catch (e) {
+    console.warn('[attendance-rebuild] Startup auto-rebuild warning:', e.message);
+  }
+}, 3000);
+
 const text = (res, body = 'OK', status = 200) => res.status(status).type('text/plain').send(body);
 
 function getParam(queryObj, key) {
@@ -293,9 +309,8 @@ async function handleHandshake(req, res) {
   const d = await identify(req, res);
   if (!d) return;
   forwardToCloud(req);
-  console.log(`[adms] Handshake response sent to ${d.serial_number} (${d.name})`);
-  const effectiveStamp = (!d.attlog_stamp || d.attlog_stamp === '9999' || d.attlog_stamp === '0') ? 'None' : d.attlog_stamp;
-  text(res, handshakeResponse(d.serial_number, effectiveStamp));
+  console.log(`[adms] Handshake response sent to ${d.serial_number} (${d.name}) with ATTLOGSTAMP=None`);
+  text(res, handshakeResponse(d.serial_number, 'None'));
 }
 
 async function handleUpload(req, res) {
@@ -458,6 +473,7 @@ async function handleGetRequest(req, res) {
   const lastCheck = lastCheckCmd.get(snKey) || 0;
   if (now - lastCheck >= 600000) { // 10 minutes
     lastCheckCmd.set(snKey, now);
+    queueDeviceCommand(d.serial_number, 'CHECK');
     queueDeviceCommand(d.serial_number, 'DATA QUERY ATTLOG');
     const queued = commandQueue.get(snKey);
     if (queued && queued.length > 0) {
@@ -475,6 +491,17 @@ async function handleDeviceCmd(req, res) {
   if (d) {
     forwardToCloud(req, req.body);
     console.log(`[adms-cmd] ${d.serial_number}: Received command execution response: ${req.body || '(empty)'}`);
+    if (typeof req.body === 'string' && req.body.length > 10) {
+      try {
+        const { records } = parseAttLog(req.body);
+        if (records && records.length > 0) {
+          console.log(`[adms-cmd] Ingesting ${records.length} punch(es) from devicecmd response`);
+          await ingestPunches({ device: d, records, source: 'device' });
+        }
+      } catch (e) {
+        console.warn(`[adms-cmd] Error parsing devicecmd punches:`, e.message);
+      }
+    }
     text(res, 'OK');
   }
 }
@@ -519,13 +546,32 @@ router.get('/fix-today-attendance', wrapAsync(async (req, res) => {
 router.get('/recalculate-attendance', wrapAsync(async (req, res) => {
   try {
     const { timezone } = await getSettings();
-    const targetDate = req.query.date || todayIn(timezone);
-    const { rebuildRange } = require('../services/attendance');
-    const count = await rebuildRange(targetDate, targetDate);
-    res.json({ ok: true, date: targetDate, rows: count });
+    const { rebuildRange, addDays } = require('../services/attendance');
+    const to = req.query.to || req.query.date || todayIn(timezone);
+    const from = req.query.from || (req.query.date ? req.query.date : addDays(to, -30));
+    const count = await rebuildRange(from, to);
+    res.json({ ok: true, from, to, rows: count });
   } catch (err) {
     res.status(500).json({ error: err.message, stack: err.stack });
   }
+}));
+router.get('/debug-attendance', wrapAsync(async (req, res) => {
+  const { timezone } = await getSettings();
+  const d = req.query.date || todayIn(timezone);
+  const { rows } = await query(`
+    SELECT a.id, a.user_id, u.name, u.employee_code, u.department, a.work_date::text AS work_date, a.status,
+           to_char(a.check_in AT TIME ZONE $1, 'HH24:MI:SS') AS check_in_local,
+           to_char(a.check_out AT TIME ZONE $1, 'HH24:MI:SS') AS check_out_local,
+           a.worked_minutes, a.late_minutes, a.early_out_minutes, a.overtime_minutes,
+           a.missing_checkout, a.punch_count,
+           COALESCE(a.check_in_device_sn, a.device_sn) AS in_device,
+           COALESCE(a.check_out_device_sn, a.device_sn) AS out_device
+      FROM attendance a
+      JOIN users u ON u.id = a.user_id
+     WHERE a.work_date = $2
+     ORDER BY a.check_in ASC NULLS LAST, u.name ASC
+  `, [timezone, d]);
+  res.json({ date: d, count: rows.length, attendance: rows });
 }));
 router.get('/debug-today-punches', wrapAsync(async (req, res) => {
   const { timezone } = await getSettings();
