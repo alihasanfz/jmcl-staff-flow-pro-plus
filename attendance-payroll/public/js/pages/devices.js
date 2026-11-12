@@ -202,13 +202,17 @@ export async function render(view, state) {
                     ${devices.map((d) => {
                       const commTime = d.last_communication_time || d.last_seen;
                       const punchTime = d.last_punch_time || d.last_punch_at;
+                      const isActive = d.active !== false;
                       const isPrimary = ['RKQ4262500336', 'VDE2251500160'].includes(String(d.serial_number || '').trim().toUpperCase());
-                      const state = isPrimary ? 'online' : (d.connection_state || (d.online ? 'online' : d.last_seen ? 'standby' : 'offline'));
+                      const state = !d.approved ? 'pending' : (!isActive) ? 'disabled' : (d.connection_state || (d.online ? 'online' : isPrimary ? 'online' : 'offline'));
 
                       return html`
-                        <tr>
+                        <tr style="${!isActive ? 'opacity:0.75; background:#fffafb;' : ''}">
                           <td class="nameCell" style="white-space:normal; max-width:240px;">
-                            <b>${d.name}</b>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                              <b>${d.name}</b>
+                              ${!isActive ? html`<span class="badge" style="background:#fee2e2; color:#b91c1c; font-size:10px; padding:1px 5px; font-weight:700;">DISCONNECTED</span>` : ''}
+                            </div>
                             <span class="muted small">${d.model || 'SenseFace 7A'}${d.location ? ' · ' + d.location : ''}</span>
                           </td>
                           <td><code style="font-weight:700; font-size:0.88rem;">${d.serial_number}</code></td>
@@ -227,8 +231,8 @@ export async function render(view, state) {
                           <td>
                             ${state === 'pending' || !d.approved ? html`
                               <span class="badge pending">Needs Approval</span>
-                            ` : state === 'disabled' || !d.active ? html`
-                              <span class="badge inactive">Disabled</span>
+                            ` : state === 'disabled' || !isActive ? html`
+                              <span class="badge inactive" style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; font-weight:700;" title="Terminal is Disconnected / Disabled"><span class="pulse-dot offline"></span> Disconnected</span>
                             ` : state === 'online' ? html`
                               <span class="badge online"><span class="pulse-dot online"></span> Online</span>
                             ` : state === 'standby' ? html`
@@ -239,10 +243,22 @@ export async function render(view, state) {
                           </td>
                           <td class="r num" style="font-weight:700;">${d.punches_24h || 0}</td>
                           <td class="r">
-                            <div class="action-btns" style="justify-content:flex-end; gap:4px;">
+                            <div class="action-btns" style="justify-content:flex-end; gap:4px; flex-wrap:wrap;">
                               ${!d.approved ? html`
                                 <button class="btn sm primary" data-approve="${d.id}" style="padding:4px 8px; font-size:11px;">Approve</button>
                               ` : ''}
+
+                              <!-- Quick Connect / Disconnect Toggle Button -->
+                              ${isActive ? html`
+                                <button class="btn sm" data-toggle-active="${d.id}" data-set="false" data-name="${d.name}" style="padding:4px 8px; font-size:11.5px; background:#fff1f2; color:#be123c; border-color:#fecdd3; font-weight:600;" title="Disconnect or Disable this biometric terminal">
+                                  🚫 Disconnect
+                                </button>
+                              ` : html`
+                                <button class="btn sm" data-toggle-active="${d.id}" data-set="true" data-name="${d.name}" style="padding:4px 8px; font-size:11.5px; background:#f0fdf4; color:#15803d; border-color:#bbf7d0; font-weight:700;" title="Reconnect or Enable this biometric terminal">
+                                  ✅ Connect
+                                </button>
+                              `}
+
                               <button class="btn sm" data-diag="${d.id}" title="Diagnose Connection" style="padding:4px 8px; font-size:11.5px; display:inline-flex; align-items:center; gap:3px;">
                                 ${icon('globe')} Diag
                               </button>
@@ -358,6 +374,30 @@ export async function render(view, state) {
         b.addEventListener('click', () => {
           const dev = devices.find((d) => String(d.id) === b.dataset.syncTime);
           openSyncTimeModal(dev);
+        });
+      });
+
+      $$('[data-toggle-active]', container).forEach((b) => {
+        b.addEventListener('click', async () => {
+          const id = b.dataset.toggleActive;
+          const targetState = b.dataset.set === 'true';
+          const name = b.dataset.name || 'Terminal';
+          const confirmMsg = targetState
+            ? `Enable and connect ${name}? It will start receiving biometric punches and processing gate attendance.`
+            : `Disconnect and disable ${name}? It will stop receiving attendance punches and gate access.`;
+          const ok = await confirmDialog(targetState ? `Connect ${name}?` : `Disconnect ${name}?`, confirmMsg, {
+            confirmLabel: targetState ? 'Enable / Connect' : 'Disconnect / Disable',
+            danger: !targetState,
+          });
+          if (!ok) return;
+
+          try {
+            const res = await post(`/devices/${id}/toggle-active`, { active: targetState });
+            toast(res.message || 'Device status updated');
+            load();
+          } catch (e) {
+            toast(e.message, 'bad');
+          }
         });
       });
 

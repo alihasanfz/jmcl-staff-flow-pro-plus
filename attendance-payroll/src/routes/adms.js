@@ -143,7 +143,7 @@ async function identify(req, res) {
   // Throttle database write: only update last_seen in DB once every 30 seconds per device
   if (now - (lastDbUpdate.get(d.id) || 0) >= 30000) {
     lastDbUpdate.set(d.id, now);
-    await query('UPDATE devices SET last_seen = now(), last_ip = $2, online = true, active = true, approved = true WHERE id = $1', [d.id, ip]);
+    await query('UPDATE devices SET last_seen = now(), last_ip = $2, online = true, approved = true WHERE id = $1', [d.id, ip]);
   }
 
   return d;

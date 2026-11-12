@@ -50,8 +50,8 @@ const device = z.object({
 });
 
 router.get('/', wrap(async (req, res) => {
-  // Ensure primary registered devices are always active, approved, and online
-  await query(`UPDATE devices SET active = true, approved = true, online = true, last_seen = COALESCE(last_seen, now()) WHERE UPPER(TRIM(serial_number)) = ANY(ARRAY['RKQ4262500336', 'VDE2251500160'])`).catch(() => {});
+  // Ensure devices have approved set if null
+  await query(`UPDATE devices SET approved = true WHERE approved IS NULL`).catch(() => {});
 
   let rows = [];
   try {
@@ -75,11 +75,10 @@ router.get('/', wrap(async (req, res) => {
       : d.last_seen;
     const lastSeenMs = effectiveLastSeen ? new Date(effectiveLastSeen).getTime() : 0;
     const diffSec = lastSeenMs ? Math.floor((now - lastSeenMs) / 1000) : null;
-    const isPrimaryTerminal = ['RKQ4262500336', 'VDE2251500160'].includes(String(d.serial_number || '').trim().toUpperCase());
-    // A registered device stays Online if it has communicated recently or is a primary terminal
-    const isOnline = Boolean(d.online) || isPrimaryTerminal || (diffSec !== null && diffSec < (86400 * 7));
+    const isOnline = Boolean(d.online) && (diffSec !== null && diffSec < (86400 * 7));
     const isStandby = false;
-    const state = !d.approved ? 'pending' : (!d.active && !isPrimaryTerminal) ? 'disabled' : isOnline ? 'online' : 'offline';
+    // When d.active is false, the terminal is explicitly Disabled / Disconnected
+    const state = !d.approved ? 'pending' : (d.active === false) ? 'disabled' : isOnline ? 'online' : (d.online ? 'online' : 'offline');
 
     // Terminal Clock & Date formatted in Bangladesh Standard Time (Asia/Dhaka)
     const dhakaNow = new Date();
@@ -89,6 +88,7 @@ router.get('/', wrap(async (req, res) => {
 
     return {
       ...d,
+      active: d.active !== false,
       device_clock: deviceClockStr,
       device_date: deviceDateStr,
       device_full_time: deviceFullTime,
@@ -102,6 +102,26 @@ router.get('/', wrap(async (req, res) => {
   });
 
   res.json({ devices: enriched });
+}));
+
+/** Toggle Active / Inactive (Enable / Disable / Disconnect) for a device */
+router.post('/:id/toggle-active', wrap(async (req, res) => {
+  const did = parse(id, req.params.id);
+  const { rows: [d] } = await query('SELECT * FROM devices WHERE id = $1', [did]);
+  if (!d) throw notFound('Device not found');
+
+  const newActive = req.body.active !== undefined ? Boolean(req.body.active) : (d.active === false);
+  await query('UPDATE devices SET active = $1 WHERE id = $2', [newActive, did]);
+  await query(
+    `INSERT INTO audit_log (user_id, action, entity, entity_id, detail) VALUES ($1, $2, 'device', $3, $4::jsonb)`,
+    [req.user.id, newActive ? 'enable' : 'disable', String(did), JSON.stringify({ serial_number: d.serial_number, active: newActive })]
+  );
+
+  res.json({
+    ok: true,
+    active: newActive,
+    message: `Terminal ${d.name} (${d.serial_number}) is now ${newActive ? 'Enabled / Active' : 'Disabled / Disconnected'}.`,
+  });
 }));
 
 /** Server configuration info for ZKTeco ADMS setup */
