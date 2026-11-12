@@ -1,5 +1,5 @@
 // Digital Leave Application & Multi-Tier Approval System
-import { get, post, put, del, qs } from '../api.js';
+import { get, post, put, del, download, qs } from '../api.js';
 import { html, setHTML, $, $$, fmtDateLong, fmtDate, badge, toast, modal, formValues, confirmDialog, icon } from '../ui.js';
 import { canEdit, canView } from '../permissions.js';
 
@@ -48,8 +48,11 @@ export async function render(view, state) {
               <p style="margin:4px 0 0 30px; font-size:13px; color:#93C5FD;">Digital Leave Application &amp; Multi-Tier Approval System</p>
             </div>
             <div class="row" style="gap:10px;">
+              <button id="btnDownloadBlankHeader" class="btn" style="background:rgba(255,255,255,0.15); color:#ffffff; font-weight:700; border:1px solid rgba(255,255,255,0.35); padding:8px 16px; border-radius:8px; display:inline-flex; align-items:center; gap:6px;" title="Download Official Standard Blank Leave Application Form (A4 PDF)">
+                <span>📥</span> <span>Download Blank Form (PDF)</span>
+              </button>
               <button id="btnNewApplicationHeader" class="btn" style="background:#ffffff; color:#0F2942; font-weight:700; border:none; padding:8px 16px; border-radius:8px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
-                <span>📝</span> <span>New Leave Application</span>
+                <span>📝</span> <span>New Application</span>
               </button>
             </div>
           </div>
@@ -95,6 +98,19 @@ export async function render(view, state) {
       headerBtn.addEventListener('click', () => {
         activeTab = 'apply';
         frame();
+      });
+    }
+
+    const blankBtn = $('#btnDownloadBlankHeader');
+    if (blankBtn) {
+      blankBtn.addEventListener('click', async () => {
+        try {
+          toast('Downloading Blank Leave Application Form (PDF)...');
+          await download('/leave/blank-form/pdf');
+          toast('Blank Form downloaded successfully');
+        } catch (e) {
+          window.open('/api/leave/blank-form/pdf', '_blank');
+        }
       });
     }
 
@@ -240,10 +256,10 @@ export async function render(view, state) {
                   </td>
                   <td class="r">
                     <span class="row" style="justify-content:flex-end; gap:6px; flex-wrap:nowrap;">
-                      <!-- Print / Download PDF -->
-                      <a href="/api/leave/requests/${r.id}/pdf" target="_blank" download="Leave_Application_${r.id}.pdf" class="btn sm" style="background:#f0f9ff; color:#0369a1; border:1px solid #bae6fd; font-weight:600;" title="Download Official A4 Printable PDF">
-                        📄 PDF
-                      </a>
+                      <!-- Download Official PDF -->
+                      <button class="btn sm" data-download-pdf="${r.id}" style="background:#0F2942; color:#ffffff; font-weight:700; border:none; display:inline-flex; align-items:center; gap:5px; padding:5px 12px; border-radius:6px;" title="Download Official A4 Printable PDF">
+                        <span>📥</span> <span>Download Form</span>
+                      </button>
 
                       <!-- View Details Modal -->
                       <button class="btn sm" data-action="view" data-id="${r.id}" title="View Application &amp; Signatures">
@@ -282,6 +298,19 @@ export async function render(view, state) {
       `);
 
       // Bind Row Actions
+      $$('[data-download-pdf]', tbody).forEach((b) => {
+        b.addEventListener('click', async (e) => {
+          e.preventDefault();
+          try {
+            toast('Downloading Leave Application Form...');
+            await download(`/leave/requests/${b.dataset.downloadPdf}/pdf`);
+            toast('Leave Form downloaded successfully');
+          } catch (err) {
+            window.open(`/api/leave/requests/${b.dataset.downloadPdf}/pdf`, '_blank');
+          }
+        });
+      });
+
       $$('[data-action="view"]', tbody).forEach((b) => {
         b.addEventListener('click', () => openApplicationDetailsModal(filtered.find((x) => String(x.id) === b.dataset.id)));
       });
@@ -333,7 +362,12 @@ export async function render(view, state) {
               <h2 style="margin:0; font-size:17px; color:#0F2942; font-weight:700;">Employee Leave Application Form</h2>
               <p class="muted small" style="margin:2px 0 0;">Fill in the particulars to submit an official leave request for approval.</p>
             </div>
-            <span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:600; padding:4px 10px;">Company Standard Form</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button type="button" id="btnDownloadBlankInForm" class="btn sm" style="background:#0F2942; color:#fff; font-weight:700; border:none; display:inline-flex; align-items:center; gap:5px; padding:6px 14px; border-radius:6px;" title="Download Official Standard Blank Leave Application Form (A4 PDF)">
+                <span>📥</span> <span>Download Blank Form (PDF)</span>
+              </button>
+              <span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:600; padding:4px 10px;">Company Standard Form</span>
+            </div>
           </div>
         </header>
 
@@ -548,6 +582,19 @@ export async function render(view, state) {
     eInput.addEventListener('change', calculateDays);
     halfInput.addEventListener('change', calculateDays);
     calculateDays();
+
+    const blankInFormBtn = $('#btnDownloadBlankInForm');
+    if (blankInFormBtn) {
+      blankInFormBtn.addEventListener('click', async () => {
+        try {
+          toast('Downloading Blank Leave Application Form (PDF)...');
+          await download('/leave/blank-form/pdf');
+          toast('Blank Form downloaded successfully');
+        } catch (e) {
+          window.open('/api/leave/blank-form/pdf', '_blank');
+        }
+      });
+    }
 
     // Form Submit
     $('#digitalLeaveForm').addEventListener('submit', async (e) => {
@@ -836,10 +883,13 @@ export async function render(view, state) {
                 <b style="font-size:15px; color:#0F2942;">${r.name}</b>
                 <div class="small muted">${r.employee_code || ''} • ${r.designation} • ${r.department}</div>
               </div>
-              <div>
-                <a href="/api/leave/requests/${r.id}/pdf" target="_blank" download="Leave_Application_${r.id}.pdf" class="btn sm" style="background:#0F2942; color:#fff; font-weight:700;">
-                  📄 Download A4 PDF
-                </a>
+              <div class="row" style="gap:8px;">
+                <button type="button" id="btnModalDownloadPdf" class="btn sm" style="background:#0F2942; color:#fff; font-weight:700; border:none; display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:6px;" title="Download Official A4 Printable PDF">
+                  <span>📥</span> <span>Download Form (PDF)</span>
+                </button>
+                <button type="button" id="btnModalPrintPdf" class="btn sm" style="background:#f1f5f9; color:#0F2942; border:1px solid #cbd5e1; font-weight:700; display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:6px;" title="Open A4 PDF directly for printing">
+                  <span>🖨️</span> <span>Print Form</span>
+                </button>
               </div>
             </div>
           </div>
@@ -889,6 +939,21 @@ export async function render(view, state) {
       `,
       onSubmit: (form, close) => close(),
     });
+
+    setTimeout(() => {
+      $('#btnModalDownloadPdf')?.addEventListener('click', async () => {
+        try {
+          toast('Downloading Leave Application Form...');
+          await download(`/leave/requests/${r.id}/pdf`);
+          toast('Leave Form downloaded successfully');
+        } catch {
+          window.open(`/api/leave/requests/${r.id}/pdf`, '_blank');
+        }
+      });
+      $('#btnModalPrintPdf')?.addEventListener('click', () => {
+        window.open(`/api/leave/requests/${r.id}/pdf`, '_blank');
+      });
+    }, 50);
   };
 
   // Modal: Department Head Recommendation

@@ -685,6 +685,195 @@ async function generateLeaveApplicationPdf(requestId, res) {
   doc.end();
 }
 
+/**
+ * Generate Professional A4 English Blank Printable Leave Application Form
+ */
+async function generateBlankLeaveFormPdf(res) {
+  const doc = new PDFDocument({
+    size: 'A4',
+    margin: 36,
+    info: {
+      Title: 'Blank Leave Application Form - Jeans Manufacturing Company Ltd.',
+      Author: 'Jeans Manufacturing Company Ltd.',
+      Subject: 'Official Blank Leave Application Form'
+    }
+  });
+
+  const f = registerFonts(doc);
+  doc.pipe(res);
+
+  const left = 36;
+  const width = doc.page.width - 72; // ~523 pt
+
+  const NAVY = '#0F2942';
+  const LIGHT_BLUE = '#F0F9FF';
+  const BORDER_COLOR = '#CBD5E1';
+  const TEXT_DARK = '#0F172A';
+  const TEXT_MUTED = '#475569';
+
+  // --- HEADER BANNER ---
+  doc.rect(left, 36, width, 4).fill(NAVY);
+
+  doc.font(f.bold).fontSize(16).fillColor(NAVY)
+    .text('JEANS MANUFACTURING COMPANY LTD.', left, 46, { align: 'center', width });
+  doc.font(f.regular).fontSize(9).fillColor(TEXT_MUTED)
+    .text('Corporate & Factory Office • Hemayetpur, Savar, Dhaka, Bangladesh • Phone: +880-2-7744112', left, 66, { align: 'center', width });
+
+  const titleY = 82;
+  doc.rect(left, titleY, width, 24).fill(LIGHT_BLUE);
+  doc.rect(left, titleY, width, 24).strokeColor(BORDER_COLOR).lineWidth(0.8).stroke();
+  doc.font(f.bold).fontSize(11).fillColor(NAVY)
+    .text('EMPLOYEE LEAVE APPLICATION & APPROVAL FORM', left, titleY + 6, { align: 'center', width });
+
+  const refY = 112;
+  doc.font(f.regular).fontSize(8.5).fillColor(TEXT_MUTED)
+    .text(`Form Code: `, left, refY, { continued: true })
+    .font(f.bold).fillColor(TEXT_DARK).text(`JMCL-LA-BLANK-A4`)
+    .font(f.regular).fillColor(TEXT_MUTED)
+    .text(`Application Date: `, left + 340, refY, { continued: true })
+    .font(f.bold).fillColor(TEXT_DARK).text(`_____ / _____ / 2026`);
+
+  // --- SECTION 1: EMPLOYEE INFORMATION ---
+  let curY = 130;
+  doc.rect(left, curY, width, 18).fill('#E2E8F0');
+  doc.font(f.bold).fontSize(9.5).fillColor(NAVY)
+    .text('1. EMPLOYEE INFORMATION (TO BE FILLED BY APPLICANT)', left + 8, curY + 4);
+  curY += 18;
+
+  const rowHeight = 22;
+  const col1 = left;
+  const col1W = 130;
+  const col2 = left + 130;
+  const col2W = 130;
+  const col3 = left + 260;
+  const col3W = 130;
+  const col4 = left + 390;
+  const col4W = width - 390;
+
+  const drawBlankRow = (y, l1, l2) => {
+    doc.rect(left, y, width, rowHeight).strokeColor(BORDER_COLOR).lineWidth(0.5).stroke();
+    doc.rect(left, y, col1W, rowHeight).fill('#F8FAFC');
+    doc.rect(col3, y, col3W, rowHeight).fill('#F8FAFC');
+
+    doc.font(f.regular).fontSize(8.5).fillColor(TEXT_MUTED).text(l1, col1 + 6, y + 6);
+    doc.font(f.regular).fontSize(8.5).fillColor(TEXT_MUTED).text(l2, col3 + 6, y + 6);
+  };
+
+  drawBlankRow(curY, 'Employee ID:', 'Full Name:');
+  curY += rowHeight;
+  drawBlankRow(curY, 'Department:', 'Designation:');
+  curY += rowHeight;
+  drawBlankRow(curY, 'Section / Unit:', 'Joining Date:');
+  curY += rowHeight;
+  drawBlankRow(curY, 'Contact Number:', 'Official Email:');
+  curY += rowHeight + 10;
+
+  // --- SECTION 2: LEAVE APPLICATION PARTICULARS ---
+  doc.rect(left, curY, width, 18).fill('#E2E8F0');
+  doc.font(f.bold).fontSize(9.5).fillColor(NAVY)
+    .text('2. LEAVE DETAILS & APPLICATION PARTICULARS', left + 8, curY + 4);
+  curY += 18;
+
+  // Type & Duration checkboxes
+  doc.rect(left, curY, width, 26).strokeColor(BORDER_COLOR).lineWidth(0.5).stroke();
+  doc.rect(left, curY, col1W, 26).fill('#F8FAFC');
+  doc.font(f.regular).fontSize(8.5).fillColor(TEXT_MUTED).text('Leave Category:', col1 + 6, curY + 8);
+  doc.font(f.bold).fontSize(8.5).fillColor(TEXT_DARK)
+    .text('[  ] Casual Leave (CL)      [  ] Sick Leave (SL)      [  ] Earned Leave (EL)      [  ] Unpaid Leave', col2 + 6, curY + 8);
+  curY += 26;
+
+  doc.rect(left, curY, width, 24).strokeColor(BORDER_COLOR).lineWidth(0.5).stroke();
+  doc.rect(left, curY, col1W, 24).fill('#F8FAFC');
+  doc.font(f.regular).fontSize(8.5).fillColor(TEXT_MUTED).text('Duration Mode:', col1 + 6, curY + 7);
+  doc.font(f.bold).fontSize(8.5).fillColor(TEXT_DARK)
+    .text('[  ] Full Day Leave                         [  ] Half Day Leave (0.5 Working Day)', col2 + 6, curY + 7);
+  curY += 24;
+
+  drawBlankRow(curY, 'Start Date (From):', 'End Date (To):');
+  curY += rowHeight;
+
+  doc.rect(left, curY, width, rowHeight).strokeColor(BORDER_COLOR).lineWidth(0.5).stroke();
+  doc.rect(left, curY, col1W, rowHeight).fill('#F8FAFC');
+  doc.font(f.regular).fontSize(8.5).fillColor(TEXT_MUTED).text('Total Working Days:', col1 + 6, curY + 6);
+  doc.font(f.regular).fontSize(8.5).fillColor(TEXT_MUTED).text('_________ Working Days (Excluding Friday & Holidays)', col2 + 6, curY + 6);
+  curY += rowHeight;
+
+  // Reason Box
+  const reasonH = 46;
+  doc.rect(left, curY, width, reasonH).strokeColor(BORDER_COLOR).lineWidth(0.5).stroke();
+  doc.rect(left, curY, col1W, reasonH).fill('#F8FAFC');
+  doc.font(f.regular).fontSize(8.5).fillColor(TEXT_MUTED).text('Reason for Leave:\n(Be specific)', col1 + 6, curY + 8);
+  doc.font(f.regular).fontSize(8).fillColor(TEXT_MUTED)
+    .text('_____________________________________________________________________________________________________\n_____________________________________________________________________________________________________', col2 + 6, curY + 12);
+  curY += reasonH;
+
+  drawBlankRow(curY, 'Address During Leave:', 'Emergency Phone:');
+  curY += rowHeight + 10;
+
+  // --- SECTION 3: LEAVE BALANCE STATUS (OFFICE USE) ---
+  doc.rect(left, curY, width, 18).fill('#E2E8F0');
+  doc.font(f.bold).fontSize(9.5).fillColor(NAVY)
+    .text('3. LEAVE BALANCE STATUS (FOR HR / OFFICE USE ONLY)', left + 8, curY + 4);
+  curY += 18;
+
+  const balW = width / 3;
+  doc.rect(left, curY, width, 32).strokeColor(BORDER_COLOR).lineWidth(0.5).stroke();
+  doc.moveTo(left + balW, curY).lineTo(left + balW, curY + 32).strokeColor(BORDER_COLOR).stroke();
+  doc.moveTo(left + (balW * 2), curY).lineTo(left + (balW * 2), curY + 32).strokeColor(BORDER_COLOR).stroke();
+
+  doc.font(f.bold).fontSize(8.5).fillColor(NAVY).text('Casual Leave (CL)', left + 8, curY + 5);
+  doc.font(f.regular).fontSize(8).fillColor(TEXT_MUTED).text('Annual Quota: 10 Days\nUsed: _____d | Remaining: _____d', left + 8, curY + 16);
+
+  doc.font(f.bold).fontSize(8.5).fillColor(NAVY).text('Sick Leave (SL)', left + balW + 8, curY + 5);
+  doc.font(f.regular).fontSize(8).fillColor(TEXT_MUTED).text('Annual Quota: 14 Days\nUsed: _____d | Remaining: _____d', left + balW + 8, curY + 16);
+
+  doc.font(f.bold).fontSize(8.5).fillColor(NAVY).text('Earned Leave (EL)', left + (balW * 2) + 8, curY + 5);
+  doc.font(f.regular).fontSize(8).fillColor(TEXT_MUTED).text('Annual Quota: 15 Days\nUsed: _____d | Remaining: _____d', left + (balW * 2) + 8, curY + 16);
+  curY += 42;
+
+  // --- SECTION 4: THREE-TIER SIGNATURE & APPROVAL SECTION ---
+  doc.rect(left, curY, width, 18).fill('#E2E8F0');
+  doc.font(f.bold).fontSize(9.5).fillColor(NAVY)
+    .text('4. VERIFICATION, RECOMMENDATION & APPROVAL RECORD', left + 8, curY + 4);
+  curY += 22;
+
+  const boxW = (width - 16) / 3;
+  const boxH = 115;
+
+  // Box 1: Employee
+  const b1X = left;
+  doc.rect(b1X, curY, boxW, boxH).strokeColor(BORDER_COLOR).lineWidth(0.8).stroke();
+  doc.rect(b1X, curY, boxW, 18).fill(LIGHT_BLUE);
+  doc.font(f.bold).fontSize(8.5).fillColor(NAVY).text('1. APPLICANT / EMPLOYEE', b1X + 6, curY + 5);
+  doc.font(f.regular).fontSize(8).fillColor(TEXT_MUTED)
+    .text('Applicant Signature:\n\n__________________________________\n\nFull Name:\n__________________________________\n\nDate: _____ / _____ / 2026', b1X + 6, curY + 24);
+
+  // Box 2: Dept Head
+  const b2X = left + boxW + 8;
+  doc.rect(b2X, curY, boxW, boxH).strokeColor(BORDER_COLOR).lineWidth(0.8).stroke();
+  doc.rect(b2X, curY, boxW, 18).fill(LIGHT_BLUE);
+  doc.font(f.bold).fontSize(8.5).fillColor(NAVY).text('2. DEPARTMENT HEAD', b2X + 6, curY + 5);
+  doc.font(f.regular).fontSize(8).fillColor(TEXT_MUTED)
+    .text('Recommendation:\n[  ] Recommended     [  ] Rejected\n\nRemarks:\n__________________________________\n\nSignature & Date:\n__________________________________', b2X + 6, curY + 24);
+
+  // Box 3: Admin Head
+  const b3X = left + (boxW * 2) + 16;
+  doc.rect(b3X, curY, boxW, boxH).strokeColor(BORDER_COLOR).lineWidth(0.8).stroke();
+  doc.rect(b3X, curY, boxW, 18).fill(LIGHT_BLUE);
+  doc.font(f.bold).fontSize(8.5).fillColor(NAVY).text('3. ADMIN HEAD / FINAL APPROVAL', b3X + 6, curY + 5);
+  doc.font(f.regular).fontSize(8).fillColor(TEXT_MUTED)
+    .text('Final Decision:\n[  ] Approved           [  ] Rejected\n\nRemarks:\n__________________________________\n\nAuthorized Signature & Stamp:\n__________________________________', b3X + 6, curY + 24);
+
+  curY += boxH + 16;
+
+  // --- FOOTER NOTE ---
+  doc.moveTo(left, curY).lineTo(left + width, curY).strokeColor('#E2E8F0').lineWidth(0.8).stroke();
+  doc.font(f.regular).fontSize(7.5).fillColor(TEXT_MUTED)
+    .text('Jeans Manufacturing Company Ltd. • Staff Flow Pro HRMS • Official Standard Blank Form (A4)', left, curY + 6, { width, align: 'center' });
+
+  doc.end();
+}
+
 module.exports = {
   ensureBalances,
   getBalances,
@@ -700,4 +889,5 @@ module.exports = {
   getAllBalances,
   updateUserBalance,
   generateLeaveApplicationPdf,
+  generateBlankLeaveFormPdf,
 };

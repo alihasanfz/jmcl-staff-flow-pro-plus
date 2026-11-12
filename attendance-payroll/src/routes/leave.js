@@ -256,6 +256,13 @@ router.get('/requests/:id/pdf', wrap(async (req, res) => {
   await leave.generateLeaveApplicationPdf(reqId, res);
 }));
 
+// Download Official Blank Leave Application Form (A4 PDF)
+router.get('/blank-form/pdf', wrap(async (req, res) => {
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="JMCL_Leave_Application_Form_Blank.pdf"');
+  await leave.generateBlankLeaveFormPdf(res);
+}));
+
 // Submit Digital Leave Application (by employee or on behalf)
 router.post('/requests', wrap(async (req, res) => {
   const canActForOthers = canEdit(req.user, 'leave') || isManager(req.user);
