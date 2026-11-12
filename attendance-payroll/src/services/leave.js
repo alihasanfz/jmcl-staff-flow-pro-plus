@@ -140,4 +140,180 @@ async function cancel(requestId, actor) {
   return { id: requestId, status: 'cancelled' };
 }
 
-module.exports = { ensureBalances, getBalances, countWorkingDays, createRequest, review, cancel };
+/** Admin/Manager creates a leave request on behalf of an employee */
+async function adminCreateRequest(actor, { userId, leaveTypeId, startDate, endDate, halfDay, reason, status = 'approved' }) {
+  if (endDate < startDate) throw bad('End date must be on or after start date');
+  const year = Number(startDate.slice(0, 4));
+
+  const { rows: [type] } = await query('SELECT * FROM leave_types WHERE id = $1 AND active', [leaveTypeId]);
+  if (!type) throw bad('Unknown leave type');
+
+  const { rows: [u] } = await query('SELECT * FROM users WHERE id = $1', [userId]);
+  if (!u) throw notFound('User not found');
+
+  const working = await countWorkingDays(userId, startDate, endDate);
+  if (working === 0) throw bad('The selected dates are all weekly offs or holidays');
+  const days = halfDay ? 0.5 : working;
+
+  const reqStatus = ['approved', 'pending'].includes(status) ? status : 'approved';
+
+  const req = await tx(async (db) => {
+    if (reqStatus === 'approved' && type.annual_quota !== null) {
+      await ensureBalances(userId, year, db);
+      await db.query(
+        `UPDATE leave_balances SET used = used + $4 WHERE user_id = $1 AND leave_type_id = $2 AND year = $3`,
+        [userId, type.id, year, days]);
+    }
+    const { rows: [newReq] } = await db.query(
+      `INSERT INTO leave_requests (user_id, leave_type_id, start_date, end_date, half_day, days, reason, status, reviewed_by, reviewed_at, review_note)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CASE WHEN $8 = 'approved' THEN now() ELSE NULL END, $10)
+       RETURNING *`,
+      [userId, type.id, startDate, endDate, !!halfDay, days, reason || '', reqStatus, reqStatus === 'approved' ? actor.id : null, reqStatus === 'approved' ? `Approved by ${actor.name}` : null]
+    );
+    return newReq;
+  });
+
+  if (reqStatus === 'approved') {
+    await rebuildRange(startDate, endDate, { userId });
+  }
+
+  return req;
+}
+
+/** Admin/Manager updates an existing leave request (dates, type, status, reason) */
+async function adminUpdateRequest(requestId, actor, { leaveTypeId, startDate, endDate, halfDay, reason, status }) {
+  const result = await tx(async (db) => {
+    const { rows: [old] } = await db.query(
+      `SELECT lr.*, lt.annual_quota FROM leave_requests lr JOIN leave_types lt ON lt.id = lr.leave_type_id WHERE lr.id = $1 FOR UPDATE OF lr`,
+      [requestId]
+    );
+    if (!old) throw notFound('Leave request not found');
+
+    const newStart = startDate || old.start_date;
+    const newEnd = endDate || old.end_date;
+    const newTypeId = leaveTypeId || old.leave_type_id;
+    const newStatus = status || old.status;
+    const newHalf = halfDay !== undefined ? !!halfDay : old.half_day;
+    const newReason = reason !== undefined ? reason : old.reason;
+
+    const working = await countWorkingDays(old.user_id, newStart, newEnd, db);
+    const newDays = newHalf ? 0.5 : (working || old.days);
+
+    // If it was previously approved and deducted balance, restore old days
+    const oldYear = Number(String(old.start_date).slice(0, 4));
+    if (old.status === 'approved' && old.annual_quota !== null) {
+      await db.query(
+        `UPDATE leave_balances SET used = GREATEST(0, used - $4) WHERE user_id = $1 AND leave_type_id = $2 AND year = $3`,
+        [old.user_id, old.leave_type_id, oldYear, old.days]
+      );
+    }
+
+    // If newly approved, deduct new days
+    const newYear = Number(String(newStart).slice(0, 4));
+    const { rows: [targetType] } = await db.query('SELECT * FROM leave_types WHERE id = $1', [newTypeId]);
+    if (newStatus === 'approved' && targetType && targetType.annual_quota !== null) {
+      await ensureBalances(old.user_id, newYear, db);
+      await db.query(
+        `UPDATE leave_balances SET used = used + $4 WHERE user_id = $1 AND leave_type_id = $2 AND year = $3`,
+        [old.user_id, newTypeId, newYear, newDays]
+      );
+    }
+
+    const { rows: [updated] } = await db.query(
+      `UPDATE leave_requests
+          SET leave_type_id = $2, start_date = $3, end_date = $4, half_day = $5, days = $6, reason = $7, status = $8,
+              reviewed_by = CASE WHEN $8 = 'approved' THEN COALESCE(reviewed_by, $9) ELSE reviewed_by END,
+              reviewed_at = CASE WHEN $8 = 'approved' THEN COALESCE(reviewed_at, now()) ELSE reviewed_at END
+        WHERE id = $1
+        RETURNING *`,
+      [requestId, newTypeId, newStart, newEnd, newHalf, newDays, newReason, newStatus, actor.id]
+    );
+
+    return { old, updated };
+  });
+
+  const minDate = result.old.start_date < result.updated.start_date ? result.old.start_date : result.updated.start_date;
+  const maxDate = result.old.end_date > result.updated.end_date ? result.old.end_date : result.updated.end_date;
+  await rebuildRange(minDate, maxDate, { userId: result.old.user_id });
+
+  return result.updated;
+}
+
+/** Admin/Manager deletes a leave request permanently */
+async function adminDeleteRequest(requestId, actor) {
+  const result = await tx(async (db) => {
+    const { rows: [r] } = await db.query(
+      `SELECT lr.*, lt.annual_quota FROM leave_requests lr JOIN leave_types lt ON lt.id = lr.leave_type_id WHERE lr.id = $1 FOR UPDATE OF lr`,
+      [requestId]
+    );
+    if (!r) throw notFound('Leave request not found');
+
+    if (r.status === 'approved' && r.annual_quota !== null) {
+      const year = Number(String(r.start_date).slice(0, 4));
+      await db.query(
+        `UPDATE leave_balances SET used = GREATEST(0, used - $4) WHERE user_id = $1 AND leave_type_id = $2 AND year = $3`,
+        [r.user_id, r.leave_type_id, year, r.days]
+      );
+    }
+
+    await db.query('DELETE FROM leave_requests WHERE id = $1', [requestId]);
+    return r;
+  });
+
+  if (result.status === 'approved') {
+    await rebuildRange(result.start_date, result.end_date, { userId: result.user_id });
+  }
+
+  return { id: requestId, deleted: true };
+}
+
+/** Get all employee balances for a year */
+async function getAllBalances(year) {
+  const y = parseInt(year, 10) || new Date().getUTCFullYear();
+  const { rows } = await query(`
+    SELECT u.id AS user_id, u.name, u.employee_code, u.department,
+           COALESCE(
+             json_agg(
+               json_build_object(
+                 'leave_type_id', lt.id,
+                 'name', lt.name,
+                 'allocated', COALESCE(b.allocated, lt.annual_quota, 0),
+                 'used', COALESCE(b.used, 0),
+                 'remaining', (COALESCE(b.allocated, lt.annual_quota, 0) - COALESCE(b.used, 0))
+               ) ORDER BY lt.id
+             ) FILTER (WHERE lt.id IS NOT NULL), '[]'
+           ) AS balances
+      FROM users u
+      CROSS JOIN leave_types lt
+      LEFT JOIN leave_balances b ON b.user_id = u.id AND b.leave_type_id = lt.id AND b.year = $1
+     WHERE u.active = true AND lt.active = true AND lt.annual_quota IS NOT NULL
+     GROUP BY u.id, u.name, u.employee_code, u.department
+     ORDER BY u.name ASC
+  `, [y]);
+  return rows;
+}
+
+/** Update employee leave balance */
+async function updateUserBalance(userId, leaveTypeId, year, allocated, used) {
+  await query(`
+    INSERT INTO leave_balances (user_id, leave_type_id, year, allocated, used)
+    VALUES ($1, $2, $3, $4, $5)
+    ON CONFLICT (user_id, leave_type_id, year)
+    DO UPDATE SET allocated = EXCLUDED.allocated, used = EXCLUDED.used
+  `, [userId, leaveTypeId, year, allocated, used]);
+  return { ok: true };
+}
+
+module.exports = {
+  ensureBalances,
+  getBalances,
+  countWorkingDays,
+  createRequest,
+  review,
+  cancel,
+  adminCreateRequest,
+  adminUpdateRequest,
+  adminDeleteRequest,
+  getAllBalances,
+  updateUserBalance,
+};

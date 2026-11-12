@@ -120,6 +120,42 @@ async function firstRun() {
        WHERE LOWER(department) NOT LIKE '%store%' AND LOWER(department) NOT LIKE '%commercial%'
     `);
 
+    // Ensure Casual Leave (CL) 10 days and Sick Leave (SL) 14 days exist with full quota allocation
+    try {
+      await query(`
+        INSERT INTO leave_types (name, annual_quota, paid, active)
+        VALUES 
+          ('Casual Leave (CL)', 10, true, true),
+          ('Sick Leave (SL)', 14, true, true),
+          ('Unpaid Leave', NULL, false, true)
+        ON CONFLICT (name) DO UPDATE SET 
+          annual_quota = EXCLUDED.annual_quota,
+          paid = EXCLUDED.paid,
+          active = EXCLUDED.active
+      `);
+
+      await query(`
+        UPDATE leave_types SET name = 'Casual Leave (CL)', annual_quota = 10, active = true WHERE name ILIKE '%casual%' AND name != 'Casual Leave (CL)';
+        UPDATE leave_types SET name = 'Sick Leave (SL)', annual_quota = 14, active = true WHERE name ILIKE '%sick%' AND name != 'Sick Leave (SL)';
+        UPDATE leave_types SET active = false WHERE name ILIKE '%annual%';
+      `);
+
+      const currentYear = new Date().getFullYear();
+      await query(`
+        INSERT INTO leave_balances (user_id, leave_type_id, year, allocated, used)
+        SELECT u.id, lt.id, $1, lt.annual_quota, 0
+          FROM users u
+         CROSS JOIN leave_types lt
+         WHERE u.active = true
+           AND lt.active = true
+           AND lt.annual_quota IS NOT NULL
+        ON CONFLICT (user_id, leave_type_id, year) 
+        DO UPDATE SET allocated = EXCLUDED.allocated
+      `, [currentYear]);
+    } catch (err) {
+      console.warn('[bootstrap] leave types setup note:', err.message);
+    }
+
     // Ensure all device schema columns exist
     await query(`
       ALTER TABLE devices ADD COLUMN IF NOT EXISTS last_punch_at timestamptz;
