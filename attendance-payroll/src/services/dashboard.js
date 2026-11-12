@@ -24,9 +24,10 @@ async function today() {
   const byUser = new Map(rows.rows.map((r) => [r.user_id, r]));
   const onLeave = new Set(leave.rows.map((l) => l.user_id));
   const holiday = hol.rows[0]?.name || null;
-  const isOff = (p) => (p.weekly_off || []).includes(dow(date));
+  const isOff = (p) => (p.weekly_off || []).includes(dow(date)) || dow(date) === 5;
 
   const expected = people.rows.filter((p) => !holiday && !isOff(p));
+  const offDayWorkers = people.rows.filter((p) => (holiday || isOff(p)));
   const kpi = { expected: expected.length, present: 0, late: 0, absent: 0, onLeave: 0, notYet: 0, overtimeMinutes: 0 };
   const ribbon = [];
 
@@ -51,6 +52,21 @@ async function today() {
       checkIn: r?.cin || null, checkOut: r?.cout || null,
       lateMinutes: r?.late_minutes || 0, earlyOutMinutes: r?.early_out_minutes || 0, overtimeMinutes: r?.overtime_minutes || 0,
     });
+  }
+
+  // Also include any employees who came in and punched on an Off Day (e.g. Friday)
+  for (const p of offDayWorkers) {
+    const r = byUser.get(p.id);
+    if (r && ['present', 'late', 'half_day'].includes(r.status)) {
+      kpi.present++;
+      kpi.overtimeMinutes += r.overtime_minutes || 0;
+      ribbon.unshift({
+        id: p.id, name: p.name, department: p.department, state: 'present',
+        shiftStart: (p.st || '09:00:00').slice(0, 5), shiftEnd: (p.et || '18:00:00').slice(0, 5),
+        checkIn: r?.cin || null, checkOut: r?.cout || null,
+        lateMinutes: 0, earlyOutMinutes: 0, overtimeMinutes: r?.overtime_minutes || 0,
+      });
+    }
   }
   const onTime = Math.max(0, kpi.present - kpi.late);
   kpi.onTime = onTime;

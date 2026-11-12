@@ -242,9 +242,13 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
                 WHERE pl.user_id = a.user_id
                   AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
                   AND UPPER(pl.device_sn) = UPPER(${snParam})
-                  AND to_char(pl.punched_at AT TIME ZONE $1, 'HH24:MI') >= '18:00'
+                  AND (
+                    to_char(pl.punched_at AT TIME ZONE $1, 'HH24:MI') >= '18:00'
+                    OR a.off_day_work = true
+                    OR EXTRACT(DOW FROM a.work_date) = 5
+                  )
                   AND pl.punched_at >= (
-                    SELECT MIN(pl2.punched_at) + interval '15 minutes'
+                    SELECT MIN(pl2.punched_at) + interval '5 minutes'
                       FROM punch_logs pl2
                      WHERE pl2.user_id = a.user_id
                        AND to_char(pl2.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
@@ -271,13 +275,18 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
 
     const resultRows = rows.map((r) => {
       const hasDevicePunch = !!r.check_in_local;
+      const isFriday = new Date(`${r.work_date}T00:00:00Z`).getUTCDay() === 5;
       let finalStatus = r.raw_status;
       if (!hasDevicePunch) {
-        if (!['leave', 'unpaid_leave', 'holiday', 'weekend'].includes(r.raw_status)) {
+        if (isFriday || ['leave', 'unpaid_leave', 'holiday', 'weekend'].includes(r.raw_status)) {
+          finalStatus = r.raw_status === 'holiday' ? 'holiday' : (['leave', 'unpaid_leave'].includes(r.raw_status) ? r.raw_status : 'weekend');
+        } else {
           finalStatus = 'absent';
         }
       } else {
-        if (r.shift_start && r.check_in_local) {
+        if (isFriday || r.off_day_work) {
+          finalStatus = 'present';
+        } else if (r.shift_start && r.check_in_local) {
           const [ih, im] = r.check_in_local.split(':').map(Number);
           const [sh, sm] = r.shift_start.split(':').map(Number);
           const inMin = ih * 60 + im;
@@ -289,15 +298,28 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
         }
       }
 
+      let worked = hasDevicePunch ? (r.worked_minutes || 0) : 0;
+      let ot = hasDevicePunch ? (r.overtime_minutes || 0) : 0;
+      if (hasDevicePunch && (isFriday || r.off_day_work) && r.check_in_local && r.check_out_local) {
+        const [ih, im] = r.check_in_local.split(':').map(Number);
+        const [oh, om] = r.check_out_local.split(':').map(Number);
+        const span = Math.max(0, (oh * 60 + om) - (ih * 60 + im));
+        if (span > 0) {
+          worked = span;
+          ot = span;
+        }
+      }
+
       return {
         ...r,
         status: finalStatus,
+        off_day_work: (isFriday || r.off_day_work) ? true : r.off_day_work,
         check_in_local: hasDevicePunch ? r.check_in_local : null,
         check_out_local: hasDevicePunch ? r.check_out_local : null,
-        worked_minutes: hasDevicePunch ? r.worked_minutes : 0,
-        overtime_minutes: hasDevicePunch ? r.overtime_minutes : 0,
-        late_minutes: hasDevicePunch ? r.late_minutes : 0,
-        early_out_minutes: hasDevicePunch ? r.early_out_minutes : 0,
+        worked_minutes: worked,
+        overtime_minutes: ot,
+        late_minutes: (hasDevicePunch && !isFriday && !r.off_day_work) ? r.late_minutes : 0,
+        early_out_minutes: (hasDevicePunch && !isFriday && !r.off_day_work) ? r.early_out_minutes : 0,
         missing_checkout: hasDevicePunch ? r.missing_checkout : false,
       };
     });

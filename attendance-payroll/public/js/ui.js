@@ -43,7 +43,12 @@ export const ago = (iso) => {
 };
 export const addDays = (s, n) => { const d = D(s); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
-export const badge = (status, label) => html`<span class="badge ${status}">${label || t(status) || status}</span>`;
+export const badge = (status, label) => {
+  if (status === 'weekend') {
+    return html`<span class="badge weekend" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; font-weight:600;">🏖️ ${label || t('weekend') || 'Off Day'}</span>`;
+  }
+  return html`<span class="badge ${status}">${label || t(status) || status}</span>`;
+};
 
 /* ---------- toasts ---------- */
 export function toast(message, kind = 'ok') {

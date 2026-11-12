@@ -144,7 +144,7 @@ export async function render(view, state) {
           ['absent', 'Absent'],
           ['leave', 'On leave'],
           ['unpaid_leave', 'Unpaid leave'],
-          ['weekend', 'Weekly off'],
+          ['weekend', 'Off Day (Friday)'],
           ['holiday', 'Holiday'],
         ].map(([v, l]) => html`<option value="${v}" ${v === f.status ? 'selected' : ''}>${l}</option>`)}
               </select>
@@ -460,7 +460,7 @@ export async function render(view, state) {
                 <td class="r">${fmtMin(r.late_minutes)}</td>
                 <td class="r">${fmtMin(r.early_out_minutes)}</td>
                 <td class="r">${r.overtime_minutes ? html`${fmtMin(r.overtime_minutes)}${r.off_day_work ? html` <span class="small muted">off day</span>` : ''}` : '—'}</td>
-                <td>${badge(r.status)}</td>
+                <td>${r.off_day_work && r.status === 'present' ? html`<span class="badge" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-weight:700;">🟢 Present (Off Day)</span>` : badge(r.status)}</td>
                 ${isMgr ? html`
                   <td class="r">
                     <div class="action-btns">

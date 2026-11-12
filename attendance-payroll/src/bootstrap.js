@@ -120,6 +120,33 @@ async function firstRun() {
        WHERE LOWER(department) NOT LIKE '%store%' AND LOWER(department) NOT LIKE '%commercial%'
     `);
 
+    // Ensure all shifts have Friday (5) as company weekly off
+    await query(`
+      UPDATE shifts
+         SET weekly_off = '{5}'
+       WHERE weekly_off IS NULL OR weekly_off = '{}' OR NOT (5 = ANY(weekly_off))
+    `).catch(() => { });
+
+    // Cleanly update any existing Friday records:
+    // Friday with no punches -> 'weekend' (Off Day), NOT absent!
+    // Friday with punches -> 'present', off_day_work = true
+    await query(`
+      UPDATE attendance
+         SET status = 'weekend',
+             off_day_work = false
+       WHERE EXTRACT(DOW FROM work_date) = 5
+         AND (punch_count = 0 OR punch_count IS NULL)
+         AND status NOT IN ('leave', 'unpaid_leave', 'holiday')
+    `).catch(() => { });
+
+    await query(`
+      UPDATE attendance
+         SET status = 'present',
+             off_day_work = true
+       WHERE EXTRACT(DOW FROM work_date) = 5
+         AND punch_count > 0
+    `).catch(() => { });
+
     // Ensure Casual Leave (CL) 10 days and Sick Leave (SL) 14 days exist with full quota allocation
     try {
       await query(`

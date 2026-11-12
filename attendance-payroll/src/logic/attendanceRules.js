@@ -7,7 +7,7 @@
  *  - late_minutes       = check-in minus shift start, when check-in is later than start + grace; otherwise 0
  *  - early_out_minutes  = shift end minus check-out, when check-out is earlier than end - early-out grace; otherwise 0
  *  - overtime_minutes   = check-out minus shift end, when check-out is later than end + overtime threshold (capped)
- *  - on a weekly-off day or holiday, all worked time is overtime (off_day_work = true)
+ *  - on a weekly-off day (Friday) or holiday, all worked time is overtime (off_day_work = true)
  *  - worked_minutes     = (check-out - check-in), minus the unpaid break when the span exceeds 4 hours
  */
 const { dow, toMin } = require('../utils/time');
@@ -22,9 +22,10 @@ function computeDay({ date, today, nowMin, user, shift, punches, holiday, leave,
 
   const startMin = toMin(shift.start_time);
   const endMin = toMin(shift.end_time);
-  const isWeeklyOff = (shift.weekly_off || []).includes(dow(date));
+  const dayOfWeek = dow(date);
+  // Friday (day 5) is the company-wide weekly off day in Bangladesh
+  const isWeeklyOff = (shift.weekly_off || []).includes(dayOfWeek) || dayOfWeek === 5;
   const isOffDay = isWeeklyOff || !!holiday;
-  const shiftStarted = date < today || nowMin >= (startMin + shift.grace_minutes);
   const dayOver = date < today || nowMin >= endMin;
 
   const base = {
@@ -32,34 +33,52 @@ function computeDay({ date, today, nowMin, user, shift, punches, holiday, leave,
     late_minutes: 0, early_out_minutes: 0, overtime_minutes: 0, missing_checkout: false, off_day_work: false,
   };
 
+  // Case 1: No punches recorded on this day
   if (punches.length === 0) {
     if (isOffDay) return { ...base, status: holiday ? 'holiday' : 'weekend' };
     if (leave) return { ...base, status: leave.paid ? 'leave' : 'unpaid_leave' };
-    if (shiftStarted) return { ...base, status: 'absent' };
-    return null;                                  // shift not started yet
+    if (dayOver) return { ...base, status: 'absent' };
+    return null;                                  // shift/day not over yet
   }
 
+  // Case 2: Employee punched on this day
   const first = punches[0];
   const last = punches[punches.length - 1];
   const inMin = toMin(first.t);
   const outMin = toMin(last.t);
   const isPastDay = date < today;
+  const allowOt = (shift.allow_overtime !== false) && (user.overtime_eligible !== false);
+
+  // Subcase A: Punched on a Weekly Off / Friday / Holiday
+  if (isOffDay) {
+    const hasOut = punches.length >= 2 && (outMin - inMin >= r.min_punch_gap_minutes);
+    const span = hasOut ? Math.max(0, outMin - inMin) : 0;
+    const otMins = allowOt ? Math.min(span, r.ot_max_minutes * 2) : 0;
+    return {
+      ...base,
+      check_in: first.at,
+      check_out: hasOut ? last.at : null,
+      punch_count: punches.length,
+      status: 'present',
+      off_day_work: true,
+      worked_minutes: span,
+      overtime_minutes: otMins,
+      missing_checkout: !hasOut && (isPastDay || nowMin >= 1140),
+    };
+  }
+
+  // Subcase B: Punched on a regular working day (Sat - Thu)
   // A punch is recognized as a genuine check-out when:
-  //  1. In the normal departure window near/after shift end (from 60 mins before shift end onwards, e.g. >= 18:00 for 19:00 shift, >= 17:45 for 18:45 Commercial, >= 16:00 for 17:00 Store), OR
-  //  2. Explicitly registered as a check-out (state = 1) near departure with at least 4 hours worked.
-  // Intermediate midday/afternoon tea, prayer, or lunch swipes (e.g. 11:00–16:30 for evening shifts) are NEVER recognized as checkouts.
-  const isLegitCheckout = outMin >= (endMin - 60)
-    || (last.state === 1 && outMin - inMin >= 240 && outMin >= (endMin - 120));
+  //  1. The day is in the past (date < today), OR
+  //  2. In the normal departure window near/after shift end (from 60 mins before shift end onwards, e.g. >= 18:00 for 19:00 shift), OR
+  //  3. Explicitly registered as a check-out (state = 1) with at least 3 hours worked.
+  const isLegitCheckout = isPastDay
+    || outMin >= (endMin - 60)
+    || (last.state === 1 && outMin - inMin >= 180 && outMin >= (endMin - 120));
   const hasOut = punches.length >= 2 && (outMin - inMin >= r.min_punch_gap_minutes) && isLegitCheckout;
   const row = { ...base, check_in: first.at, check_out: hasOut ? last.at : null };
 
   const span = hasOut ? outMin - inMin : 0;
-  const allowOt = (shift.allow_overtime !== false) && (user.overtime_eligible !== false);
-  if (isOffDay) {
-    const otMins = allowOt ? Math.min(span, r.ot_max_minutes * 2) : 0;
-    return { ...row, status: 'present', off_day_work: true, worked_minutes: span, overtime_minutes: otMins };
-  }
-
   row.late_minutes = inMin > startMin + shift.grace_minutes ? inMin - startMin : 0;
   if (hasOut) {
     row.worked_minutes = Math.max(0, span - (span > 240 ? shift.break_minutes : 0));
