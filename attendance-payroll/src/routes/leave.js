@@ -2,7 +2,7 @@
 const router = require('express').Router();
 const { query } = require('../db');
 const { wrap, parse, forbidden, bad, notFound } = require('../utils/http');
-const { requireRole, isManager, canEdit } = require('../middleware/auth');
+const { requireRole, isManager, canEdit, canView } = require('../middleware/auth');
 const leave = require('../services/leave');
 const { z, date, id } = require('./schemas');
 
@@ -11,6 +11,13 @@ const leaveReviewer = (req, res, next) => {
     return next();
   }
   return next(forbidden('Your role cannot access this'));
+};
+
+const adminHeadOnly = (req, res, next) => {
+  if (canEdit(req.user, 'leave') || ['super_admin', 'company_admin', 'admin', 'hr_manager'].includes(req.user.role)) {
+    return next();
+  }
+  return next(forbidden('Only authorized Admin Head / HR Manager can grant final approval'));
 };
 
 /* ---------------- Leave Types (Full CRUD) ---------------- */
@@ -34,7 +41,6 @@ router.post('/types', leaveReviewer, wrap(async (req, res) => {
     [b.name, b.annualQuota ?? null, b.paid, b.active]
   );
 
-  // If quota provided, seed for all active users for current year
   if (created.annual_quota !== null) {
     const year = new Date().getUTCFullYear();
     await query(`
@@ -71,7 +77,6 @@ router.put('/types/:id', leaveReviewer, wrap(async (req, res) => {
     [typeId, newName, newQuota, newPaid, newActive]
   );
 
-  // Update existing balances if quota changed
   if (newQuota !== null && newQuota !== cur.annual_quota) {
     const year = new Date().getUTCFullYear();
     await query(
@@ -85,10 +90,8 @@ router.put('/types/:id', leaveReviewer, wrap(async (req, res) => {
 
 router.delete('/types/:id', leaveReviewer, wrap(async (req, res) => {
   const typeId = parse(id, req.params.id);
-  // Check if requests exist
   const { rows: [cnt] } = await query('SELECT COUNT(*) AS c FROM leave_requests WHERE leave_type_id = $1', [typeId]);
   if (parseInt(cnt.c, 10) > 0) {
-    // If requests exist, soft delete by deactivating
     await query('UPDATE leave_types SET active = false WHERE id = $1', [typeId]);
     return res.json({ id: typeId, deactivated: true, message: 'Leave type deactivated because records exist' });
   }
@@ -101,7 +104,7 @@ router.delete('/types/:id', leaveReviewer, wrap(async (req, res) => {
 /* ---------------- Employee Balances ---------------- */
 
 router.get('/balances', wrap(async (req, res) => {
-  const uid = isManager(req.user) && req.query.userId ? parse(id, req.query.userId) : req.user.id;
+  const uid = (isManager(req.user) || canEdit(req.user, 'leave')) && req.query.userId ? parse(id, req.query.userId) : req.user.id;
   const year = parseInt(req.query.year, 10) || new Date().getUTCFullYear();
   res.json({ year, balances: await leave.getBalances(uid, year) });
 }));
@@ -125,38 +128,171 @@ router.put('/balances/:userId/:leaveTypeId', leaveReviewer, wrap(async (req, res
   res.json({ ok: true });
 }));
 
-/* ---------------- Leave Requests (Full CRUD) ---------------- */
+/* ---------------- Leave Dashboard KPI & Statistics ---------------- */
 
-/** scope=mine (default) | pending (managers: queue) | all (managers) */
+router.get('/stats', leaveReviewer, wrap(async (req, res) => {
+  const year = parseInt(req.query.year, 10) || new Date().getUTCFullYear();
+
+  const [countsRes, deptRes, typeRes] = await Promise.all([
+    query(`
+      SELECT 
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+        COUNT(*) FILTER (WHERE status = 'recommended')::int AS recommended,
+        COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
+        COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected,
+        COUNT(*) FILTER (WHERE status = 'cancelled')::int AS cancelled
+      FROM leave_requests
+      WHERE EXTRACT(YEAR FROM start_date) = $1
+    `, [year]),
+    query(`
+      SELECT u.department, COUNT(*)::int AS count
+        FROM leave_requests lr
+        JOIN users u ON u.id = lr.user_id
+       WHERE EXTRACT(YEAR FROM lr.start_date) = $1
+       GROUP BY u.department
+       ORDER BY count DESC
+    `, [year]),
+    query(`
+      SELECT lt.name AS type, COUNT(*)::int AS count, COALESCE(SUM(lr.days), 0) AS total_days
+        FROM leave_requests lr
+        JOIN leave_types lt ON lt.id = lr.leave_type_id
+       WHERE EXTRACT(YEAR FROM lr.start_date) = $1
+       GROUP BY lt.name
+       ORDER BY count DESC
+    `, [year])
+  ]);
+
+  res.json({
+    year,
+    summary: countsRes.rows[0] || { total: 0, pending: 0, recommended: 0, approved: 0, rejected: 0 },
+    byDepartment: deptRes.rows,
+    byType: typeRes.rows
+  });
+}));
+
+/* ---------------- Leave Requests (Full CRUD & Workflow) ---------------- */
+
+/** scope: mine (default) | pending | recommended | all */
 router.get('/requests', wrap(async (req, res) => {
   const scope = req.query.scope || 'mine';
-  if (scope !== 'mine' && !isManager(req.user) && !canEdit(req.user, 'leave')) throw forbidden();
+  if (scope !== 'mine' && !isManager(req.user) && !canEdit(req.user, 'leave') && !canView(req.user, 'leave')) {
+    throw forbidden();
+  }
+
   const params = [];
   let where = 'TRUE';
-  if (scope === 'mine') { params.push(req.user.id); where = `lr.user_id = $${params.length}`; }
-  if (scope === 'pending') where = `lr.status = 'pending'`;
-  if (['pending', 'approved', 'rejected', 'cancelled'].includes(req.query.status)) { params.push(req.query.status); where += ` AND lr.status = $${params.length}`; }
-  if (req.query.userId) { params.push(parse(id, req.query.userId)); where += ` AND lr.user_id = $${params.length}`; }
+  if (scope === 'mine') {
+    params.push(req.user.id);
+    where = `lr.user_id = $${params.length}`;
+  } else if (scope === 'pending') {
+    where = `lr.status = 'pending'`;
+  } else if (scope === 'recommended') {
+    where = `lr.status = 'recommended'`;
+  }
+
+  if (req.query.status && ['pending', 'recommended', 'approved', 'rejected', 'cancelled'].includes(req.query.status)) {
+    params.push(req.query.status);
+    where += ` AND lr.status = $${params.length}`;
+  }
+  if (req.query.userId) {
+    params.push(parse(id, req.query.userId));
+    where += ` AND lr.user_id = $${params.length}`;
+  }
+  if (req.query.department) {
+    params.push(req.query.department);
+    where += ` AND u.department = $${params.length}`;
+  }
 
   const { rows } = await query(
-    `SELECT lr.id, lr.user_id, u.name, u.employee_code, u.department, lt.id AS leave_type_id, lt.name AS type, lt.paid,
+    `SELECT lr.id, lr.user_id, u.name, u.employee_code, u.department, u.designation,
+            COALESCE(u.section, u.department, 'Main Section') AS section, u.phone, u.email,
+            lt.id AS leave_type_id, lt.name AS type, lt.paid,
             lr.start_date::text AS start_date, lr.end_date::text AS end_date,
-            lr.half_day, lr.days, lr.reason, lr.status, rv.name AS reviewer, lr.review_note, lr.created_at
-       FROM leave_requests lr JOIN users u ON u.id = lr.user_id JOIN leave_types lt ON lt.id = lr.leave_type_id
+            lr.half_day, lr.days, lr.reason, lr.status,
+            lr.address_during_leave, lr.contact_number, lr.document_url,
+            lr.applicant_signature, lr.applied_at,
+            lr.dept_head_id, lr.dept_head_name, lr.dept_head_recommendation, lr.dept_head_remarks, lr.dept_head_signed_at, lr.dept_head_signature,
+            lr.admin_head_id, lr.admin_head_name, lr.admin_head_decision, lr.admin_head_remarks, lr.admin_head_signed_at, lr.admin_head_signature,
+            rv.name AS reviewer, lr.review_note, lr.created_at, lr.audit_history
+       FROM leave_requests lr
+       JOIN users u ON u.id = lr.user_id
+       JOIN leave_types lt ON lt.id = lr.leave_type_id
        LEFT JOIN users rv ON rv.id = lr.reviewed_by
-      WHERE ${where} ORDER BY (lr.status = 'pending') DESC, lr.start_date DESC LIMIT 500`, params);
+      WHERE ${where}
+      ORDER BY (lr.status = 'pending') DESC, (lr.status = 'recommended') DESC, lr.start_date DESC
+      LIMIT 1000`, params);
   res.json({ requests: rows });
 }));
 
-// User self-service create
-router.post('/requests', wrap(async (req, res) => {
-  const b = parse(z.object({
-    leaveTypeId: id, startDate: date, endDate: date, halfDay: z.boolean().default(false), reason: z.string().trim().max(500).default(''),
-  }), req.body);
-  res.status(201).json(await leave.createRequest(req.user, b));
+// Single Request details
+router.get('/requests/:id', wrap(async (req, res) => {
+  const reqId = parse(id, req.params.id);
+  const { rows: [r] } = await query(
+    `SELECT lr.*, lt.name AS type_name, lt.paid,
+            u.name AS emp_name, u.employee_code, u.department, u.designation,
+            COALESCE(u.section, u.department, 'Main Section') AS section,
+            u.join_date::text AS join_date, u.phone, u.email
+       FROM leave_requests lr
+       JOIN users u ON u.id = lr.user_id
+       JOIN leave_types lt ON lt.id = lr.leave_type_id
+      WHERE lr.id = $1`, [reqId]);
+  if (!r) throw notFound('Leave application not found');
+
+  if (r.user_id !== req.user.id && !isManager(req.user) && !canView(req.user, 'leave')) {
+    throw forbidden();
+  }
+
+  const year = Number(String(r.start_date).slice(0, 4));
+  const balances = await leave.getBalances(r.user_id, year);
+  res.json({ request: r, balances });
 }));
 
-// Admin create on behalf of employee (Direct add / approve)
+// Generate & Download A4 English Leave Application PDF
+router.get('/requests/:id/pdf', wrap(async (req, res) => {
+  const reqId = parse(id, req.params.id);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="Leave_Application_${reqId}.pdf"`);
+  await leave.generateLeaveApplicationPdf(reqId, res);
+}));
+
+// Submit Digital Leave Application (by employee or on behalf)
+router.post('/requests', wrap(async (req, res) => {
+  const canActForOthers = canEdit(req.user, 'leave') || isManager(req.user);
+  const targetUserId = req.body.userId && canActForOthers ? parse(id, req.body.userId) : req.user.id;
+
+  const b = parse(z.object({
+    userId: id.optional(),
+    leaveTypeId: id,
+    startDate: date,
+    endDate: date,
+    halfDay: z.boolean().default(false),
+    reason: z.string().trim().max(1000).default(''),
+    addressDuringLeave: z.string().trim().max(300).optional(),
+    contactNumber: z.string().trim().max(50).optional(),
+    documentUrl: z.string().trim().max(500).optional(),
+    applicantSignature: z.string().trim().max(100).optional(),
+    status: z.enum(['pending', 'recommended', 'approved']).optional(),
+  }), req.body);
+
+  const created = await leave.createApplication(req.user, {
+    userId: targetUserId,
+    leaveTypeId: b.leaveTypeId,
+    startDate: b.startDate,
+    endDate: b.endDate,
+    halfDay: b.halfDay,
+    reason: b.reason,
+    addressDuringLeave: b.addressDuringLeave,
+    contactNumber: b.contactNumber,
+    documentUrl: b.documentUrl,
+    applicantSignature: b.applicantSignature || req.user.name,
+    status: (canActForOthers && b.status) ? b.status : 'pending',
+  });
+
+  res.status(201).json({ request: created });
+}));
+
+// Admin direct create
 router.post('/admin-create', leaveReviewer, wrap(async (req, res) => {
   const b = parse(z.object({
     userId: id,
@@ -164,15 +300,63 @@ router.post('/admin-create', leaveReviewer, wrap(async (req, res) => {
     startDate: date,
     endDate: date,
     halfDay: z.boolean().default(false),
-    reason: z.string().trim().max(500).default(''),
-    status: z.enum(['approved', 'pending']).default('approved'),
+    reason: z.string().trim().max(1000).default(''),
+    addressDuringLeave: z.string().trim().max(300).optional(),
+    contactNumber: z.string().trim().max(50).optional(),
+    status: z.enum(['pending', 'recommended', 'approved']).default('approved'),
   }), req.body);
 
-  const reqRecord = await leave.adminCreateRequest(req.user, b);
-  res.status(201).json({ request: reqRecord });
+  const created = await leave.createApplication(req.user, b);
+  res.status(201).json({ request: created });
 }));
 
-// Admin edit request
+// Department Head Recommendation
+router.post('/requests/:id/recommend', leaveReviewer, wrap(async (req, res) => {
+  const reqId = parse(id, req.params.id);
+  const b = parse(z.object({
+    decision: z.enum(['recommended', 'rejected']),
+    remarks: z.string().trim().max(500).optional(),
+    signature: z.string().trim().max(100).optional(),
+  }), req.body);
+
+  const updated = await leave.recommend(reqId, req.user, {
+    decision: b.decision,
+    remarks: b.remarks || '',
+    signature: b.signature || req.user.name,
+  });
+  res.json({ request: updated });
+}));
+
+// Admin Head Final Approval
+router.post('/requests/:id/final-approve', adminHeadOnly, wrap(async (req, res) => {
+  const reqId = parse(id, req.params.id);
+  const b = parse(z.object({
+    decision: z.enum(['approved', 'rejected']),
+    remarks: z.string().trim().max(500).optional(),
+    signature: z.string().trim().max(100).optional(),
+  }), req.body);
+
+  const updated = await leave.finalApprove(reqId, req.user, {
+    decision: b.decision,
+    remarks: b.remarks || '',
+    signature: b.signature || req.user.name,
+  });
+  res.json({ request: updated });
+}));
+
+const noteSchema = z.object({ note: z.string().trim().max(300).optional() });
+router.post('/requests/:id/approve', leaveReviewer, wrap(async (req, res) => {
+  res.json(await leave.finalApprove(parse(id, req.params.id), req.user, { decision: 'approved', remarks: parse(noteSchema, req.body ?? {}).note }));
+}));
+
+router.post('/requests/:id/reject', leaveReviewer, wrap(async (req, res) => {
+  res.json(await leave.finalApprove(parse(id, req.params.id), req.user, { decision: 'rejected', remarks: parse(noteSchema, req.body ?? {}).note }));
+}));
+
+router.post('/requests/:id/cancel', wrap(async (req, res) => {
+  res.json(await leave.cancel(parse(id, req.params.id), req.user));
+}));
+
 router.put('/requests/:id', leaveReviewer, wrap(async (req, res) => {
   const reqId = parse(id, req.params.id);
   const b = parse(z.object({
@@ -180,30 +364,18 @@ router.put('/requests/:id', leaveReviewer, wrap(async (req, res) => {
     startDate: date.optional(),
     endDate: date.optional(),
     halfDay: z.boolean().optional(),
-    reason: z.string().trim().max(500).optional(),
-    status: z.enum(['pending', 'approved', 'rejected', 'cancelled']).optional(),
+    reason: z.string().trim().max(1000).optional(),
+    status: z.enum(['pending', 'recommended', 'approved', 'rejected', 'cancelled']).optional(),
   }), req.body);
 
   const updated = await leave.adminUpdateRequest(reqId, req.user, b);
   res.json({ request: updated });
 }));
 
-// Admin delete request
 router.delete('/requests/:id', leaveReviewer, wrap(async (req, res) => {
   const reqId = parse(id, req.params.id);
   const result = await leave.adminDeleteRequest(reqId, req.user);
   res.json(result);
-}));
-
-const noteSchema = z.object({ note: z.string().trim().max(300).optional() });
-router.post('/requests/:id/approve', leaveReviewer, wrap(async (req, res) => {
-  res.json(await leave.review(parse(id, req.params.id), req.user, 'approved', parse(noteSchema, req.body ?? {}).note));
-}));
-router.post('/requests/:id/reject', leaveReviewer, wrap(async (req, res) => {
-  res.json(await leave.review(parse(id, req.params.id), req.user, 'rejected', parse(noteSchema, req.body ?? {}).note));
-}));
-router.post('/requests/:id/cancel', wrap(async (req, res) => {
-  res.json(await leave.cancel(parse(id, req.params.id), req.user));
 }));
 
 module.exports = router;

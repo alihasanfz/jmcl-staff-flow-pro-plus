@@ -32,7 +32,7 @@ const NAV = [
   { path: '/settings', key: 'settings', label: 'Settings', icon: 'gear', roles: ADMIN_HR },
 ];
 
-const V = '5.8';
+const V = '5.9';
 const PAGES = {
   '/': () => import(`./pages/dashboard.js?v=${V}`),
   '/attendance': () => import(`./pages/attendance.js?v=${V}`),

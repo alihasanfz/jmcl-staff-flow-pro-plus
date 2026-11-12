@@ -147,13 +147,39 @@ async function firstRun() {
          AND punch_count > 0
     `).catch(() => { });
 
-    // Ensure Casual Leave (CL) 10 days and Sick Leave (SL) 14 days exist with full quota allocation
+    // Ensure Casual Leave (CL) 10 days, Sick Leave (SL) 14 days, and Earned Leave (EL) 15 days exist
     try {
+      await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS section text DEFAULT ''`).catch(() => { });
+
+      await query(`
+        ALTER TABLE leave_requests DROP CONSTRAINT IF EXISTS leave_requests_status_check;
+        ALTER TABLE leave_requests ADD CONSTRAINT leave_requests_status_check CHECK (status IN ('pending','recommended','approved','rejected','cancelled'));
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS address_during_leave text DEFAULT '';
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS contact_number text DEFAULT '';
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS document_url text DEFAULT '';
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS applicant_signature text DEFAULT '';
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS applied_at timestamptz DEFAULT now();
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS dept_head_id int REFERENCES users(id);
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS dept_head_name text DEFAULT '';
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS dept_head_recommendation text DEFAULT 'pending';
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS dept_head_remarks text DEFAULT '';
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS dept_head_signed_at timestamptz;
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS dept_head_signature text DEFAULT '';
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS admin_head_id int REFERENCES users(id);
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS admin_head_name text DEFAULT '';
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS admin_head_decision text DEFAULT 'pending';
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS admin_head_remarks text DEFAULT '';
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS admin_head_signed_at timestamptz;
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS admin_head_signature text DEFAULT '';
+        ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS audit_history jsonb NOT NULL DEFAULT '[]';
+      `).catch((err) => console.warn('[bootstrap] leave_requests schema upgrade:', err.message));
+
       await query(`
         INSERT INTO leave_types (name, annual_quota, paid, active)
         VALUES 
           ('Casual Leave (CL)', 10, true, true),
           ('Sick Leave (SL)', 14, true, true),
+          ('Earned Leave (EL)', 15, true, true),
           ('Unpaid Leave', NULL, false, true)
         ON CONFLICT (name) DO UPDATE SET 
           annual_quota = EXCLUDED.annual_quota,
@@ -164,7 +190,7 @@ async function firstRun() {
       await query(`
         UPDATE leave_types SET name = 'Casual Leave (CL)', annual_quota = 10, active = true WHERE name ILIKE '%casual%' AND name != 'Casual Leave (CL)';
         UPDATE leave_types SET name = 'Sick Leave (SL)', annual_quota = 14, active = true WHERE name ILIKE '%sick%' AND name != 'Sick Leave (SL)';
-        UPDATE leave_types SET active = false WHERE name ILIKE '%annual%';
+        UPDATE leave_types SET name = 'Earned Leave (EL)', annual_quota = 15, active = true WHERE (name ILIKE '%earned%' OR name ILIKE '%annual%') AND name != 'Earned Leave (EL)';
       `);
 
       const currentYear = new Date().getFullYear();
