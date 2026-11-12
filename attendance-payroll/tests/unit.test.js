@@ -266,3 +266,23 @@ test('date helpers', () => {
   assert.match(T.todayIn('Asia/Dhaka'), /^\d{4}-\d{2}-\d{2}$/);
   assert.ok(T.nowMinIn('Asia/Dhaka') >= 0);
 });
+
+test('backup crypto: AES-256-GCM encryption, decryption and sha256 checksum', () => {
+  const { encryptBuffer, decryptBuffer, sha256 } = require('../src/services/backupCrypto');
+  const secret = 'SuperSecretKey123!@#';
+  const original = Buffer.from('Jeans Manufacturing Company Ltd. Staff Flow Pro Database Backup Payload 2026', 'utf8');
+
+  const checksumOriginal = sha256(original);
+  assert.equal(checksumOriginal.length, 64);
+
+  const encrypted = encryptBuffer(original, secret);
+  assert.notDeepEqual(encrypted, original);
+  assert.equal(encrypted.subarray(0, 4).toString('utf8'), 'JMCL');
+
+  const decrypted = decryptBuffer(encrypted, secret);
+  assert.deepEqual(decrypted, original);
+  assert.equal(sha256(decrypted), checksumOriginal);
+
+  // Wrong password should throw
+  assert.throws(() => decryptBuffer(encrypted, 'WrongPassword'), /unable to authenticate data|Unsupported state or unable to authenticate data|Cipher job failed/i);
+});

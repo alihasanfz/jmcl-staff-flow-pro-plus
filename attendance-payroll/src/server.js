@@ -25,11 +25,16 @@ async function main() {
       backfillRecentPunchesToCloud().catch(() => {});
     }, 2000);
   });
-  if (config.schedulerEnabled) scheduler.start();
+  if (config.schedulerEnabled) {
+    scheduler.start();
+    const backupScheduler = require('./services/backupScheduler');
+    backupScheduler.startBackupScheduler();
+  }
 
   const shutdown = (sig) => {
     console.log(`[server] ${sig} received, shutting down`);
     scheduler.stop();
+    try { require('./services/backupScheduler').stopBackupScheduler(); } catch (_) {}
     server.close(() => pool.end().then(() => process.exit(0)));
     setTimeout(() => process.exit(1), 10_000).unref();
   };

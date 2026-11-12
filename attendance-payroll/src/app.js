@@ -33,7 +33,7 @@ function createApp() {
   app.use('/devicecmd', (req, res, next) => { req.url = '/devicecmd' + (req.url === '/' ? '' : req.url); adms(req, res, next); });
   app.use('/ping', (req, res, next) => { req.url = '/ping' + (req.url === '/' ? '' : req.url); adms(req, res, next); });
 
-  app.use(express.json({ limit: '200kb' }));
+  app.use(express.json({ limit: '50mb' }));
   app.use(cookieParser());
 
   app.use('/api', require('./routes/meta'));
@@ -55,6 +55,7 @@ function createApp() {
   app.use('/api/notifications', require('./routes/notifications'));
   app.use('/api/devices', require('./routes/devices'));
   app.use('/api/settings', require('./routes/settings'));
+  app.use('/api/backup', require('./routes/backup'));
   app.use('/api', notFoundHandler);
 
   // Static PWA + the single vendored library (Chart.js) served from node_modules.

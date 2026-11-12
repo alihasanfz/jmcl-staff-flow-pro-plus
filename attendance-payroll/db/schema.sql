@@ -390,3 +390,38 @@ INSERT INTO designations (name) VALUES
   ('Sales Executive')
 ON CONFLICT (name) DO NOTHING;
 
+-- ============================================================================
+-- AUTOMATED BACKUP & RESTORE TABLES
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS backups (
+  id               bigserial PRIMARY KEY,
+  file_name        text NOT NULL,
+  backup_type      text NOT NULL DEFAULT 'daily',
+  scope            text NOT NULL DEFAULT 'full',
+  file_size        bigint NOT NULL DEFAULT 0,
+  checksum_sha256  text,
+  encrypted        boolean NOT NULL DEFAULT true,
+  storage_location text NOT NULL DEFAULT 'cloud',
+  gdrive_file_id   text,
+  gdrive_folder_id text,
+  status           text NOT NULL DEFAULT 'completed',
+  error_message    text,
+  tables_count     int DEFAULT 0,
+  records_count    int DEFAULT 0,
+  metadata         jsonb DEFAULT '{}',
+  created_at       timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS backups_created_at_idx ON backups (created_at DESC);
+
+CREATE TABLE IF NOT EXISTS backup_logs (
+  id               bigserial PRIMARY KEY,
+  backup_id        bigint REFERENCES backups(id) ON DELETE CASCADE,
+  action           text NOT NULL,
+  status           text NOT NULL,
+  message          text NOT NULL,
+  details          jsonb DEFAULT '{}',
+  created_at       timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS backup_logs_created_at_idx ON backup_logs (created_at DESC);
+
+

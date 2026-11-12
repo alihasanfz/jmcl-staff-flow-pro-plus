@@ -30,9 +30,10 @@ const NAV = [
   { path: '/notifications', key: 'notifications', label: 'Notifications', icon: 'bell', roles: ALL_ROLES },
   { path: '/audit-logs', key: 'audit_logs', label: 'Audit Logs', icon: 'audit', roles: ['admin', 'company_admin', 'super_admin', 'hr_manager'] },
   { path: '/settings', key: 'settings', label: 'Settings', icon: 'gear', roles: ADMIN_HR },
+  { path: '/backup', key: 'backup', label: 'Backup & Restore', icon: 'database', roles: ADMIN_ONLY },
 ];
 
-const V = '6.0';
+const V = '6.1';
 const PAGES = {
   '/': () => import(`./pages/dashboard.js?v=${V}`),
   '/attendance': () => import(`./pages/attendance.js?v=${V}`),
@@ -51,6 +52,7 @@ const PAGES = {
   '/notifications': () => import(`./pages/notifications.js?v=${V}`),
   '/audit-logs': () => import(`./pages/audit.js?v=${V}`),
   '/settings': () => import(`./pages/settings.js?v=${V}`),
+  '/backup': () => import(`./pages/backup.js?v=${V}`),
 };
 
 let cleanup = null;
