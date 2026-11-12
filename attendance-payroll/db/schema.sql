@@ -409,6 +409,7 @@ CREATE TABLE IF NOT EXISTS backups (
   tables_count     int DEFAULT 0,
   records_count    int DEFAULT 0,
   metadata         jsonb DEFAULT '{}',
+  file_data        bytea,
   created_at       timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS backups_created_at_idx ON backups (created_at DESC);

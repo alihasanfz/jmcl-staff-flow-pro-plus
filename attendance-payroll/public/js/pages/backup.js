@@ -42,9 +42,9 @@ export async function render(view, state) {
               </p>
             </div>
             <div class="row" style="gap:10px; flex-wrap:wrap;">
-              <button id="btnQuickSql" class="btn" style="background:rgba(255,255,255,0.15); color:#ffffff; font-weight:700; border:1px solid rgba(255,255,255,0.35); padding:8px 16px; border-radius:8px; display:inline-flex; align-items:center; gap:6px;" title="Instantly stream raw PostgreSQL SQL database dump">
+              <a href="/api/backup/download-sql" id="btnQuickSql" class="btn" download="JMCL_Database_Dump.sql" style="background:rgba(255,255,255,0.15); color:#ffffff; font-weight:700; border:1px solid rgba(255,255,255,0.35); padding:8px 16px; border-radius:8px; display:inline-flex; align-items:center; gap:6px; text-decoration:none;" title="Instantly stream raw PostgreSQL SQL database dump">
                 <span>📥</span> <span>Quick Download SQL</span>
-              </button>
+              </a>
               <button id="btnRunBackupNow" class="btn primary" style="background:#10B981; color:#ffffff; font-weight:700; border:none; padding:8px 18px; border-radius:8px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 6px rgba(16,185,129,0.3);">
                 <span>▶</span> <span>Run Backup Now</span>
               </button>
@@ -133,15 +133,9 @@ export async function render(view, state) {
       }
     });
 
-    // Quick Download SQL button
-    $('#btnQuickSql').addEventListener('click', async () => {
-      try {
-        toast('Streaming raw PostgreSQL database dump (SQL)...');
-        await download('/backup/download-sql');
-        toast('SQL Dump downloaded successfully');
-      } catch (e) {
-        window.open('/api/backup/download-sql', '_blank');
-      }
+    // Quick Download SQL link feedback
+    $('#btnQuickSql')?.addEventListener('click', () => {
+      toast('Streaming PostgreSQL SQL database dump download...');
     });
 
     // Restore Modal button
@@ -210,9 +204,9 @@ export async function render(view, state) {
                     </td>
                     <td class="r">
                       <span class="row" style="justify-content:flex-end; gap:6px; flex-wrap:nowrap;">
-                        <button class="btn sm" data-dl-backup="${b.id}" style="background:#0F2942; color:#fff; font-weight:700; display:inline-flex; align-items:center; gap:4px; padding:5px 12px; border-radius:6px;" title="Download this backup file">
+                        <a href="/api/backup/download/${b.id}" class="btn sm" download="${b.file_name}" style="background:#0F2942; color:#fff; font-weight:700; display:inline-flex; align-items:center; gap:4px; padding:5px 12px; border-radius:6px; text-decoration:none;" title="Download this backup file">
                           <span>📥</span> <span>Download</span>
-                        </button>
+                        </a>
                         <button class="btn sm" data-del-backup="${b.id}" style="color:#dc2626; border-color:#fca5a5;" title="Delete backup record">
                           🗑️
                         </button>
@@ -233,20 +227,6 @@ export async function render(view, state) {
     `);
 
     $('#btnFirstBackup')?.addEventListener('click', () => $('#btnRunBackupNow').click());
-
-    // Bind action buttons
-    $$('[data-dl-backup]', container).forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const id = btn.dataset.dlBackup;
-        try {
-          toast('Preparing backup file download...');
-          await download(`/backup/download/${id}`);
-          toast('Backup downloaded successfully');
-        } catch {
-          window.open(`/api/backup/download/${id}`, '_blank');
-        }
-      });
-    });
 
     $$('[data-del-backup]', container).forEach((btn) => {
       btn.addEventListener('click', () => {

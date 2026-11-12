@@ -51,10 +51,10 @@ router.post('/run', wrap(async (req, res) => {
  * Direct streaming download of raw PostgreSQL SQL dump.
  */
 router.get('/download-sql', wrap(async (req, res) => {
-  const { sqlDump, fileName } = await backupService.generateRawSqlDump();
+  const fileName = `JMCL_Database_Dump_${new Date().toISOString().slice(0, 10)}.sql`;
   res.setHeader('Content-Type', 'application/sql');
   res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-  res.send(sqlDump);
+  await backupService.streamDatabaseSql(res);
 }));
 
 /**
@@ -63,32 +63,15 @@ router.get('/download-sql', wrap(async (req, res) => {
  */
 router.get('/download/:id', wrap(async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const { rows: [b] } = await query('SELECT * FROM backups WHERE id = $1', [id]);
-  if (!b) return res.status(404).json({ error: 'Backup record not found' });
-
-  // If stored in Google Drive, download from Google Drive
-  const config = await backupService.getBackupConfig();
-  if (b.gdrive_file_id && config.service_account_json) {
-    try {
-      const sa = typeof config.service_account_json === 'string'
-        ? JSON.parse(config.service_account_json)
-        : config.service_account_json;
-      const token = await googleDrive.getAccessToken(sa);
-      const buffer = await googleDrive.downloadFile(token, b.gdrive_file_id);
-
-      res.setHeader('Content-Type', b.encrypted ? 'application/octet-stream' : 'application/gzip');
-      res.setHeader('Content-Disposition', `attachment; filename="${b.file_name}"`);
-      return res.send(buffer);
-    } catch (err) {
-      console.warn('[backup-download] Could not download from Google Drive:', err.message);
-    }
+  const fileRes = await backupService.getBackupFile(id);
+  if (!fileRes || !fileRes.buffer) {
+    return res.status(404).json({ error: 'Backup file could not be retrieved' });
   }
 
-  // Fallback: generate fresh on-demand dump with matching metadata
-  const { sqlDump, fileName } = await backupService.generateRawSqlDump();
-  res.setHeader('Content-Type', 'application/sql');
-  res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-  res.send(sqlDump);
+  res.setHeader('Content-Type', fileRes.encrypted ? 'application/octet-stream' : 'application/gzip');
+  res.setHeader('Content-Disposition', `attachment; filename="${fileRes.fileName}"`);
+  res.setHeader('Content-Length', fileRes.buffer.length);
+  return res.send(fileRes.buffer);
 }));
 
 /**

@@ -404,8 +404,10 @@ async function firstRun() {
         tables_count     int DEFAULT 0,
         records_count    int DEFAULT 0,
         metadata         jsonb DEFAULT '{}',
+        file_data        bytea,
         created_at       timestamptz NOT NULL DEFAULT now()
       );
+      ALTER TABLE backups ADD COLUMN IF NOT EXISTS file_data bytea;
       CREATE INDEX IF NOT EXISTS backups_created_at_idx ON backups (created_at DESC);
 
       CREATE TABLE IF NOT EXISTS backup_logs (

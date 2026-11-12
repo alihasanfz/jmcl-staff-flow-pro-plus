@@ -2,14 +2,20 @@
 /**
  * JMCL STAFF FLOW PRO PLUS — Automated Backup & Restore Coordinator Service
  */
+const fs = require('fs');
+const path = require('path');
 const zlib = require('zlib');
 const { query } = require('../db');
-const { dumpDatabase, restoreDatabase } = require('./backupDump');
+const { dumpDatabase, streamDatabaseSql, restoreDatabase } = require('./backupDump');
 const { encryptBuffer, decryptBuffer, sha256 } = require('./backupCrypto');
 const googleDrive = require('./googleDrive');
 const { notifyManagers } = require('./notifications');
 
 const DEFAULT_KEY = process.env.BACKUP_ENCRYPTION_KEY || 'JMCL-StaffFlowPro-2026-BackupKey';
+const BACKUP_DIR = path.resolve(__dirname, '../../backups');
+if (!fs.existsSync(BACKUP_DIR)) {
+  try { fs.mkdirSync(BACKUP_DIR, { recursive: true }); } catch (_) {}
+}
 
 /**
  * Retrieve current backup & Google Drive configuration.
@@ -114,12 +120,19 @@ async function runBackup({ type = 'manual', scope = 'full' } = {}) {
     const finalChecksum = sha256(finalBuffer);
     const fileSize = finalBuffer.length;
 
-    // Step 4: Record backup in DB
+    // Save copy to local server storage
+    try {
+      fs.writeFileSync(path.join(BACKUP_DIR, fileName), finalBuffer);
+    } catch (fsErr) {
+      console.warn('[backup] Could not save to local disk:', fsErr.message);
+    }
+
+    // Step 4: Record backup in DB (with binary file_data for instant download)
     const { rows: [b] } = await query(`
       INSERT INTO backups (
         file_name, backup_type, scope, file_size, checksum_sha256,
-        encrypted, storage_location, status, tables_count, records_count, metadata, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, now())
+        encrypted, storage_location, status, tables_count, records_count, metadata, file_data, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, now())
       RETURNING *
     `, [
       fileName,
@@ -137,6 +150,7 @@ async function runBackup({ type = 'manual', scope = 'full' } = {}) {
         uncompressedSize: rawPayload.length,
         compressedSize: compressed.length,
       }),
+      finalBuffer,
     ]);
     backupRecord = b;
 
@@ -361,11 +375,67 @@ async function getBackupStats() {
 }
 
 /**
- * List recent backups and activity logs.
+ * Retrieve the full binary buffer of a backup by ID.
+ * Tries: Local Disk -> DB file_data -> Google Drive -> Fresh Generation
+ */
+async function getBackupFile(id) {
+  const { rows: [b] } = await query('SELECT * FROM backups WHERE id = $1', [id]);
+  if (!b) return null;
+
+  // 1. Check local disk
+  const localPath = path.join(BACKUP_DIR, b.file_name);
+  if (fs.existsSync(localPath)) {
+    try {
+      const buffer = fs.readFileSync(localPath);
+      return { buffer, fileName: b.file_name, encrypted: b.encrypted, record: b };
+    } catch (_) {}
+  }
+
+  // 2. Check binary file_data in DB
+  if (b.file_data) {
+    return { buffer: b.file_data, fileName: b.file_name, encrypted: b.encrypted, record: b };
+  }
+
+  // 3. Check Google Drive
+  const config = await getBackupConfig();
+  if (b.gdrive_file_id && config.service_account_json) {
+    try {
+      const sa = typeof config.service_account_json === 'string'
+        ? JSON.parse(config.service_account_json)
+        : config.service_account_json;
+      const token = await googleDrive.getAccessToken(sa);
+      const buffer = await googleDrive.downloadFile(token, b.gdrive_file_id);
+      return { buffer, fileName: b.file_name, encrypted: b.encrypted, record: b };
+    } catch (gdErr) {
+      console.warn('[backup] Google Drive download failed:', gdErr.message);
+    }
+  }
+
+  // 4. Fallback: generate fresh payload for this record
+  try {
+    const dump = await dumpDatabase();
+    const rawPayload = JSON.stringify({ manifest: dump.manifest, sqlDump: dump.sqlDump, dataExport: dump.dataExport });
+    const compressed = zlib.gzipSync(Buffer.from(rawPayload, 'utf8'), { level: 9 });
+    const finalBuffer = b.encrypted ? encryptBuffer(compressed, config.encryption_key) : compressed;
+    return { buffer: finalBuffer, fileName: b.file_name, encrypted: b.encrypted, record: b };
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * List recent backups (excluding heavy binary payload) and activity logs.
  */
 async function listBackups(limit = 50) {
   const [bRes, lRes] = await Promise.all([
-    query(`SELECT * FROM backups ORDER BY created_at DESC LIMIT $1`, [limit]),
+    query(`
+      SELECT id, file_name, backup_type, scope, file_size, checksum_sha256,
+             encrypted, storage_location, gdrive_file_id, gdrive_folder_id,
+             status, error_message, tables_count, records_count, metadata, created_at
+        FROM backups
+       ORDER BY created_at DESC
+       LIMIT $1
+    `, [limit]),
     query(`SELECT * FROM backup_logs ORDER BY created_at DESC LIMIT 100`),
   ]);
 
@@ -380,6 +450,8 @@ module.exports = {
   saveBackupConfig,
   runBackup,
   generateRawSqlDump,
+  streamDatabaseSql,
+  getBackupFile,
   restoreBackupBuffer,
   getBackupStats,
   listBackups,

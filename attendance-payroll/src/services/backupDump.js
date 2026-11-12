@@ -130,6 +130,58 @@ async function dumpDatabase() {
 }
 
 /**
+ * Streams the entire database dump directly to an HTTP response stream.
+ * Prevents memory bottlenecks and ensures immediate browser download start.
+ */
+async function streamDatabaseSql(res) {
+  const timestamp = new Date().toISOString();
+  res.write(`-- ============================================================================\n`);
+  res.write(`-- JMCL STAFF FLOW PRO PLUS — AUTOMATED FULL DATABASE BACKUP\n`);
+  res.write(`-- Generated At: ${timestamp}\n`);
+  res.write(`-- System: Jeans Manufacturing Company Ltd.\n`);
+  res.write(`-- ============================================================================\n\n`);
+  res.write(`BEGIN;\n\n`);
+
+  for (const table of APPLICATION_TABLES) {
+    try {
+      const { rows } = await query(`SELECT * FROM "${table}"`);
+      if (!rows.length) {
+        res.write(`-- Table "${table}": 0 rows\n\n`);
+        continue;
+      }
+
+      res.write(`-- ----------------------------------------------------------------------------\n`);
+      res.write(`-- Data for table "${table}" (${rows.length} rows)\n`);
+      res.write(`-- ----------------------------------------------------------------------------\n`);
+
+      const columns = Object.keys(rows[0]);
+      const quotedCols = columns.map((c) => `"${c}"`).join(', ');
+
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+        const batch = rows.slice(i, i + BATCH_SIZE);
+        const valuesRows = batch.map((r) => {
+          const vals = columns.map((c) => sqlLiteral(r[c]));
+          return `(${vals.join(', ')})`;
+        });
+
+        res.write(`INSERT INTO "${table}" (${quotedCols}) VALUES\n  ${valuesRows.join(',\n  ')}\nON CONFLICT DO NOTHING;\n\n`);
+      }
+    } catch (err) {
+      res.write(`-- Skipping table "${table}": ${err.message}\n`);
+    }
+  }
+
+  res.write(`-- Update sequence generators to prevent primary key collision\n`);
+  for (const table of APPLICATION_TABLES) {
+    res.write(`SELECT setval(pg_get_serial_sequence('"${table}"', 'id'), COALESCE(MAX(id), 1)) FROM "${table}";\n`);
+  }
+
+  res.write(`\nCOMMIT;\n`);
+  res.end();
+}
+
+/**
  * Restores database from a structured dump or SQL script.
  * Includes automatic safety snapshot before applying restore.
  */
@@ -196,6 +248,7 @@ async function restoreDatabase(dumpData, { onProgress = null } = {}) {
 
 module.exports = {
   dumpDatabase,
+  streamDatabaseSql,
   restoreDatabase,
   APPLICATION_TABLES,
 };
