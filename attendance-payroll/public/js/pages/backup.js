@@ -528,3 +528,4 @@ export async function render(view, state) {
 
   await frame();
 }
+

@@ -160,7 +160,7 @@ async function ensureFolder(token, folderName, parentFolderId = null) {
     query += ` and '${parentFolderId}' in parents`;
   }
 
-  const listUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
+  const listUrl = `https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&includeItemsFromAllDrives=true&q=${encodeURIComponent(query)}&fields=files(id,name)`;
   const listRes = await request(listUrl, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -178,7 +178,7 @@ async function ensureFolder(token, folderName, parentFolderId = null) {
     metadata.parents = [parentFolderId];
   }
 
-  const createRes = await request('https://www.googleapis.com/drive/v3/files', {
+  const createRes = await request('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -198,8 +198,15 @@ async function ensureFolder(token, folderName, parentFolderId = null) {
  *   ├── Database_Backup/
  *   └── Backup_Logs/
  */
-async function ensureFolderHierarchy(token, rootFolderName = 'JMCL_Backup') {
-  const rootId = await ensureFolder(token, rootFolderName);
+async function ensureFolderHierarchy(token, rootFolderNameOrId = 'JMCL_Backup') {
+  let rootId = null;
+  // If input looks like an alphanumeric Google Drive ID (25+ characters, no spaces)
+  if (rootFolderNameOrId && /^[A-Za-z0-9_-]{25,}$/.test(rootFolderNameOrId)) {
+    rootId = rootFolderNameOrId;
+  } else {
+    rootId = await ensureFolder(token, rootFolderNameOrId || 'JMCL_Backup');
+  }
+
   const subfolders = [
     'Daily_Backup',
     'Weekly_Backup',
@@ -243,7 +250,7 @@ async function uploadFile(token, { name, buffer, mimeType = 'application/octet-s
     Buffer.from(footer, 'utf8'),
   ]);
 
-  const uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size,createdTime,webViewLink';
+  const uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,size,createdTime,webViewLink';
   const res = await request(uploadUrl, {
     method: 'POST',
     headers: {
@@ -260,7 +267,7 @@ async function uploadFile(token, { name, buffer, mimeType = 'application/octet-s
  * Downloads a file buffer from Google Drive by fileId.
  */
 async function downloadFile(token, fileId) {
-  const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+  const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`;
   const res = await request(url, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -275,7 +282,7 @@ async function applyRetention(token, folderId, maxAgeDays = 30) {
   const cutoff = new Date(Date.now() - (maxAgeDays * 24 * 60 * 60 * 1000)).toISOString();
   const query = `'${folderId}' in parents and createdTime < '${cutoff}' and trashed = false`;
 
-  const listUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,createdTime)`;
+  const listUrl = `https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&includeItemsFromAllDrives=true&q=${encodeURIComponent(query)}&fields=files(id,name,createdTime)`;
   const listRes = await request(listUrl, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -285,7 +292,7 @@ async function applyRetention(token, folderId, maxAgeDays = 30) {
 
   for (const f of files) {
     try {
-      await request(`https://www.googleapis.com/drive/v3/files/${f.id}`, {
+      await request(`https://www.googleapis.com/drive/v3/files/${f.id}?supportsAllDrives=true`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -304,3 +311,4 @@ module.exports = {
   downloadFile,
   applyRetention,
 };
+

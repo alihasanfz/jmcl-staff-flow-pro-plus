@@ -154,7 +154,10 @@ async function runBackup({ type = 'manual', scope = 'full' } = {}) {
         }
 
         const token = await googleDrive.getAccessToken(sa);
-        const folders = await googleDrive.ensureFolderHierarchy(token, config.root_folder_name || 'JMCL_Backup');
+        let rootTarget = config.root_folder_id || config.root_folder_name || 'JMCL_Backup';
+        const urlMatch = String(rootTarget).match(/folders\/([A-Za-z0-9_-]+)/);
+        if (urlMatch) rootTarget = urlMatch[1];
+        const folders = await googleDrive.ensureFolderHierarchy(token, rootTarget);
 
         // Determine destination folder based on backup type
         let targetFolderId = folders.root;
@@ -382,3 +385,4 @@ module.exports = {
   listBackups,
   logActivity,
 };
+

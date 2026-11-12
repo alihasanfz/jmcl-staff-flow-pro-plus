@@ -199,3 +199,4 @@ module.exports = {
   restoreDatabase,
   APPLICATION_TABLES,
 };
+
