@@ -220,46 +220,43 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
   let where = 'a.work_date BETWEEN $2 AND $3';
   if (userId) { params.push(userId); where += ` AND a.user_id = $${params.length}`; }
   if (department) { params.push(department); where += ` AND u.department = $${params.length}`; }
-  if (status) { params.push(status); where += ` AND a.status = $${params.length}`; }
+  if (status && !deviceSn) { params.push(status); where += ` AND a.status = $${params.length}`; }
 
   if (deviceSn) {
     params.push(deviceSn);
     const snParam = `$${params.length}`;
-    where += ` AND (
-      UPPER(COALESCE(a.check_in_device_sn, a.device_sn, '')) = UPPER(${snParam})
-      OR EXISTS (
-        SELECT 1 FROM punch_logs pl
-         WHERE pl.user_id = a.user_id
-           AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
-           AND UPPER(pl.device_sn) = UPPER(${snParam})
-      )
-    )`;
-
     params.push(limit);
     const limitParam = `$${params.length}`;
 
-    // Select punch times specifically for THIS device so device data is 100% separate
+    // Select punch times specifically for THIS device so device attendance is strictly evaluated:
+    // If an employee did NOT punch on this device (e.g. ZK-uFace 800), their status on this machine is 'absent'!
     const { rows } = await query(
-      `SELECT a.id, a.user_id, u.name, u.employee_code, u.department, a.work_date::text AS work_date, a.status,
-              COALESCE(
-                (SELECT to_char(MIN(pl.punched_at) AT TIME ZONE $1, 'HH24:MI')
-                   FROM punch_logs pl
-                  WHERE pl.user_id = a.user_id
-                    AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
-                    AND UPPER(pl.device_sn) = UPPER(${snParam})),
-                to_char(a.check_in AT TIME ZONE $1, 'HH24:MI')
-              ) AS check_in_local,
-              to_char(a.check_out AT TIME ZONE $1, 'HH24:MI') AS check_out_local,
+      `SELECT a.id, a.user_id, u.name, u.employee_code, u.department, a.work_date::text AS work_date,
+              (SELECT to_char(MIN(pl.punched_at) AT TIME ZONE $1, 'HH24:MI')
+                 FROM punch_logs pl
+                WHERE pl.user_id = a.user_id
+                  AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
+                  AND UPPER(pl.device_sn) = UPPER(${snParam})) AS check_in_local,
+              (SELECT to_char(MAX(pl.punched_at) AT TIME ZONE $1, 'HH24:MI')
+                 FROM punch_logs pl
+                WHERE pl.user_id = a.user_id
+                  AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
+                  AND UPPER(pl.device_sn) = UPPER(${snParam})
+                  AND to_char(pl.punched_at AT TIME ZONE $1, 'HH24:MI') >= '18:00'
+                  AND pl.punched_at >= (
+                    SELECT MIN(pl2.punched_at) + interval '15 minutes'
+                      FROM punch_logs pl2
+                     WHERE pl2.user_id = a.user_id
+                       AND to_char(pl2.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
+                       AND UPPER(pl2.device_sn) = UPPER(${snParam})
+                  )) AS check_out_local,
+              (SELECT COUNT(*)::int FROM punch_logs pl
+                WHERE pl.user_id = a.user_id
+                  AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
+                  AND UPPER(pl.device_sn) = UPPER(${snParam})) AS punch_count,
               a.worked_minutes, a.late_minutes, a.early_out_minutes, a.overtime_minutes,
-              a.missing_checkout, a.off_day_work,
-              COALESCE(
-                (SELECT COUNT(*)::int FROM punch_logs pl
-                  WHERE pl.user_id = a.user_id
-                    AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
-                    AND UPPER(pl.device_sn) = UPPER(${snParam})),
-                a.punch_count
-              ) AS punch_count,
-              s.name AS shift_name,
+              a.missing_checkout, a.off_day_work, a.status AS raw_status,
+              s.name AS shift_name, s.start_time::text AS shift_start, s.grace_minutes AS shift_grace,
               COALESCE(d.name, ${snParam}) AS device_name,
               ${snParam} AS device_sn
          FROM attendance a
@@ -267,9 +264,48 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
          LEFT JOIN shifts s ON s.id = a.shift_id
          LEFT JOIN devices d ON UPPER(d.serial_number) = UPPER(${snParam})
         WHERE ${where}
-        ORDER BY a.work_date DESC, u.name
+        ORDER BY (EXISTS (
+          SELECT 1 FROM punch_logs pl WHERE pl.user_id = a.user_id AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text AND UPPER(pl.device_sn) = UPPER(${snParam})
+        )) DESC, a.work_date DESC, u.name
         LIMIT ${limitParam}`, params);
-    return rows;
+
+    const resultRows = rows.map((r) => {
+      const hasDevicePunch = !!r.check_in_local;
+      let finalStatus = r.raw_status;
+      if (!hasDevicePunch) {
+        if (!['leave', 'unpaid_leave', 'holiday', 'weekend'].includes(r.raw_status)) {
+          finalStatus = 'absent';
+        }
+      } else {
+        if (r.shift_start && r.check_in_local) {
+          const [ih, im] = r.check_in_local.split(':').map(Number);
+          const [sh, sm] = r.shift_start.split(':').map(Number);
+          const inMin = ih * 60 + im;
+          const startMin = sh * 60 + sm;
+          const grace = r.shift_grace || 0;
+          finalStatus = inMin > startMin + grace ? 'late' : 'present';
+        } else {
+          finalStatus = 'present';
+        }
+      }
+
+      return {
+        ...r,
+        status: finalStatus,
+        check_in_local: hasDevicePunch ? r.check_in_local : null,
+        check_out_local: hasDevicePunch ? r.check_out_local : null,
+        worked_minutes: hasDevicePunch ? r.worked_minutes : 0,
+        overtime_minutes: hasDevicePunch ? r.overtime_minutes : 0,
+        late_minutes: hasDevicePunch ? r.late_minutes : 0,
+        early_out_minutes: hasDevicePunch ? r.early_out_minutes : 0,
+        missing_checkout: hasDevicePunch ? r.missing_checkout : false,
+      };
+    });
+
+    if (status) {
+      return resultRows.filter((r) => r.status === status);
+    }
+    return resultRows;
   }
 
   params.push(limit);

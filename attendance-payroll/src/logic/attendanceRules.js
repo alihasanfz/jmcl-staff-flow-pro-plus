@@ -24,6 +24,7 @@ function computeDay({ date, today, nowMin, user, shift, punches, holiday, leave,
   const endMin = toMin(shift.end_time);
   const isWeeklyOff = (shift.weekly_off || []).includes(dow(date));
   const isOffDay = isWeeklyOff || !!holiday;
+  const shiftStarted = date < today || nowMin >= (startMin + shift.grace_minutes);
   const dayOver = date < today || nowMin >= endMin;
 
   const base = {
@@ -34,8 +35,8 @@ function computeDay({ date, today, nowMin, user, shift, punches, holiday, leave,
   if (punches.length === 0) {
     if (isOffDay) return { ...base, status: holiday ? 'holiday' : 'weekend' };
     if (leave) return { ...base, status: leave.paid ? 'leave' : 'unpaid_leave' };
-    if (dayOver) return { ...base, status: 'absent' };
-    return null;                                  // shift not finished: not absent yet
+    if (shiftStarted) return { ...base, status: 'absent' };
+    return null;                                  // shift not started yet
   }
 
   const first = punches[0];
