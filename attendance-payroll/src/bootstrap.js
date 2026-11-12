@@ -240,26 +240,25 @@ async function firstRun() {
     const settings = await getSettings();
     const today = todayIn(settings.timezone);
 
-    // 1. One-time restore: Bring back evening punches for 2026-11-11 to their true 20:xx PM times
+    // 1. Restore evening punches for 2026-11-11 to true 19:xx / 20:xx PM times:
+    // e.g. Prasanta Chandra Biswas was 21:47 -> 19:47, Ruhanul was 21:59 -> 19:59
     try {
       // If any punches are still in early morning of 2026-11-12, shift back to 2026-11-11
       const resEarly = await query(`
         UPDATE punch_logs
            SET punched_at = punched_at - interval '6 hours'
-         WHERE id >= 77590 AND id <= 77755
-           AND to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM-DD') = '2026-11-12'
+         WHERE to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM-DD') = '2026-11-12'
            AND to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'HH24') < '07'
       `);
-      // If any punches on 2026-11-11 are at 22:xx, shift back by 2 hours to 20:xx
+      // Shift evening punches on 2026-11-11 that are fast by 2 hours (21:xx / 22:xx -> 19:xx / 20:xx)
       const resLate = await query(`
         UPDATE punch_logs
            SET punched_at = punched_at - interval '2 hours'
-         WHERE id >= 77590 AND id <= 77755
-           AND to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM-DD') = '2026-11-11'
-           AND to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'HH24') >= '22'
+         WHERE to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM-DD') = '2026-11-11'
+           AND to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'HH24') IN ('21', '22')
       `);
       if (resEarly.rowCount || resLate.rowCount) {
-        console.log(`[bootstrap] Restored evening punches on 2026-11-11 (early: ${resEarly.rowCount}, late: ${resLate.rowCount})`);
+        console.log(`[bootstrap] Corrected evening punches on 2026-11-11 (early morning shifted: ${resEarly.rowCount}, evening shifted: ${resLate.rowCount})`);
       }
       await rebuildRange('2026-11-11', '2026-11-12');
     } catch (e) {

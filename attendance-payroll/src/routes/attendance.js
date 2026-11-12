@@ -42,20 +42,7 @@ router.get('/live', wrap(async (req, res) => {
     SELECT a.id, a.user_id, u.name, u.employee_code, u.department, u.photo,
            s.name AS shift_name,
            to_char(a.check_in AT TIME ZONE $1, 'HH24:MI') AS check_in,
-           COALESCE(
-             to_char(a.check_out AT TIME ZONE $1, 'HH24:MI'),
-             (SELECT to_char(MAX(pl.punched_at) AT TIME ZONE $1, 'HH24:MI')
-                FROM punch_logs pl
-               WHERE pl.user_id = u.id
-                 AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = $2::text
-                 AND to_char(pl.punched_at AT TIME ZONE $1, 'HH24:MI') >= '15:00'
-                 AND pl.punched_at >= (
-                   SELECT MIN(pl2.punched_at) + interval '15 minutes'
-                     FROM punch_logs pl2
-                    WHERE pl2.user_id = u.id
-                      AND to_char(pl2.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = $2::text
-                 ))
-           ) AS check_out,
+           to_char(a.check_out AT TIME ZONE $1, 'HH24:MI') AS check_out,
            a.worked_minutes, a.late_minutes, a.early_out_minutes, a.overtime_minutes, a.status,
            a.missing_checkout,
            COALESCE(d.name, a.device_sn, a.check_in_device_sn, '—') AS device_name,

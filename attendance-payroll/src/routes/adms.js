@@ -538,6 +538,16 @@ router.post('/cloud-sync/sync-now', wrapAsync(async (req, res) => {
   const count = await backfillRecentPunchesToCloud();
   res.json({ ok: true, synced: count });
 }));
+router.post('/sync-history', wrapAsync(async (req, res) => {
+  const sn = (getParam(req.query, 'SN') || req.body?.sn || '').trim();
+  const dateFrom = req.body?.dateFrom || '2026-11-11 00:00:00';
+  const devices = sn ? [{ serial_number: sn }] : (await query('SELECT serial_number FROM devices WHERE active = true')).rows;
+  for (const d of devices) {
+    queueDeviceCommand(d.serial_number, `DATA QUERY ATTLOG StartTime=${dateFrom}`);
+    queueDeviceCommand(d.serial_number, 'CHECK');
+  }
+  res.json({ ok: true, queuedFor: devices.map(d => d.serial_number), dateFrom });
+}));
 router.get('/fix-today-attendance', wrapAsync(async (req, res) => {
   const { fixMorningPunches } = require('../services/attendance');
   const result = await fixMorningPunches(req.query.date);

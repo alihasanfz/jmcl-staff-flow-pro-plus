@@ -44,15 +44,11 @@ function computeDay({ date, today, nowMin, user, shift, punches, holiday, leave,
   const outMin = toMin(last.t);
   const isPastDay = date < today;
   // A punch is recognized as a genuine check-out when:
-  //  1. In the normal departure window near/after shift end (from 90 mins before shift end), OR
-  //  2. Explicitly registered as a check-out (state = 1) with at least 3 hours worked, OR
-  //  3. Departure in late afternoon / evening (after 16:00 / 4:00 PM) having worked at least 5 hours, OR
-  //  4. On past dates, a valid afternoon departure (after 13:00 / 1:00 PM) having worked at least 3 hours.
-  // Morning gate passes, lunch swipes (11:00–12:30), and intermediate entries are NEVER recognized as checkouts.
-  const isLegitCheckout = outMin >= (endMin - 90)
-    || (last.state === 1 && outMin - inMin >= 180)
-    || (outMin >= 960 && outMin - inMin >= 300)
-    || (isPastDay && outMin >= 780 && outMin - inMin >= 180);
+  //  1. In the normal departure window near/after shift end (from 60 mins before shift end onwards, e.g. >= 18:00 for 19:00 shift, >= 17:45 for 18:45 Commercial, >= 16:00 for 17:00 Store), OR
+  //  2. Explicitly registered as a check-out (state = 1) near departure with at least 4 hours worked.
+  // Intermediate midday/afternoon tea, prayer, or lunch swipes (e.g. 11:00–16:30 for evening shifts) are NEVER recognized as checkouts.
+  const isLegitCheckout = outMin >= (endMin - 60)
+    || (last.state === 1 && outMin - inMin >= 240 && outMin >= (endMin - 120));
   const hasOut = punches.length >= 2 && (outMin - inMin >= r.min_punch_gap_minutes) && isLegitCheckout;
   const row = { ...base, check_in: first.at, check_out: hasOut ? last.at : null };
 

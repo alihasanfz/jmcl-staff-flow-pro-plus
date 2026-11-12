@@ -241,13 +241,14 @@ function startProxyServer(port) {
   return server;
 }
 
-// Listen on primary port (8080)
-startProxyServer(PROXY_PORT);
-
-// Also listen on fallback port 3000 if not already used
-if (PROXY_PORT !== 3000) {
-  startProxyServer(3000);
-}
+// Listen on primary and standard ZKTeco ports
+[8080, 3000, 8000, 80].forEach((p) => {
+  try {
+    startProxyServer(p);
+  } catch (err) {
+    console.warn(`[Notice] Port ${p} cannot be opened: ${err.message}`);
+  }
+});
 
 /** Probing loop */
 async function cycle() {
