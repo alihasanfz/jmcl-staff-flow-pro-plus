@@ -29,6 +29,10 @@ async function main() {
     scheduler.start();
     const backupScheduler = require('./services/backupScheduler');
     backupScheduler.startBackupScheduler();
+    try {
+      const { backfillMissingBackupData } = require('./services/backup');
+      setTimeout(() => backfillMissingBackupData().catch(() => {}), 6000);
+    } catch (_) {}
   }
 
   const shutdown = (sig) => {

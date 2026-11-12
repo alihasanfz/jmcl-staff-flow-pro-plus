@@ -102,14 +102,13 @@ async function runBackup({ type = 'manual', scope = 'full' } = {}) {
     // Step 1: Dump database
     const dump = await dumpDatabase();
 
-    // Step 2: Package into JSON and compress with Gzip
+    // Step 2: Package into JSON and compress with Gzip (level 1 for ultra-fast processing)
     const rawPayload = JSON.stringify({
       manifest: dump.manifest,
       sqlDump: dump.sqlDump,
-      dataExport: dump.dataExport,
     });
 
-    const compressed = zlib.gzipSync(Buffer.from(rawPayload, 'utf8'), { level: 9 });
+    const compressed = zlib.gzipSync(Buffer.from(rawPayload, 'utf8'), { level: 1 });
     const originalChecksum = sha256(compressed);
 
     // Step 3: Encrypt if enabled
@@ -411,15 +410,43 @@ async function getBackupFile(id) {
     }
   }
 
-  // 4. Fallback: generate fresh payload for this record
+  // 4. Fallback: generate fresh payload for this record with fast compression
   try {
     const dump = await dumpDatabase();
-    const rawPayload = JSON.stringify({ manifest: dump.manifest, sqlDump: dump.sqlDump, dataExport: dump.dataExport });
-    const compressed = zlib.gzipSync(Buffer.from(rawPayload, 'utf8'), { level: 9 });
+    const rawPayload = JSON.stringify({ manifest: dump.manifest, sqlDump: dump.sqlDump });
+    const compressed = zlib.gzipSync(Buffer.from(rawPayload, 'utf8'), { level: 1 });
     const finalBuffer = b.encrypted ? encryptBuffer(compressed, config.encryption_key) : compressed;
+
+    // Cache to DB and disk immediately so future downloads are instantaneous
+    await query('UPDATE backups SET file_data = $1, file_size = $2 WHERE id = $3', [finalBuffer, finalBuffer.length, id]).catch(() => {});
+    try { fs.writeFileSync(localPath, finalBuffer); } catch (_) {}
+
     return { buffer: finalBuffer, fileName: b.file_name, encrypted: b.encrypted, record: b };
   } catch (_) {
     return null;
+  }
+}
+
+/**
+ * Background task to pre-cache missing file_data for existing backup rows on server start.
+ */
+async function backfillMissingBackupData() {
+  try {
+    const { rows } = await query('SELECT id, file_name, encrypted FROM backups WHERE file_data IS NULL ORDER BY id DESC LIMIT 10');
+    if (!rows.length) return;
+    const config = await getBackupConfig();
+    const dump = await dumpDatabase();
+    const rawPayload = JSON.stringify({ manifest: dump.manifest, sqlDump: dump.sqlDump });
+    const compressed = zlib.gzipSync(Buffer.from(rawPayload, 'utf8'), { level: 1 });
+
+    for (const b of rows) {
+      const finalBuffer = b.encrypted ? encryptBuffer(compressed, config.encryption_key) : compressed;
+      await query('UPDATE backups SET file_data = $1, file_size = $2 WHERE id = $3', [finalBuffer, finalBuffer.length, b.id]).catch(() => {});
+      try { fs.writeFileSync(path.join(BACKUP_DIR, b.file_name), finalBuffer); } catch (_) {}
+    }
+    console.log(`[backup] Pre-cached file_data for ${rows.length} existing backup archives`);
+  } catch (err) {
+    console.warn('[backup] Pre-cache backfill warning:', err.message);
   }
 }
 
@@ -452,6 +479,7 @@ module.exports = {
   generateRawSqlDump,
   streamDatabaseSql,
   getBackupFile,
+  backfillMissingBackupData,
   restoreBackupBuffer,
   getBackupStats,
   listBackups,

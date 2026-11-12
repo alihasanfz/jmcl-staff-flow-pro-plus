@@ -50,9 +50,9 @@ function sqlLiteral(val) {
 }
 
 /**
- * Generates full database dump (Schema + Data + Manifest) in pure SQL and JSON.
+ * Generates full database dump (Schema + Data + Manifest) in pure SQL.
  */
-async function dumpDatabase() {
+async function dumpDatabase({ includeDataExport = false } = {}) {
   const timestamp = new Date().toISOString();
   const manifest = {
     version: '1.0.0',
@@ -70,14 +70,14 @@ async function dumpDatabase() {
   sqlLines.push(`-- ============================================================================\n`);
   sqlLines.push(`BEGIN;\n`);
 
-  const dataExport = {};
+  const dataExport = includeDataExport ? {} : null;
 
   for (const table of APPLICATION_TABLES) {
     try {
       const { rows } = await query(`SELECT * FROM "${table}"`);
       manifest.tables[table] = rows.length;
       manifest.totalRecords += rows.length;
-      dataExport[table] = rows;
+      if (includeDataExport) dataExport[table] = rows;
 
       if (!rows.length) {
         sqlLines.push(`-- Table "${table}": 0 rows`);
