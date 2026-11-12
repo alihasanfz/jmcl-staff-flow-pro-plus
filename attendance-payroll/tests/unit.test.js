@@ -178,7 +178,7 @@ test('morning intermediate swipes do not trigger automatic checkout after shift 
 });
 
 test('half day when worked time below threshold', () => {
-  assert.equal(mk('2026-10-26', ['09:00:00', '12:00:00']).status, 'half_day');
+  assert.equal(mk('2026-10-26', ['09:30:00', '13:00:00']).status, 'half_day');
 });
 
 test('absent only after the day/shift is over', () => {

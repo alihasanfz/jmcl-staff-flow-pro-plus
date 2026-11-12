@@ -382,16 +382,19 @@ router.post('/fix-morning-punches', editAttendance, wrap(async (req, res) => {
   });
 }));
 
-/** Restore punches that were shifted by -2 hours on 2026-11-11 */
+/** Restore punches that were shifted by bootstrap on 2026-11-11 / 2026-11-12 */
 router.post('/restore-shifted-punches', editAttendance, wrap(async (req, res) => {
   const { rows } = await query(`
-    SELECT id FROM punch_logs WHERE id >= 77590 AND id <= 77755
+    SELECT id FROM punch_logs
+     WHERE id >= 77590 AND id <= 77755
+       AND to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM-DD') = '2026-11-12'
+       AND to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'HH24') < '07'
   `);
   let shiftedUpdated = 0;
   let deletedDuplicates = 0;
   for (const row of rows) {
     try {
-      await query(`UPDATE punch_logs SET punched_at = punched_at + interval '2 hours' WHERE id = $1`, [row.id]);
+      await query(`UPDATE punch_logs SET punched_at = punched_at - interval '6 hours' WHERE id = $1`, [row.id]);
       shiftedUpdated++;
     } catch (err) {
       if (err.code === '23505') {
@@ -419,8 +422,9 @@ router.post('/restore-shifted-punches', editAttendance, wrap(async (req, res) =>
            punch_count = 1
      WHERE user_id = 4
        AND work_date = '2026-11-11'
+       AND check_in IS NOT NULL
   `);
-  const rebuilt = await rebuildRange('2026-11-11', '2026-11-11');
+  const rebuilt = await rebuildRange('2026-11-11', '2026-11-12');
   res.json({ ok: true, shiftedUpdated, deletedDuplicates, rebuilt });
 }));
 
