@@ -384,27 +384,22 @@ router.post('/fix-morning-punches', editAttendance, wrap(async (req, res) => {
 
 /** Restore punches that were shifted by bootstrap on 2026-11-11 / 2026-11-12 */
 router.post('/restore-shifted-punches', editAttendance, wrap(async (req, res) => {
-  const { rows } = await query(`
-    SELECT id FROM punch_logs
+  // If any punches are still in early morning of 2026-11-12, shift back to 2026-11-11
+  await query(`
+    UPDATE punch_logs
+       SET punched_at = punched_at - interval '6 hours'
      WHERE id >= 77590 AND id <= 77755
        AND to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM-DD') = '2026-11-12'
        AND to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'HH24') < '07'
   `);
-  let shiftedUpdated = 0;
-  let deletedDuplicates = 0;
-  for (const row of rows) {
-    try {
-      await query(`UPDATE punch_logs SET punched_at = punched_at - interval '6 hours' WHERE id = $1`, [row.id]);
-      shiftedUpdated++;
-    } catch (err) {
-      if (err.code === '23505') {
-        await query(`DELETE FROM punch_logs WHERE id = $1`, [row.id]);
-        deletedDuplicates++;
-      } else {
-        throw err;
-      }
-    }
-  }
+  // If any punches on 2026-11-11 are at 22:xx, shift back by 2 hours to 20:xx
+  const result = await query(`
+    UPDATE punch_logs
+       SET punched_at = punched_at - interval '2 hours'
+     WHERE id >= 77590 AND id <= 77755
+       AND to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM-DD') = '2026-11-11'
+       AND to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'HH24') >= '22'
+  `);
 
   await query(`
     DELETE FROM punch_logs
@@ -425,7 +420,7 @@ router.post('/restore-shifted-punches', editAttendance, wrap(async (req, res) =>
        AND check_in IS NOT NULL
   `);
   const rebuilt = await rebuildRange('2026-11-11', '2026-11-12');
-  res.json({ ok: true, shiftedUpdated, deletedDuplicates, rebuilt });
+  res.json({ ok: true, shiftedUpdated: result.rowCount, rebuilt });
 }));
 
 module.exports = router;

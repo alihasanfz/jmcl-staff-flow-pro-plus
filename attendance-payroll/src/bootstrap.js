@@ -240,27 +240,28 @@ async function firstRun() {
     const settings = await getSettings();
     const today = todayIn(settings.timezone);
 
-    // 1. One-time restore: Bring back evening punches for 2026-11-11 that were shifted forward into early morning of 2026-11-12
+    // 1. One-time restore: Bring back evening punches for 2026-11-11 to their true 20:xx PM times
     try {
-      const { rows } = await query(`
-        SELECT id FROM punch_logs
+      // If any punches are still in early morning of 2026-11-12, shift back to 2026-11-11
+      const resEarly = await query(`
+        UPDATE punch_logs
+           SET punched_at = punched_at - interval '6 hours'
          WHERE id >= 77590 AND id <= 77755
            AND to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM-DD') = '2026-11-12'
            AND to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'HH24') < '07'
       `);
-      for (const row of rows) {
-        try {
-          await query(`UPDATE punch_logs SET punched_at = punched_at - interval '6 hours' WHERE id = $1`, [row.id]);
-        } catch (err) {
-          if (err.code === '23505') {
-            await query(`DELETE FROM punch_logs WHERE id = $1`, [row.id]);
-          }
-        }
+      // If any punches on 2026-11-11 are at 22:xx, shift back by 2 hours to 20:xx
+      const resLate = await query(`
+        UPDATE punch_logs
+           SET punched_at = punched_at - interval '2 hours'
+         WHERE id >= 77590 AND id <= 77755
+           AND to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM-DD') = '2026-11-11'
+           AND to_char(punched_at AT TIME ZONE 'Asia/Dhaka', 'HH24') >= '22'
+      `);
+      if (resEarly.rowCount || resLate.rowCount) {
+        console.log(`[bootstrap] Restored evening punches on 2026-11-11 (early: ${resEarly.rowCount}, late: ${resLate.rowCount})`);
       }
-      if (rows.length) {
-        console.log(`[bootstrap] Restored ${rows.length} evening punches back to 2026-11-11`);
-        await rebuildRange('2026-11-11', '2026-11-12');
-      }
+      await rebuildRange('2026-11-11', '2026-11-12');
     } catch (e) {
       console.warn('[bootstrap] restore punches note:', e.message);
     }
