@@ -32,7 +32,7 @@ const opt = (name, def) => {
 const DEVICE_IP = String(opt('device-ip', process.env.DEVICE_IP || '192.168.0.201'));
 const DEVICE_PORT = parseInt(opt('device-port', process.env.DEVICE_PORT || '4370'), 10);
 const PROXY_PORT = parseInt(opt('proxy-port', process.env.PROXY_PORT || '8080'), 10);
-const SERVER_URL = String(opt('server-url', process.env.SERVER_URL || 'https://jmcl-staff-flow-pro-plus.onrender.com')).replace(/\/$/, '');
+const SERVER_URL = String(opt('server-url', process.env.SERVER_URL || 'https://jmcl-staff-flow-pro-plus-2846.onrender.com')).replace(/\/$/, '');
 const POLL_INTERVAL = parseInt(opt('poll-interval', 20), 10) * 1000;
 
 // Discover all active local IPv4 addresses

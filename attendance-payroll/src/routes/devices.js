@@ -142,8 +142,8 @@ router.get('/server-info', wrap(async (req, res) => {
   const isLocal = reqHostname === 'localhost' || reqHostname === '127.0.0.1';
   const isHttps = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https';
 
-  const configuredHost = settings.adms_server_host || process.env.ADMS_SERVER_HOST || (!isLocal ? reqHostname : detectedLanIp);
-  const configuredPort = settings.adms_server_port || (isHttps ? 443 : (process.env.PORT || 3000));
+  const configuredHost = !isLocal ? reqHostname : (settings.adms_server_host || process.env.ADMS_SERVER_HOST || detectedLanIp);
+  const configuredPort = isHttps ? 443 : (settings.adms_server_port || (process.env.PORT || 3000));
 
   res.json({
     serverHost: configuredHost,

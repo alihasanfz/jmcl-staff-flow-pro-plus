@@ -151,14 +151,19 @@ async function identify(req, res) {
 
 const usable = (d) => d && d.active !== false;
 
-const CLOUD_SYNC_TARGET = (process.env.CLOUD_SYNC_TARGET || 'https://jmcl-staff-flow-pro-plus.onrender.com').replace(/\/$/, '');
+const CLOUD_SYNC_TARGET = (process.env.CLOUD_SYNC_TARGET || 'https://jmcl-staff-flow-pro-plus-2846.onrender.com').replace(/\/$/, '');
 const lastCloudForward = new Map();
 
 function forwardToCloud(req, rawBody = null) {
   if (!CLOUD_SYNC_TARGET) return;
   const host = (req.get('host') || '').toLowerCase();
-  // Never forward if this server instance is already running in Render cloud
-  if (host.includes('onrender.com') || process.env.RENDER || process.env.IS_RENDER) {
+  let targetHost = '';
+  try {
+    targetHost = new URL(CLOUD_SYNC_TARGET).host.toLowerCase();
+  } catch (_) {}
+
+  // If this server instance is already the destination target host, do not forward to self
+  if (targetHost && host === targetHost) {
     return;
   }
 
