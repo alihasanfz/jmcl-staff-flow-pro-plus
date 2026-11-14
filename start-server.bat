@@ -8,7 +8,7 @@ echo ====================================================================
 echo          JMCL STAFF FLOW PRO - Local Server & Device Gateway
 echo ====================================================================
 echo Local Dashboard : http://localhost:3000
-echo Cloud Server    : https://jmcl-staff-flow-pro-plus.onrender.com
+echo Cloud Server    : https://jmcl-staff-flow-pro-plus-2846.onrender.com
 echo ====================================================================
 echo.
 

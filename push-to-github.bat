@@ -8,7 +8,7 @@ echo ====================================================================
 echo        JMCL STAFF FLOW PRO - Push Updates to GitHub
 echo ====================================================================
 echo  Target Repo : https://github.com/alihasanfz/jmcl-staff-flow-pro-plus
-echo  Live Cloud  : https://jmcl-staff-flow-pro-plus.onrender.com
+echo  Live Cloud  : https://jmcl-staff-flow-pro-plus-2846.onrender.com
 echo ====================================================================
 echo.
 
@@ -44,7 +44,7 @@ if %errorlevel% equ 0 (
     echo ====================================================================
     echo   SUCCESS! All updates have been pushed to GitHub!
     echo   Render Cloud is now automatically deploying the live website:
-    echo   https://jmcl-staff-flow-pro-plus.onrender.com
+    echo   https://jmcl-staff-flow-pro-plus-2846.onrender.com
     echo ====================================================================
 ) else (
     color 0C

@@ -17,7 +17,7 @@ console.log('   All IPv4 Adapters: ' + (ips.join(', ') || 'None'));
 console.log('');
 
 console.log('2. Cloud Server Connection (Render):');
-const req = https.get('https://jmcl-staff-flow-pro-plus.onrender.com/iclock/debug-today-punches?date=2026-11-11', { timeout: 8000 }, (res) => {
+const req = https.get('https://jmcl-staff-flow-pro-plus-2846.onrender.com/iclock/debug-today-punches', { timeout: 8000 }, (res) => {
   let d = '';
   res.on('data', c => d += c);
   res.on('end', () => {

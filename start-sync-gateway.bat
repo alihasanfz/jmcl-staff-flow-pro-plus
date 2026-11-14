@@ -8,7 +8,7 @@ echo ====================================================================
 echo          JMCL STAFF FLOW PRO - ZKTeco Cloud Sync Gateway
 echo ====================================================================
 echo   Relaying local biometric punches to Render Cloud Server:
-echo   https://jmcl-staff-flow-pro-plus.onrender.com
+echo   https://jmcl-staff-flow-pro-plus-2846.onrender.com
 echo ====================================================================
 echo.
 
@@ -24,7 +24,7 @@ if %errorlevel% neq 0 (
 )
 
 :: Configuration
-if "%SERVER_URL%"=="" set SERVER_URL=https://jmcl-staff-flow-pro-plus.onrender.com
+if "%SERVER_URL%"=="" set SERVER_URL=https://jmcl-staff-flow-pro-plus-2846.onrender.com
 if "%PROXY_PORT%"=="" set PROXY_PORT=8080
 
 :: Change directory to script directory
