@@ -70,11 +70,13 @@ function computeDay({ date, today, nowMin, user, shift, punches, holiday, leave,
   // Subcase B: Punched on a regular working day (Sat - Thu)
   // A punch is recognized as a genuine check-out when:
   //  1. The day is in the past (date < today), OR
-  //  2. In the normal departure window near/after shift end (from 60 mins before shift end onwards, e.g. >= 18:00 for 19:00 shift), OR
-  //  3. Explicitly registered as a check-out (state = 1) with at least 3 hours worked.
+  //  2. Shift / day has ended (dayOver) and punch occurred in afternoon/evening (>= 12:00) with at least 3 hours worked, OR
+  //  3. Within departure window near/after shift end (within 120 mins of shift end or later), OR
+  //  4. Explicitly registered as a check-out (state = 1) with at least min_punch_gap_minutes.
   const isLegitCheckout = isPastDay
-    || outMin >= (endMin - 60)
-    || (last.state === 1 && outMin - inMin >= 180 && outMin >= (endMin - 120));
+    || (dayOver && outMin >= 720 && outMin - inMin >= 180)
+    || outMin >= (endMin - 120)
+    || (last.state === 1 && outMin - inMin >= r.min_punch_gap_minutes);
   const hasOut = punches.length >= 2 && (outMin - inMin >= r.min_punch_gap_minutes) && isLegitCheckout;
   const row = { ...base, check_in: first.at, check_out: hasOut ? last.at : null };
 

@@ -243,7 +243,8 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
                   AND to_char(pl.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = a.work_date::text
                   AND UPPER(pl.device_sn) = UPPER(${snParam})
                   AND (
-                    to_char(pl.punched_at AT TIME ZONE $1, 'HH24:MI') >= '18:00'
+                    to_char(pl.punched_at AT TIME ZONE $1, 'HH24:MI') >= '12:00'
+                    OR pl.state = 1
                     OR a.off_day_work = true
                     OR EXTRACT(DOW FROM a.work_date) = 5
                   )
