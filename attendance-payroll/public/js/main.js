@@ -33,7 +33,7 @@ const NAV = [
   { path: '/backup', key: 'backup', label: 'Backup & Restore', icon: 'database', roles: ADMIN_ONLY },
 ];
 
-const V = '6.1';
+const V = '7.0';
 const PAGES = {
   '/': () => import(`./pages/dashboard.js?v=${V}`),
   '/attendance': () => import(`./pages/attendance.js?v=${V}`),
@@ -138,8 +138,14 @@ function buildShell(nav) {
     <div class="shell ${isCollapsed ? 'collapsed' : ''}">
       <aside class="sidebar">
         <div class="brand">
-          <img src="/icons/icon-192.png" alt="">
-          <span>${state.meta.company || 'Jeans Manufacturing Company Ltd.'}</span>
+          <div class="brand-logo-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 21h18M3 7v14M21 7v14M9 21V11m6 10V11M9 7l3-4 3 4M9 7h6"/>
+            </svg>
+          </div>
+          <div class="brand-name">
+            <span>${state.meta.company || 'Jeans Manufacturing Company Ltd.'}</span>
+          </div>
         </div>
         <nav class="nav" aria-label="Main">
           ${nav.map((n) => html`
@@ -149,34 +155,59 @@ function buildShell(nav) {
             </a>
           `)}
         </nav>
-        <div class="side-foot">
-          <strong>${u.name}</strong>
-          <span class="role-desc muted small">${u.role.replace('_', ' ').toUpperCase()}</span>
-          <div class="row" style="margin-top:8px">
-            <button id="pw">${t('changePassword')}</button>
-            <button id="logout">${t('signOut')}</button>
+        <div class="side-user-card">
+          <div class="user-avatar-wrap">
+            <div class="user-avatar-circle">
+              ${(u.name || 'AH').slice(0, 2).toUpperCase()}
+            </div>
+            <div class="user-details">
+              <strong class="user-name">${u.name}</strong>
+              <span class="user-badge">${u.role.replace('_', ' ').toUpperCase()}</span>
+            </div>
+          </div>
+          <div class="user-actions">
+            <button id="pw" class="side-btn sm">${t('changePassword') || 'Password'}</button>
+            <button id="logout" class="side-btn sm">${t('signOut') || 'Sign Out'}</button>
+          </div>
+        </div>
+        <div class="side-grow-banner">
+          <div class="grow-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M4 19h4V9H4v10zm6 0h4V5h-4v14zm6 0h4v-7h-4v7z"/>
+            </svg>
+          </div>
+          <div class="grow-text">
+            <span>Work Smart</span>
+            <strong>Grow Together</strong>
           </div>
         </div>
       </aside>
       <div class="main">
         <div class="topbar">
-          <button class="icon-btn" id="sidebar-toggle" title="${t('collapseSidebar')}">
-            ${icon('menu')}
-          </button>
-          <h1 id="page-title"></h1>
-          <span class="date" id="today"></span>
-
+          <div class="topbar-left">
+            <button class="icon-btn" id="sidebar-toggle" title="${t('collapseSidebar')}">
+              ${icon('menu')}
+            </button>
+            <div class="topbar-title-wrap">
+              <h1 id="page-title"></h1>
+              <span class="topbar-sub" id="page-subtitle">Welcome to ${state.meta.company || 'Jeans Manufacturing Company Ltd.'}</span>
+            </div>
+          </div>
           <div class="topbar-actions">
-            <button class="pill-btn" id="lang-toggle" title="${t('language')}">
+            <div class="date-pill" id="today-pill">
+              ${icon('calendar')}
+              <span id="today"></span>
+            </div>
+            <button class="pill-btn lang-pill" id="lang-toggle" title="${t('language')}">
               ${icon('globe')}
-              <span>${getLang() === 'en' ? 'বাংলা' : 'English'}</span>
+              <span>${getLang() === 'en' ? 'বাংলা ⌵' : 'English ⌵'}</span>
             </button>
-            <button class="icon-btn" id="theme-toggle" title="${t('darkMode')}">
-              ${icon('moon')}
-            </button>
-            <button class="bell" id="bell" aria-label="Notifications" aria-haspopup="dialog">
+            <button class="bell circular-btn" id="bell" aria-label="Notifications" aria-haspopup="dialog">
               ${icon('bell')}
               <span class="count" id="bell-count" hidden></span>
+            </button>
+            <button class="icon-btn circular-btn" id="fullscreen-toggle" title="Full Screen">
+              ${icon('expand')}
             </button>
           </div>
         </div>
@@ -185,7 +216,7 @@ function buildShell(nav) {
     </div>`);
 
   $('#today').textContent = new Date().toLocaleDateString(getLang() === 'bn' ? 'bn-BD' : 'en-GB', {
-    weekday: 'long', day: 'numeric', month: 'long', timeZone: state.meta.timezone || 'Asia/Dhaka'
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: state.meta.timezone || 'Asia/Dhaka'
   });
 
   $('#sidebar-toggle').addEventListener('click', () => {
@@ -194,7 +225,15 @@ function buildShell(nav) {
     localStorage.setItem('jmcl_sidebar_collapsed', s.classList.contains('collapsed'));
   });
 
-  $('#theme-toggle').addEventListener('click', toggleTheme);
+  $('#fullscreen-toggle')?.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  });
+
+  $('#theme-toggle')?.addEventListener('click', toggleTheme);
   updateThemeIcon();
 
   $('#lang-toggle').addEventListener('click', () => {

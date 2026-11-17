@@ -69,280 +69,242 @@ async function renderManager(view, state) {
     const onTimePct = k.onTimeRate ?? (k.present ? Math.round((onTimeCount / k.present) * 100) : 0);
 
     setHTML(view, html`
-      <div class="stack" style="gap:22px;">
-        <!-- 1. Executive Telemetry & Command Center -->
-        <section class="analytics-hero-banner">
-          <div class="row between" style="align-items:center; flex-wrap:wrap; gap:14px; position:relative; z-index:1;">
-            <div style="display:flex; align-items:center; gap:14px;">
-              <div style="width:46px; height:46px; border-radius:12px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.18); display:grid; place-items:center; font-size:24px;">
-                🏭
-              </div>
-              <div>
-                <h1 style="font-size:20px; font-weight:800; color:#fff; margin:0 0 2px 0; letter-spacing:-0.3px;">
-                  Jeans Manufacturing Company Ltd.
-                </h1>
-                <div style="font-size:12.5px; color:#94a3b8; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                  <span>Biometric Workforce Intelligence &amp; Access Analytics</span>
-                  <span>·</span>
-                  <span style="color:#38bdf8; font-weight:600; display:inline-flex; align-items:center; gap:5px;" id="header-live-time">
-                    <span class="pulse-dot online"></span> Calculating...
-                  </span>
-                </div>
+      <div class="stack" style="gap:20px;">
+        <!-- 1. Executive KPI Cards (Row of 6) -->
+        <section class="modern-kpi-grid">
+          <!-- Card 1: Scheduled Staff -->
+          <div class="kpi-stat-card">
+            <div class="kpi-card-header">
+              <div class="kpi-icon-box" style="background:#e0f2fe; color:#0284c7;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               </div>
             </div>
-
-            <div class="row" style="gap:8px; flex-wrap:wrap;">
-              <a href="/attendance" data-link class="btn sm primary" style="border-radius:20px; font-weight:600; padding:6px 14px; background:#0284c7; border-color:#0284c7;">
-                ${icon('calendar')} Daily Sheet
-              </a>
-              <a href="/attendance?tab=live" data-link class="btn sm" style="background:rgba(255,255,255,0.12); color:#fff; border:1px solid rgba(255,255,255,0.2); font-weight:600; border-radius:20px; padding:6px 14px;">
-                ${icon('live')} Live Monitor
-              </a>
-              <a href="/devices" data-link class="btn sm" style="background:rgba(255,255,255,0.12); color:#fff; border:1px solid rgba(255,255,255,0.2); font-weight:600; border-radius:20px; padding:6px 14px;">
-                ${icon('device')} Terminals
-              </a>
+            <div class="kpi-card-title">Scheduled Staff</div>
+            <div class="kpi-card-val-row">
+              <span class="kpi-card-val">${k.expected}</span>
+              <span class="kpi-card-badge" style="background:#e0f2fe; color:#0284c7;">+ 100%</span>
             </div>
+            <div class="kpi-sparkline">
+              <svg viewBox="0 0 100 24" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="gradStaff" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#0284c7" stop-opacity="0.25"/>
+                    <stop offset="100%" stop-color="#0284c7" stop-opacity="0.0"/>
+                  </linearGradient>
+                </defs>
+                <path d="M 0,16 Q 25,18 50,12 T 100,6 L 100,24 L 0,24 Z" fill="url(#gradStaff)"/>
+                <path d="M 0,16 Q 25,18 50,12 T 100,6" fill="none" stroke="#0284c7" stroke-width="2.2" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="kpi-card-foot">Total active workforce</div>
           </div>
 
-          <!-- Dual Biometric Telemetry Cards -->
-          <div class="hero-telemetry-row">
-            <!-- Terminal 1: ZKTeco uFace 800 -->
-            <div class="telemetry-card uface">
-              <div class="telemetry-head">
-                <div>
-                  <div class="telemetry-title">
-                    <span>🏢</span> ZKTeco Terminal (ZK-UFACE800-01)
-                  </div>
-                  <div class="telemetry-meta">
-                    Model: <b>uFace 800</b> · SN: <code>RKQ4262500336</code> · Main Attendance Entrance
-                  </div>
-                </div>
-                <span class="pulse-badge online" style="background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3); font-size:10.5px; font-weight:700; border-radius:20px; padding:3px 9px;">
-                  <span class="glowing-dot"></span> LIVE SYNC
-                </span>
-              </div>
-              <div class="telemetry-stats-strip">
-                <div class="telemetry-stat-item">
-                  <span class="telemetry-stat-label">Clock (Dhaka)</span>
-                  <span class="telemetry-stat-val clock" id="uface-live-clock">--:--:-- --</span>
-                </div>
-                <div class="telemetry-stat-item">
-                  <span class="telemetry-stat-label">Punches Today</span>
-                  <span class="telemetry-stat-val" style="color:#38bdf8;">${ufacePunches} logged</span>
-                </div>
-                <div class="telemetry-stat-item">
-                  <span class="telemetry-stat-label">Staff Present</span>
-                  <span class="telemetry-stat-val" style="color:#10b981;">${term.uface?.unique_users || 0} staff</span>
-                </div>
-                <div class="telemetry-stat-item">
-                  <span class="telemetry-stat-label">Latest Clock-in</span>
-                  <span class="telemetry-stat-val" style="color:#f8fafc; font-size:12px;">${term.uface?.last_punch || '—'}</span>
-                </div>
+          <!-- Card 2: Checked In (Present) -->
+          <div class="kpi-stat-card">
+            <div class="kpi-card-header">
+              <div class="kpi-icon-box" style="background:#dcfce7; color:#16a34a;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
               </div>
             </div>
+            <div class="kpi-card-title">Checked In (Present)</div>
+            <div class="kpi-card-val-row">
+              <span class="kpi-card-val" style="color:#15803d;">${k.present}</span>
+              <span class="kpi-card-badge" style="background:#dcfce7; color:#16a34a;">+ ${presentPct}%</span>
+            </div>
+            <div class="kpi-sparkline">
+              <svg viewBox="0 0 100 24" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="gradPres" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#16a34a" stop-opacity="0.25"/>
+                    <stop offset="100%" stop-color="#16a34a" stop-opacity="0.0"/>
+                  </linearGradient>
+                </defs>
+                <path d="M 0,20 Q 30,19 60,9 T 100,5 L 100,24 L 0,24 Z" fill="url(#gradPres)"/>
+                <path d="M 0,20 Q 30,19 60,9 T 100,5" fill="none" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="kpi-card-foot" style="color:#16a34a; font-weight:600;">✓ Active at work</div>
+          </div>
 
-            <!-- Terminal 2: SenseFace 7A Gate Controller -->
-            <div class="telemetry-card gate">
-              <div class="telemetry-head">
-                <div>
-                  <div class="telemetry-title">
-                    <span>🚪</span> ZKTeco Terminal (VDE2251500160)
-                  </div>
-                  <div class="telemetry-meta">
-                    Model: <b>SenseFace 7A</b> · SN: <code>VDE2251500160</code> · Factory Barrier Gate
-                  </div>
-                </div>
-                <span class="pulse-badge online" style="background:rgba(168,85,247,0.15); color:#c084fc; border:1px solid rgba(168,85,247,0.3); font-size:10.5px; font-weight:700; border-radius:20px; padding:3px 9px;">
-                  <span class="glowing-dot" style="background:#c084fc;"></span> GATE ACTIVE
-                </span>
-              </div>
-              <div class="telemetry-stats-strip">
-                <div class="telemetry-stat-item">
-                  <span class="telemetry-stat-label">Clock (Dhaka)</span>
-                  <span class="telemetry-stat-val clock" id="senseface-live-clock">--:--:-- --</span>
-                </div>
-                <div class="telemetry-stat-item">
-                  <span class="telemetry-stat-label">Gate Swipes</span>
-                  <span class="telemetry-stat-val" style="color:#c084fc;">${gatePunches} passes</span>
-                </div>
-                <div class="telemetry-stat-item">
-                  <span class="telemetry-stat-label">Passed Barrier</span>
-                  <span class="telemetry-stat-val" style="color:#38bdf8;">${term.gate?.unique_users || 0} staff</span>
-                </div>
-                <div class="telemetry-stat-item">
-                  <span class="telemetry-stat-label">Latest Passage</span>
-                  <span class="telemetry-stat-val" style="color:#c084fc; font-size:12px;">${term.gate?.last_punch || '—'}</span>
-                </div>
+          <!-- Card 3: On-Time Arrivals -->
+          <div class="kpi-stat-card">
+            <div class="kpi-card-header">
+              <div class="kpi-icon-box" style="background:#f3e8ff; color:#9333ea;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               </div>
             </div>
+            <div class="kpi-card-title">On-Time Arrivals</div>
+            <div class="kpi-card-val-row">
+              <span class="kpi-card-val" style="color:#581c87;">${onTimeCount}</span>
+              <span class="kpi-card-badge" style="background:#f3e8ff; color:#9333ea;">+ ${onTimePct}%</span>
+            </div>
+            <div class="kpi-sparkline">
+              <svg viewBox="0 0 100 24" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="gradOntime" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#9333ea" stop-opacity="0.25"/>
+                    <stop offset="100%" stop-color="#9333ea" stop-opacity="0.0"/>
+                  </linearGradient>
+                </defs>
+                <path d="M 0,21 Q 35,20 65,7 T 100,8 L 100,24 L 0,24 Z" fill="url(#gradOntime)"/>
+                <path d="M 0,21 Q 35,20 65,7 T 100,8" fill="none" stroke="#9333ea" stroke-width="2.2" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="kpi-card-foot">Within 09:00 – 10:00 AM window</div>
+          </div>
+
+          <!-- Card 4: Late Arrivals -->
+          <div class="kpi-stat-card">
+            <div class="kpi-card-header">
+              <div class="kpi-icon-box" style="background:#fef3c7; color:#d97706;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22h14M5 2h14M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg>
+              </div>
+            </div>
+            <div class="kpi-card-title">Late Arrivals</div>
+            <div class="kpi-card-val-row">
+              <span class="kpi-card-val" style="color:#b45309;">${k.late}</span>
+              <span class="kpi-card-badge" style="background:#fef3c7; color:#d97706;">+ ${k.present ? Math.round((k.late / k.present) * 100) : 0}%</span>
+            </div>
+            <div class="kpi-sparkline">
+              <svg viewBox="0 0 100 24" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="gradLate" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#d97706" stop-opacity="0.25"/>
+                    <stop offset="100%" stop-color="#d97706" stop-opacity="0.0"/>
+                  </linearGradient>
+                </defs>
+                <path d="M 0,16 Q 40,19 70,11 T 100,10 L 100,24 L 0,24 Z" fill="url(#gradLate)"/>
+                <path d="M 0,16 Q 40,19 70,11 T 100,10" fill="none" stroke="#d97706" stroke-width="2.2" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="kpi-card-foot" style="color:#d97706;">Requires supervisor follow-up</div>
+          </div>
+
+          <!-- Card 5: Absent -->
+          <div class="kpi-stat-card">
+            <div class="kpi-card-header">
+              <div class="kpi-icon-box" style="background:#e0f2fe; color:#0891b2;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/></svg>
+              </div>
+            </div>
+            <div class="kpi-card-title">Absent</div>
+            <div class="kpi-card-val-row">
+              <span class="kpi-card-val">${k.absent}</span>
+              <span class="kpi-card-badge" style="background:#e0f2fe; color:#0891b2;">+ 0.0%</span>
+            </div>
+            <div class="kpi-sparkline">
+              <svg viewBox="0 0 100 24" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="gradAbs" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#0891b2" stop-opacity="0.25"/>
+                    <stop offset="100%" stop-color="#0891b2" stop-opacity="0.0"/>
+                  </linearGradient>
+                </defs>
+                <path d="M 0,18 Q 40,16 70,19 T 100,15 L 100,24 L 0,24 Z" fill="url(#gradAbs)"/>
+                <path d="M 0,18 Q 40,16 70,19 T 100,15" fill="none" stroke="#0891b2" stroke-width="2.2" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="kpi-card-foot">Zero unreported absences</div>
+          </div>
+
+          <!-- Card 6: Overtime Hours -->
+          <div class="kpi-stat-card">
+            <div class="kpi-card-header">
+              <div class="kpi-icon-box" style="background:#fce7f3; color:#db2777;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              </div>
+            </div>
+            <div class="kpi-card-title">Overtime Hours</div>
+            <div class="kpi-card-val-row">
+              <span class="kpi-card-val" style="color:#db2777;">${(k.overtimeMinutes / 60).toFixed(1)} <span style="font-size:15px; font-weight:600;">hrs</span></span>
+              <span class="kpi-card-badge" style="background:#fce7f3; color:#db2777;">Regular Shift</span>
+            </div>
+            <div class="kpi-sparkline">
+              <svg viewBox="0 0 100 24" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="gradOt" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#db2777" stop-opacity="0.25"/>
+                    <stop offset="100%" stop-color="#db2777" stop-opacity="0.0"/>
+                  </linearGradient>
+                </defs>
+                <path d="M 0,20 Q 35,21 70,14 T 100,9 L 100,24 L 0,24 Z" fill="url(#gradOt)"/>
+                <path d="M 0,20 Q 35,21 70,14 T 100,9" fill="none" stroke="#db2777" stroke-width="2.2" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="kpi-card-foot">Shift ends at 07:00 PM</div>
           </div>
         </section>
 
-        <!-- 2. Executive KPI Analytics Grid -->
-        <section class="modern-kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
-          <!-- Total Expected -->
-          <div class="kpi-stat-card">
-            <div class="kpi-stat-top">
-              <span class="kpi-stat-label">Scheduled Staff</span>
-              <div class="kpi-stat-icon" style="background:#e0f2fe; color:#0284c7;">👥</div>
-            </div>
-            <div class="kpi-stat-main">
-              <span class="kpi-stat-val">${k.expected}</span>
-              <span class="kpi-stat-pill" style="background:#f1f5f9; color:#475569;">100% Rostered</span>
-            </div>
-            <div class="kpi-progress-track">
-              <div class="kpi-progress-fill" style="width:100%; background:#0284c7;"></div>
-            </div>
-            <span class="kpi-stat-foot">Total active workforce</span>
-          </div>
-
-          <!-- Present Today -->
-          <div class="kpi-stat-card">
-            <div class="kpi-stat-top">
-              <span class="kpi-stat-label">Checked In (Present)</span>
-              <div class="kpi-stat-icon" style="background:#dcfce7; color:#15803d;">🟢</div>
-            </div>
-            <div class="kpi-stat-main">
-              <span class="kpi-stat-val" style="color:#15803d;">${k.present}</span>
-              <span class="kpi-stat-pill" style="background:#dcfce7; color:#15803d;">${presentPct}% Present</span>
-            </div>
-            <div class="kpi-progress-track">
-              <div class="kpi-progress-fill" style="width:${presentPct}%; background:#10b981;"></div>
-            </div>
-            <span class="kpi-stat-foot" style="color:#15803d; font-weight:600;">✓ Active at work</span>
-          </div>
-
-          <!-- On-Time Arrival -->
-          <div class="kpi-stat-card">
-            <div class="kpi-stat-top">
-              <span class="kpi-stat-label">On-Time Arrivals</span>
-              <div class="kpi-stat-icon" style="background:#ecfeff; color:#0891b2;">⏱</div>
-            </div>
-            <div class="kpi-stat-main">
-              <span class="kpi-stat-val" style="color:#0891b2;">${onTimeCount}</span>
-              <span class="kpi-stat-pill" style="background:#ecfeff; color:#0891b2;">${onTimePct}% Punctual</span>
-            </div>
-            <div class="kpi-progress-track">
-              <div class="kpi-progress-fill" style="width:${onTimePct}%; background:#06b6d4;"></div>
-            </div>
-            <span class="kpi-stat-foot">Within 09:00 – 10:00 AM window</span>
-          </div>
-
-          <!-- Late Arrivals -->
-          <div class="kpi-stat-card">
-            <div class="kpi-stat-top">
-              <span class="kpi-stat-label">Late Arrivals</span>
-              <div class="kpi-stat-icon" style="background:#fef3c7; color:#d97706;">⚠️</div>
-            </div>
-            <div class="kpi-stat-main">
-              <span class="kpi-stat-val" style="color:#d97706;">${k.late}</span>
-              <span class="kpi-stat-pill" style="background:#fef3c7; color:#b45309;">${k.present ? Math.round((k.late / k.present) * 100) : 0}% of Present</span>
-            </div>
-            <div class="kpi-progress-track">
-              <div class="kpi-progress-fill" style="width:${k.present ? Math.round((k.late / k.present) * 100) : 0}%; background:#f59e0b;"></div>
-            </div>
-            <span class="kpi-stat-foot" style="color:#d97706;">Requires supervisor follow-up</span>
-          </div>
-
-          <!-- Absent -->
-          <div class="kpi-stat-card">
-            <div class="kpi-stat-top">
-              <span class="kpi-stat-label">Absent</span>
-              <div class="kpi-stat-icon" style="background:#fee2e2; color:#dc2626;">🛡</div>
-            </div>
-            <div class="kpi-stat-main">
-              <span class="kpi-stat-val" style="color:#64748b;">${k.absent}</span>
-              <span class="kpi-stat-pill" style="background:#f1f5f9; color:#475569;">0.0% Absenteeism</span>
-            </div>
-            <div class="kpi-progress-track">
-              <div class="kpi-progress-fill" style="width:0%; background:#ef4444;"></div>
-            </div>
-            <span class="kpi-stat-foot">Zero unreported absences</span>
-          </div>
-
-          <!-- Overtime Hours -->
-          <div class="kpi-stat-card">
-            <div class="kpi-stat-top">
-              <span class="kpi-stat-label">Overtime Hours</span>
-              <div class="kpi-stat-icon" style="background:#f3e8ff; color:#7e22ce;">⚡</div>
-            </div>
-            <div class="kpi-stat-main">
-              <span class="kpi-stat-val" style="color:#7e22ce;">${(k.overtimeMinutes / 60).toFixed(1)} <span style="font-size:14px; font-weight:600;">hrs</span></span>
-              <span class="kpi-stat-pill" style="background:#f3e8ff; color:#7e22ce;">Regular Shift</span>
-            </div>
-            <div class="kpi-progress-track">
-              <div class="kpi-progress-fill" style="width:0%; background:#8b5cf6;"></div>
-            </div>
-            <span class="kpi-stat-foot">Shift ends at 07:00 PM</span>
-          </div>
-        </section>
-
-        <!-- 3. Core Analytics Visualizations Grid (FRONT & CENTER) -->
-        <div style="display:grid; grid-template-columns: 2fr 1fr; gap:16px; align-items:stretch;">
-          <!-- Chart A: Hourly Biometric Influx & Gate Throughput Peak Flow -->
+        <!-- 2. Charts Row 1: Today's Influx vs Breakdown -->
+        <div class="dashboard-grid-2-1">
+          <!-- Chart A: Today's Attendance & Lateness Trend -->
           <div class="analytics-chart-panel">
             <div class="analytics-chart-head">
               <div>
                 <div class="analytics-chart-title">
-                  <span>📈</span> Today’s Biometric Influx &amp; Gate Flow Peak Curve
+                  <span class="chart-title-icon" style="color:#2563eb;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                  </span>
+                  <span>Today's Attendance &amp; Lateness Trend</span>
                 </div>
-                <span class="analytics-chart-sub">Hour-by-hour throughput comparing uFace 800 arrivals vs SenseFace 7A barrier gate passes</span>
+                <span class="analytics-chart-sub">Hourly-by-hour throughput comparing uFace 800 arrivals vs SenseFace 7A barrier gate passes</span>
               </div>
-              <span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-weight:600;">
-                Workday (07:00 AM – 08:00 PM)
-              </span>
+              <div class="pill-btn date-pill sm">
+                ${icon('calendar')} <span>Today ⌵</span>
+              </div>
             </div>
-            <div style="height:250px; position:relative;">
+            <!-- Custom Legend Matching Reference Image -->
+            <div class="chart-custom-legend">
+              <span class="legend-dot" style="background:#2563eb;"></span>
+              <span class="legend-text"><b>uFace 800</b> (Attendance Punches)</span>
+              <span class="legend-dot" style="background:#9333ea; margin-left:14px;"></span>
+              <span class="legend-text"><b>SenseFace 7A</b> (Gate Passes)</span>
+            </div>
+            <div style="height:235px; position:relative;">
               <canvas id="hourly-chart" role="img" aria-label="Hourly Biometric Flow Curve"></canvas>
             </div>
           </div>
 
-          <!-- Chart B: Today's Workforce Composition Donut Gauge -->
+          <!-- Chart B: Attendance Breakdown -->
           <div class="analytics-chart-panel">
             <div class="analytics-chart-head">
               <div>
                 <div class="analytics-chart-title">
-                  <span>🍩</span> Attendance Breakdown
+                  <span class="chart-title-icon" style="color:#d97706;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                  </span>
+                  <span>Attendance Breakdown</span>
                 </div>
-                <span class="analytics-chart-sub">Today’s roster status composition</span>
+                <span class="analytics-chart-sub">Today's roster status composition</span>
               </div>
             </div>
-            <div style="height:180px; position:relative; display:grid; place-items:center;">
+            <div style="height:185px; position:relative; display:grid; place-items:center;">
               <canvas id="donut-chart" role="img" aria-label="Workforce Composition Donut"></canvas>
               <div class="donut-center-metric">
                 <div class="pct" style="color:#10b981;">${presentPct}%</div>
-                <div class="lbl">Present</div>
+                <div class="lbl">PRESENT</div>
               </div>
             </div>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; font-size:11.5px; border-top:1px solid var(--line-2); padding-top:10px;">
-              <div style="display:flex; align-items:center; gap:6px;">
-                <span style="width:9px; height:9px; border-radius:50%; background:#10b981;"></span>
-                <span>On-time: <b>${onTimeCount}</b></span>
-              </div>
-              <div style="display:flex; align-items:center; gap:6px;">
-                <span style="width:9px; height:9px; border-radius:50%; background:#f59e0b;"></span>
-                <span>Late: <b>${k.late}</b></span>
-              </div>
-              <div style="display:flex; align-items:center; gap:6px;">
-                <span style="width:9px; height:9px; border-radius:50%; background:#38bdf8;"></span>
-                <span>Waiting: <b>${k.notYet}</b></span>
-              </div>
-              <div style="display:flex; align-items:center; gap:6px;">
-                <span style="width:9px; height:9px; border-radius:50%; background:#ef4444;"></span>
-                <span>Absent: <b>${k.absent}</b></span>
-              </div>
+            <div class="donut-legend-grid">
+              <div class="legend-item"><span class="legend-dot" style="background:#10b981;"></span> On-time: <b>${onTimeCount}</b></div>
+              <div class="legend-item"><span class="legend-dot" style="background:#f59e0b;"></span> Late: <b>${k.late}</b></div>
+              <div class="legend-item"><span class="legend-dot" style="background:#38bdf8;"></span> Waiting: <b>${k.notYet}</b></div>
+              <div class="legend-item"><span class="legend-dot" style="background:#ef4444;"></span> Absent: <b>${k.absent}</b></div>
             </div>
           </div>
         </div>
 
-        <!-- 4. Historical Trend & Department Leaderboard Grid -->
-        <div style="display:grid; grid-template-columns: 1.5fr 1fr; gap:16px;">
-          <!-- Chart C: 14-Day Attendance Trend -->
+        <!-- 3. Charts Row 2: 14-Day Trend vs Department Rate -->
+        <div class="dashboard-grid-eq">
+          <!-- 14-Day Attendance Trend -->
           <div class="analytics-chart-panel">
             <div class="analytics-chart-head">
               <div>
                 <div class="analytics-chart-title">
-                  <span>📊</span> 14-Day Attendance &amp; Lateness Trend
+                  <span class="chart-title-icon" style="color:#10b981;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                  </span>
+                  <span>14-Day Attendance &amp; Lateness Trend</span>
                 </div>
                 <span class="analytics-chart-sub">Daily attendance patterns across working days</span>
               </div>
@@ -352,14 +314,17 @@ async function renderManager(view, state) {
             </div>
           </div>
 
-          <!-- Chart D: Department Attendance Leaderboard -->
+          <!-- Department Attendance Rate -->
           <div class="analytics-chart-panel">
             <div class="analytics-chart-head">
               <div>
                 <div class="analytics-chart-title">
-                  <span>🏢</span> Department Attendance Rate
+                  <span class="chart-title-icon" style="color:#2563eb;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                  </span>
+                  <span>Department Attendance Rate</span>
                 </div>
-                <span class="analytics-chart-sub">Month-to-date presence benchmark</span>
+                <span class="analytics-chart-sub">Month-to-date percentage benchmark</span>
               </div>
             </div>
             <div style="height:230px; position:relative;">
@@ -368,21 +333,21 @@ async function renderManager(view, state) {
           </div>
         </div>
 
-        <!-- 5. Operational Feeds: Live Punches & Manager Attention -->
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
-          <!-- Live Terminal Door Punch Stream -->
-          <div class="panel" style="border-radius:14px; overflow:hidden;">
-            <header style="display:flex; justify-content:space-between; align-items:center; padding:14px 18px;">
+        <!-- 4. Operational Feeds: Live Punches & Manager Attention -->
+        <div class="dashboard-grid-eq">
+          <!-- Live Biometric Punch Stream -->
+          <div class="analytics-chart-panel" style="padding:0; overflow:hidden;">
+            <div class="feed-header">
               <div style="display:flex; align-items:center; gap:8px;">
                 <span class="pulse-dot online"></span>
                 <div>
-                  <h2 style="font-size:14.5px; font-weight:750; margin:0;">Live Biometric Punch Stream</h2>
+                  <h2 style="font-size:14.5px; font-weight:750; margin:0; color:#0f172a;">Live Biometric Punch Stream</h2>
                   <span class="small muted">Instant punch feed from uFace 800 &amp; SenseFace 7A Gate</span>
                 </div>
               </div>
-              <a href="/attendance" data-link class="small" style="font-weight:700; color:#0284c7;">View Audit Log →</a>
-            </header>
-            <div class="body flush" style="max-height:280px; overflow-y:auto;">
+              <a href="/attendance" data-link class="small view-audit-link">View Audit Log →</a>
+            </div>
+            <div class="body flush feed-scroll-body">
               ${d.punches && d.punches.length ? d.punches.map((p) => html`
                 <div class="stream-item">
                   <div style="display:flex; align-items:center; gap:10px;">
@@ -390,146 +355,156 @@ async function renderManager(view, state) {
                       ${(p.name || 'E').slice(0, 2).toUpperCase()}
                     </div>
                     <div>
-                      <div style="font-weight:700; font-size:13px; color:var(--text);">
-                        ${p.name}
-                      </div>
-                      <div style="font-size:11px; color:var(--muted); display:flex; align-items:center; gap:6px; margin-top:2px;">
-                        ${p.device && p.device.includes('RKQ') ? html`
-                          <span style="color:#0284c7; font-weight:600;">🏢 uFace 800</span>
-                        ` : p.device && p.device.includes('VDE') ? html`
-                          <span style="color:#7e22ce; font-weight:600;">🚪 SenseFace 7A (Gate)</span>
-                        ` : html`<span>${p.device || p.source}</span>`}
-                        <span>·</span>
+                      <div class="stream-emp-name">${p.name}</div>
+                      <div class="stream-subtext">
+                        <span class="stream-device-dot" style="background:${p.device && p.device.includes('VDE') ? '#a855f7' : '#0284c7'};"></span>
+                        <span>${p.device && p.device.includes('VDE') ? 'SenseFace 7A (Gate)' : 'uFace 800'}</span>
+                        <span>•</span>
                         <span>PIN: ${p.pin}</span>
                       </div>
                     </div>
                   </div>
-                  <div style="text-align:right;">
-                    <span style="font-weight:750; font-size:11px; padding:3px 8px; border-radius:12px; background:${p.punch_type === 'OUT' ? '#fee2e2' : '#dcfce7'}; color:${p.punch_type === 'OUT' ? '#991b1b' : '#15803d'}; border:1px solid ${p.punch_type === 'OUT' ? '#fecaca' : '#bbf7d0'};">
-                      ${p.punch_type === 'OUT' ? '🔴 OUT' : '🟢 IN'}
+                  <div style="display:flex; align-items:center; gap:12px;">
+                    <span class="stream-time">${p.time_12h || p.at.slice(11, 19)}</span>
+                    <span class="stream-badge ${p.punch_type === 'OUT' ? 'bad' : 'ok'}">
+                      ${p.punch_type === 'OUT' ? '− OUT' : '+ IN'}
                     </span>
-                    <div class="time muted" style="font-size:11.5px; margin-top:3px; font-weight:600; font-family:monospace;">
-                      ${p.time_12h || p.at.slice(11, 19)}
-                    </div>
                   </div>
                 </div>
               `) : html`<div class="empty" style="padding:28px;">No biometric punches received yet today.</div>`}
             </div>
           </div>
 
-          <!-- Exceptions & Needs Attention -->
-          <div class="panel" style="border-radius:14px; overflow:hidden;">
-            <header style="display:flex; justify-content:space-between; align-items:center; padding:14px 18px;">
-              <div>
-                <h2 style="font-size:14.5px; font-weight:750; margin:0;">Exceptions &amp; Manager Follow-Ups</h2>
-                <span class="small muted">Late arrivals and pending check-ins</span>
+          <!-- Exceptions & Manager Follow-Ups -->
+          <div class="analytics-chart-panel" style="padding:0; overflow:hidden;">
+            <div class="feed-header">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div class="feed-icon-box" style="background:#fef3c7; color:#d97706;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <div>
+                  <h2 style="font-size:14.5px; font-weight:750; margin:0; color:#0f172a;">Exceptions &amp; Manager Follow-Ups</h2>
+                  <span class="small muted">Late arrivals and pending check-ins</span>
+                </div>
               </div>
-              <span class="badge" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-weight:700;">
+              <span class="pill-badge" style="background:#fef3c7; color:#b45309; font-weight:700;">
                 ${k.late} Late Today
               </span>
-            </header>
-            <div class="body flush list-lines" style="max-height:280px; overflow-y:auto;">
+            </div>
+            <div class="body flush feed-scroll-body list-lines">
               ${attention(t)}
             </div>
           </div>
         </div>
 
-        <!-- 6. Compact & Interactive Daily Attendance Roster -->
-        <section class="panel" style="box-shadow:0 2px 6px rgba(0,0,0,0.03); border-radius:14px; overflow:hidden;">
-          <header style="padding:16px 20px; background:var(--surface); border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-            <div style="display:flex; align-items:center; gap:12px;">
+        <!-- 5. Compact & Interactive Daily Attendance Roster -->
+        <section class="analytics-chart-panel" style="padding:0; overflow:hidden;">
+          <header class="roster-header">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div class="roster-icon-box">👥</div>
               <div>
-                <h2 style="font-size:16px; font-weight:750; margin:0; display:flex; align-items:center; gap:8px;">
-                  📋 Today’s Workforce Attendance Roster
+                <h2 style="font-size:16px; font-weight:750; margin:0; color:#0f172a;">
+                  Today's Workforce Attendance Roster
                 </h2>
                 <span class="small muted">Showing ${filteredRibbon.length} of ${t.ribbon.length} scheduled employees · Sorted by status</span>
               </div>
             </div>
 
-            <div class="row" style="gap:10px; align-items:center; flex-wrap:wrap;">
-              <!-- Quick Search Input -->
-              <input type="search" id="roster-search" placeholder="Search employee or dept…" value="${searchTerm}" style="padding:6px 12px; border:1px solid var(--line); border-radius:20px; font-size:12.5px; width:190px; background:var(--paper);">
+            <div class="roster-controls">
+              <!-- Search Input -->
+              <div class="roster-search-wrap">
+                <span class="search-icon">${icon('search')}</span>
+                <input type="search" id="roster-search" placeholder="Search employee or department..." value="${searchTerm}" class="roster-search-input">
+              </div>
 
               <!-- Filter Tabs -->
-              <div class="tabs" style="margin-bottom:0; height:32px;">
-                <button type="button" data-roster-tab="all" aria-selected="${activeTab === 'all'}" style="height:32px; font-size:12px; padding:0 11px;">All (${t.ribbon.length})</button>
-                <button type="button" data-roster-tab="present" aria-selected="${activeTab === 'present'}" style="height:32px; font-size:12px; padding:0 11px;">Present (${k.present})</button>
-                <button type="button" data-roster-tab="late" aria-selected="${activeTab === 'late'}" style="height:32px; font-size:12px; padding:0 11px;">Late (${k.late})</button>
-                <button type="button" data-roster-tab="waiting" aria-selected="${activeTab === 'waiting'}" style="height:32px; font-size:12px; padding:0 11px;">Waiting (${k.notYet})</button>
-                <button type="button" data-roster-tab="absent" aria-selected="${activeTab === 'absent'}" style="height:32px; font-size:12px; padding:0 11px;">Absent (${k.absent})</button>
+              <div class="roster-filter-pills">
+                <button type="button" data-roster-tab="all" class="roster-pill ${activeTab === 'all' ? 'active' : ''}">All (${t.ribbon.length})</button>
+                <button type="button" data-roster-tab="present" class="roster-pill ${activeTab === 'present' ? 'active' : ''}">Present (${k.present})</button>
+                <button type="button" data-roster-tab="late" class="roster-pill ${activeTab === 'late' ? 'active' : ''}">Late (${k.late})</button>
+                <button type="button" data-roster-tab="waiting" class="roster-pill ${activeTab === 'waiting' ? 'active' : ''}">Waiting (${k.notYet})</button>
+                <button type="button" data-roster-tab="absent" class="roster-pill ${activeTab === 'absent' ? 'active' : ''}">Absent (${k.absent})</button>
               </div>
 
-              <!-- View Mode Switcher -->
-              <div class="row" style="gap:4px; background:var(--paper); padding:3px; border-radius:8px; border:1px solid var(--line);">
-                <button type="button" id="btn-mode-table" class="btn sm ${viewMode === 'table' ? 'primary' : ''}" style="border-radius:6px; padding:4px 10px; font-size:11.5px; font-weight:600;">
-                  Table
+              <!-- View Switcher -->
+              <div class="roster-view-switcher">
+                <button type="button" id="btn-mode-table" class="switcher-btn ${viewMode === 'table' ? 'active' : ''}">
+                  ${icon('table') || '📋'} Table
                 </button>
-                <button type="button" id="btn-mode-timeline" class="btn sm ${viewMode === 'timeline' ? 'primary' : ''}" style="border-radius:6px; padding:4px 10px; font-size:11.5px; font-weight:600;">
+                <button type="button" id="btn-mode-timeline" class="switcher-btn ${viewMode === 'timeline' ? 'active' : ''}">
                   Timeline
                 </button>
+                <button type="button" id="btn-toggle-roster" class="switcher-btn">
+                  ${rosterCollapsed ? 'Expand ▴' : 'Collapse ▾'}
+                </button>
               </div>
-
-              <!-- Toggle Collapse -->
-              <button type="button" id="btn-toggle-roster" class="btn sm" style="border-radius:6px; padding:4px 10px; font-size:11.5px; font-weight:600; color:var(--muted);">
-                ${rosterCollapsed ? '🔼 Expand' : '🔽 Collapse'}
-              </button>
             </div>
           </header>
 
           ${!rosterCollapsed ? (viewMode === 'table' ? html`
-            <div class="body flush table-wrap" style="max-height:420px; overflow-y:auto;">
+            <div class="table-wrap roster-table-wrap">
               ${filteredRibbon.length ? html`
-                <table style="width:100%; border-collapse:collapse;">
-                  <thead style="position:sticky; top:0; background:var(--surface); z-index:2; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                <table class="roster-table">
+                  <thead>
                     <tr>
-                      <th style="padding:10px 16px;">Employee</th>
-                      <th style="padding:10px 16px;">Department</th>
-                      <th style="padding:10px 16px;">Assigned Shift</th>
-                      <th style="padding:10px 16px;">Terminal / Machine</th>
-                      <th style="padding:10px 16px;">Check-In (IN)</th>
-                      <th style="padding:10px 16px;">Check-Out (OUT)</th>
-                      <th style="padding:10px 16px;">Status</th>
+                      <th>Employee</th>
+                      <th>Department</th>
+                      <th>Assigned Shift</th>
+                      <th>Terminal / Machine</th>
+                      <th>Check-In (IN)</th>
+                      <th>Check-Out (OUT)</th>
+                      <th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     ${filteredRibbon.map((r) => html`
-                      <tr style="border-bottom:1px solid var(--line-2);">
-                        <td style="padding:10px 16px;">
-                          <div style="display:flex; align-items:center; gap:8px;">
-                            <div class="emp-avatar" style="width:28px; height:28px; font-size:11px;">
+                      <tr>
+                        <td>
+                          <div class="roster-emp-cell">
+                            <div class="roster-avatar">
                               ${(r.name || 'E').slice(0, 2).toUpperCase()}
                             </div>
-                            <b>${r.name}</b>
+                            <span class="roster-emp-name">${r.name}</span>
                           </div>
                         </td>
-                        <td style="padding:10px 16px;"><span class="muted small">${r.department || 'General'}</span></td>
-                        <td style="padding:10px 16px;"><span class="small font-mono">${r.shiftStart} – ${r.shiftEnd}</span></td>
-                        <td style="padding:10px 16px;">
+                        <td><span class="muted small">${r.department || 'General'}</span></td>
+                        <td><span class="small font-mono">${r.shiftStart} – ${r.shiftEnd}</span></td>
+                        <td>
                           ${r.shiftStart === '09:30' ? html`
-                            <span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-weight:600;">
-                              🏢 uFace 800
+                            <span class="device-tag uface-tag">
+                              <span class="device-dot blue"></span> uFace 800
                             </span>
                           ` : html`
-                            <span class="badge" style="background:#f3e8ff; color:#7e22ce; border:1px solid #e9d5ff; font-weight:600;">
-                              🚪 SenseFace 7A (Gate)
+                            <span class="device-tag gate-tag">
+                              <span class="device-dot purple"></span> SenseFace 7A (Gate)
                             </span>
                           `}
                         </td>
-                        <td style="padding:10px 16px;">
+                        <td>
                           ${r.checkIn ? html`
-                            <span style="font-weight:700; color:#15803d; font-family:monospace; display:inline-flex; align-items:center; gap:4px;">
-                              🟢 IN: ${r.checkIn}
+                            <span class="time-in-val">
+                              ${r.checkIn}
                             </span>
                           ` : html`<span class="muted small font-mono">—</span>`}
                         </td>
-                        <td style="padding:10px 16px;">
+                        <td>
                           ${r.checkOut ? html`
-                            <span style="font-weight:700; color:#dc2626; font-family:monospace; display:inline-flex; align-items:center; gap:4px;">
-                              🔴 OUT: ${r.checkOut}
+                            <span class="time-out-val">
+                              ${r.checkOut}
                             </span>
                           ` : html`<span class="muted small font-mono">—</span>`}
                         </td>
-                        <td style="padding:10px 16px;">${badge(r.state)}</td>
+                        <td>
+                          ${r.state === 'waiting' ? html`
+                            <span class="status-pill waiting">◆ Waiting</span>
+                          ` : r.state === 'late' ? html`
+                            <span class="status-pill late">◆ Late</span>
+                          ` : r.state === 'absent' ? html`
+                            <span class="status-pill absent">◆ Absent</span>
+                          ` : html`
+                            <span class="status-pill present">◆ Present</span>
+                          `}
+                        </td>
                       </tr>
                     `)}
                   </tbody>
@@ -544,7 +519,7 @@ async function renderManager(view, state) {
             </div>
           `) : html`
             <div style="padding:16px 20px; color:var(--muted); font-size:12.5px; text-align:center;">
-              Roster table minimized. Click "🔼 Expand" above to view all 72 employee records.
+              Roster table minimized. Click "Expand ▴" above to view records.
             </div>
           `}
         </section>
@@ -604,25 +579,27 @@ async function renderManager(view, state) {
             labels: d.hourly.map((h) => h.label),
             datasets: [
               {
-                label: '🏢 uFace 800 (Attendance Punches)',
+                label: 'uFace 800 (Attendance Punches)',
                 data: d.hourly.map((h) => h.uface),
-                borderColor: '#0284c7',
-                backgroundColor: 'rgba(2, 132, 199, 0.15)',
+                borderColor: '#2563eb',
+                backgroundColor: 'rgba(37, 99, 235, 0.12)',
                 borderWidth: 2.5,
                 fill: true,
-                tension: 0.35,
+                tension: 0.45,
                 pointRadius: 3,
+                pointBackgroundColor: '#2563eb',
                 pointHoverRadius: 6,
               },
               {
-                label: '🚪 SenseFace 7A (Gate Passes)',
+                label: 'SenseFace 7A (Gate Passes)',
                 data: d.hourly.map((h) => h.gate),
-                borderColor: '#a855f7',
-                backgroundColor: 'rgba(168, 85, 247, 0.12)',
+                borderColor: '#9333ea',
+                backgroundColor: 'rgba(147, 51, 234, 0.08)',
                 borderWidth: 2.5,
                 fill: true,
-                tension: 0.35,
+                tension: 0.45,
                 pointRadius: 3,
+                pointBackgroundColor: '#9333ea',
                 pointHoverRadius: 6,
               },
             ],
@@ -633,10 +610,7 @@ async function renderManager(view, state) {
             animation: anim,
             interaction: { mode: 'index', intersect: false },
             plugins: {
-              legend: {
-                position: 'top',
-                labels: { boxWidth: 12, boxHeight: 12, font: { weight: '600', size: 11.5 } },
-              },
+              legend: { display: false },
               tooltip: {
                 callbacks: {
                   label: (c) => ` ${c.dataset.label}: ${c.raw} punch(es)`,
@@ -645,7 +619,7 @@ async function renderManager(view, state) {
             },
             scales: {
               x: { grid: { display: false } },
-              y: { beginAtZero: true, ticks: { precision: 0 } },
+              y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: 'rgba(226, 232, 240, 0.6)' } },
             },
           },
         }));
@@ -674,7 +648,7 @@ async function renderManager(view, state) {
             responsive: true,
             maintainAspectRatio: false,
             animation: anim,
-            cutout: '72%',
+            cutout: '76%',
             plugins: {
               legend: { display: false },
               tooltip: {
@@ -696,6 +670,7 @@ async function renderManager(view, state) {
           backgroundColor: color,
           borderWidth: 0,
           borderRadius: 3,
+          maxBarThickness: 16,
         });
         const trendCanvas = $('#trend');
         if (trendCanvas) {
@@ -706,7 +681,7 @@ async function renderManager(view, state) {
               datasets: [
                 ds('On time', 'present', '#10b981'),
                 ds('Late', 'late', '#f59e0b'),
-                ds('Half day', 'half_day', '#64748b'),
+                ds('Half day', 'half_day', '#38bdf8'),
                 ds('Leave', 'leave', '#8b5cf6'),
                 ds('Absent', 'absent', '#ef4444'),
               ],
@@ -716,9 +691,9 @@ async function renderManager(view, state) {
               animation: anim,
               scales: {
                 x: { stacked: true, grid: { display: false } },
-                y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } },
+                y: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: { color: 'rgba(226, 232, 240, 0.6)' } },
               },
-              plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10 } } },
+              plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11.5, weight: '600' } } } },
             },
           }));
         }
@@ -735,8 +710,9 @@ async function renderManager(view, state) {
               datasets: [{
                 label: 'Attendance Rate (%)',
                 data: d.departments.map((x) => x.rate),
-                backgroundColor: '#0284c7',
-                borderRadius: 4,
+                backgroundColor: '#2563eb',
+                borderRadius: 6,
+                barThickness: 11,
               }],
             },
             options: {
@@ -744,7 +720,7 @@ async function renderManager(view, state) {
               maintainAspectRatio: false,
               animation: anim,
               scales: {
-                x: { min: 0, max: 100, ticks: { callback: (v) => v + '%' } },
+                x: { min: 0, max: 100, ticks: { callback: (v) => v + '%' }, grid: { color: 'rgba(226, 232, 240, 0.6)' } },
                 y: { grid: { display: false } },
               },
               plugins: {
@@ -824,13 +800,21 @@ function ribbon(t, list = null) {
 function attention(t) {
   const items = [];
   for (const r of t.ribbon || []) {
-    if (r.state === 'absent') items.push({ w: 0, n: r.name, text: badge('absent'), sub: `${r.department || 'General'}, shift ${r.shiftStart}` });
-    else if (r.lateMinutes > 0) items.push({ w: 1, n: r.name, text: badge('late', `${r.lateMinutes} min late`), sub: `in at ${r.checkIn}` });
-    else if (r.state === 'waiting' && toMin(t.nowLocal) > toMin(r.shiftStart) + 30) items.push({ w: 2, n: r.name, text: badge('waiting'), sub: `shift started ${r.shiftStart}` });
+    if (r.state === 'absent') items.push({ w: 0, n: r.name, badge: html`<span class="stream-badge bad">Absent</span>`, sub: `shift ${r.shiftStart}` });
+    else if (r.lateMinutes > 0) items.push({ w: 1, n: r.name, badge: html`<span class="status-pill late">◆ ${r.lateMinutes} min late</span>`, sub: `in ${r.checkIn || '—'}` });
+    else if (r.state === 'waiting' && toMin(t.nowLocal) > toMin(r.shiftStart) + 30) items.push({ w: 2, n: r.name, badge: html`<span class="status-pill waiting">◆ Waiting</span>`, sub: `shift started ${r.shiftStart}` });
   }
   items.sort((a, b) => a.w - b.w || a.n.localeCompare(b.n));
   if (!items.length) return html`<div class="empty" style="padding:24px;">✓ All employees arrived on time. Nothing needs attention.</div>`;
-  return items.slice(0, 8).map((i) => html`<div><span><b>${i.n}</b><br><span class="small muted">${i.sub}</span></span><span>${i.text}</span></div>`);
+  return items.slice(0, 8).map((i) => html`
+    <div class="stream-item">
+      <div>
+        <div style="font-weight:700; font-size:13.5px; color:#0f172a;">${i.n}</div>
+        <div class="small muted" style="margin-top:2px;">${i.sub}</div>
+      </div>
+      <div>${i.badge}</div>
+    </div>
+  `);
 }
 
 /* ======================= Staff View ======================= */
