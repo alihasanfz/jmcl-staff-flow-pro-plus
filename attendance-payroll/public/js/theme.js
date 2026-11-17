@@ -169,10 +169,10 @@ export function showAppearanceModal() {
         <div class="appearance-mode-grid" id="mode-selector-grid">
           ${MODES.map((m) => {
             const isSelected = m.id === currentMode;
-            return `
+            return html`
               <div class="mode-card ${isSelected ? 'active' : ''}" data-mode-id="${m.id}" role="button" tabindex="0">
                 <div class="mode-card-header">
-                  <span class="mode-card-icon">${m.iconSvg}</span>
+                  <span class="mode-card-icon">${raw(m.iconSvg)}</span>
                   <span class="mode-card-badge">${m.badge}</span>
                 </div>
                 <div class="mode-card-body">
@@ -184,7 +184,7 @@ export function showAppearanceModal() {
                 </div>
               </div>
             `;
-          }).join('')}
+          })}
         </div>
       </div>
 
@@ -197,7 +197,7 @@ export function showAppearanceModal() {
         <div class="appearance-accent-grid" id="accent-selector-grid">
           ${ACCENTS.map((a) => {
             const isSelected = a.id === currentAccent;
-            return `
+            return html`
               <button type="button" class="accent-card ${isSelected ? 'active' : ''}" data-accent-id="${a.id}">
                 <span class="accent-swatch" style="background-color: ${a.hex};">
                   <svg class="accent-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -208,7 +208,7 @@ export function showAppearanceModal() {
                 </span>
               </button>
             `;
-          }).join('')}
+          })}
         </div>
       </div>
 
