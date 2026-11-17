@@ -2561,3 +2561,229 @@ svg {
   border: 1px solid #fecaca;
 }
 
+/* ==================== Multi-Device Monitoring Banners & Gate Styling ==================== */
+.monitoring-section-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.monitoring-section-banner.attendance-banner {
+  border-left: 4px solid #0284c7;
+  background: linear-gradient(90deg, rgba(2, 132, 199, 0.04) 0%, var(--surface) 35%);
+}
+.monitoring-section-banner.gate-banner {
+  border-left: 4px solid #9333ea;
+  background: linear-gradient(90deg, rgba(147, 51, 234, 0.04) 0%, var(--surface) 35%);
+}
+.msb-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 280px;
+}
+.msb-icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.msb-icon-box.uface-bg {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+.msb-icon-box.gate-bg {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+.msb-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+.msb-title {
+  font-size: 16px;
+  font-weight: 750;
+  margin: 0;
+  color: var(--text);
+}
+.msb-pill {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.msb-pill.uface-pill {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+.msb-pill.gate-pill {
+  background: #f3e8ff;
+  color: #7e22ce;
+  border: 1px solid #e9d5ff;
+}
+.msb-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 650;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+.msb-status-pill.online {
+  background: #dcfce7;
+  color: #15803d;
+}
+.msb-status-pill.security {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+.msb-desc {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.msb-telemetry {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.msb-telemetry-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.msb-telemetry-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+}
+.msb-telemetry-val {
+  font-size: 16px;
+  font-weight: 750;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.text-green { color: #16a34a !important; }
+.text-purple { color: #9333ea !important; }
+
+/* Section B Gate KPI Grid (4 columns) */
+.gate-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+@media (max-width: 1024px) {
+  .gate-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .gate-kpi-grid { grid-template-columns: 1fr; }
+}
+
+/* Latest Gate Passage Strip */
+.latest-passage-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.lps-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 650;
+}
+.pulse-dot.purple {
+  background: #a855f7;
+  box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.7);
+}
+.lps-person {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lps-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #7e22ce;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+.lps-name {
+  font-weight: 700;
+  color: var(--text);
+}
+.lps-pin {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+.lps-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lps-time {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.lps-status {
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.lps-status.passed { color: #16a34a; }
+.lps-status.denied { color: #dc2626; }
+
+/* Gate direction pills */
+.gate-dir-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+.gate-dir-pill.in {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+.gate-dir-pill.out {
+  background: #fce7f3;
+  color: #be185d;
+  border: 1px solid #fbcfe8;
+}
+
+

@@ -47,8 +47,9 @@ async function renderManager(view, state) {
     const t = d.today;
     const k = t.kpi;
     const term = d.terminals || { uface: {}, gate: {} };
+    const gate = d.gateMonitoring || {};
     const ufacePunches = term.uface?.total_punches || 0;
-    const gatePunches = term.gate?.total_punches || 0;
+    const gatePunches = term.gate?.total_punches || gate.totalSwipes || 0;
 
     // Filter employees for the roster
     const filteredRibbon = (t.ribbon || []).filter((r) => {
@@ -70,6 +71,33 @@ async function renderManager(view, state) {
 
     setHTML(view, html`
       <div class="stack" style="gap:20px;">
+        <!-- SECTION A: EMPLOYEE ATTENDANCE MONITORING — uFace 800 -->
+        <div class="monitoring-section-banner attendance-banner">
+          <div class="msb-left">
+            <div class="msb-icon-box uface-bg">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div>
+              <div class="msb-title-row">
+                <h2 class="msb-title">Employee Attendance Monitoring — ZKTeco uFace 800</h2>
+                <span class="msb-pill uface-pill">Device: ZK-UFACE800-01 (SN: RKQ4262500336)</span>
+                <span class="msb-status-pill online"><span class="pulse-dot online"></span> Authoritative Source</span>
+              </div>
+              <p class="msb-desc">100% authoritative data source for scheduled staff, presence, punctuality, late arrivals, overtime, and daily roster.</p>
+            </div>
+          </div>
+          <div class="msb-telemetry">
+            <div class="msb-telemetry-item">
+              <span class="msb-telemetry-label">Attendance Punches</span>
+              <span class="msb-telemetry-val">${ufacePunches}</span>
+            </div>
+            <div class="msb-telemetry-item">
+              <span class="msb-telemetry-label">ADMS Status</span>
+              <span class="msb-telemetry-val text-green">Online · Live</span>
+            </div>
+          </div>
+        </div>
+
         <!-- 1. Executive KPI Cards (Row of 6) -->
         <section class="modern-kpi-grid">
           <!-- Card 1: Scheduled Staff -->
@@ -335,14 +363,14 @@ async function renderManager(view, state) {
 
         <!-- 4. Operational Feeds: Live Punches & Manager Attention -->
         <div class="dashboard-grid-eq">
-          <!-- Live Biometric Punch Stream -->
+          <!-- Live Biometric Punch Stream (uFace 800) -->
           <div class="analytics-chart-panel" style="padding:0; overflow:hidden;">
             <div class="feed-header">
               <div style="display:flex; align-items:center; gap:8px;">
                 <span class="pulse-dot online"></span>
                 <div>
-                  <h2 style="font-size:14.5px; font-weight:750; margin:0; color:#0f172a;">Live Biometric Punch Stream</h2>
-                  <span class="small muted">Instant punch feed from uFace 800 &amp; SenseFace 7A Gate</span>
+                  <h2 style="font-size:14.5px; font-weight:750; margin:0; color:#0f172a;">Live Biometric Punch Stream (uFace 800)</h2>
+                  <span class="small muted">Official employee attendance punch feed</span>
                 </div>
               </div>
               <a href="/attendance" data-link class="small view-audit-link">View Audit Log →</a>
@@ -357,8 +385,8 @@ async function renderManager(view, state) {
                     <div>
                       <div class="stream-emp-name">${p.name}</div>
                       <div class="stream-subtext">
-                        <span class="stream-device-dot" style="background:${p.device && p.device.includes('VDE') ? '#a855f7' : '#0284c7'};"></span>
-                        <span>${p.device && p.device.includes('VDE') ? 'SenseFace 7A (Gate)' : 'uFace 800'}</span>
+                        <span class="stream-device-dot" style="background:#0284c7;"></span>
+                        <span>uFace 800</span>
                         <span>•</span>
                         <span>PIN: ${p.pin}</span>
                       </div>
@@ -470,15 +498,11 @@ async function renderManager(view, state) {
                         <td><span class="muted small">${r.department || 'General'}</span></td>
                         <td><span class="small font-mono">${r.shiftStart} – ${r.shiftEnd}</span></td>
                         <td>
-                          ${r.shiftStart === '09:30' ? html`
+                          ${r.checkIn ? html`
                             <span class="device-tag uface-tag">
-                              <span class="device-dot blue"></span> uFace 800
+                              <span class="device-dot blue"></span> ZK-uFace 800
                             </span>
-                          ` : html`
-                            <span class="device-tag gate-tag">
-                              <span class="device-dot purple"></span> SenseFace 7A (Gate)
-                            </span>
-                          `}
+                          ` : html`<span class="muted small font-mono">—</span>`}
                         </td>
                         <td>
                           ${r.checkIn ? html`
@@ -523,6 +547,211 @@ async function renderManager(view, state) {
             </div>
           `}
         </section>
+
+        <!-- SECTION B: FACTORY GATE ACCESS MONITORING — SenseFace 7A -->
+        <div class="monitoring-section-banner gate-banner" style="margin-top:12px;">
+          <div class="msb-left">
+            <div class="msb-icon-box gate-bg">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <div>
+              <div class="msb-title-row">
+                <h2 class="msb-title">Factory Gate Access Monitoring — SenseFace 7A</h2>
+                <span class="msb-pill gate-pill">Device: VDE2251500160</span>
+                <span class="msb-status-pill security">🛡️ Gate &amp; Turnstile Controller</span>
+              </div>
+              <p class="msb-desc">Dedicated barrier security logs &amp; turnstile throughput telemetry. Completely isolated from employee attendance &amp; payroll calculations.</p>
+            </div>
+          </div>
+          <div class="msb-telemetry">
+            <div class="msb-telemetry-item">
+              <span class="msb-telemetry-label">Today's Gate Swipes</span>
+              <span class="msb-telemetry-val">${gate.totalSwipes || 0}</span>
+            </div>
+            <div class="msb-telemetry-item">
+              <span class="msb-telemetry-label">Barrier Status</span>
+              <span class="msb-telemetry-val text-purple">${gate.device?.online ? 'Online · Active' : 'Online'}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section B KPI Cards (Row of 4) -->
+        <section class="gate-kpi-grid">
+          <!-- Card 1: Total Gate Swipes -->
+          <div class="kpi-stat-card">
+            <div class="kpi-card-header">
+              <div class="kpi-icon-box" style="background:#f3e8ff; color:#7e22ce;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+              </div>
+            </div>
+            <div class="kpi-card-title">Total Gate Swipes</div>
+            <div class="kpi-card-val-row">
+              <span class="kpi-card-val">${gate.totalSwipes || 0}</span>
+              <span class="kpi-card-badge" style="background:#f3e8ff; color:#7e22ce;">Today</span>
+            </div>
+            <div class="kpi-card-foot">Total barrier turnstile interactions</div>
+          </div>
+
+          <!-- Card 2: Gate IN / OUT -->
+          <div class="kpi-stat-card">
+            <div class="kpi-card-header">
+              <div class="kpi-icon-box" style="background:#e0f2fe; color:#0369a1;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 11 12 6 7 11"/><line x1="12" y1="18" x2="12" y2="6"/></svg>
+              </div>
+            </div>
+            <div class="kpi-card-title">Gate Direction</div>
+            <div class="kpi-card-val-row">
+              <span class="kpi-card-val" style="font-size:20px; font-weight:800; color:#0369a1;">${gate.gateIn || 0} IN <span style="font-size:15px; color:var(--muted); font-weight:500;">/</span> ${gate.gateOut || 0} OUT</span>
+            </div>
+            <div class="kpi-card-foot">Entrance vs exit barrier throughput</div>
+          </div>
+
+          <!-- Card 3: Passed Barrier -->
+          <div class="kpi-stat-card">
+            <div class="kpi-card-header">
+              <div class="kpi-icon-box" style="background:#dcfce7; color:#15803d;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+            </div>
+            <div class="kpi-card-title">Passed Barrier</div>
+            <div class="kpi-card-val-row">
+              <span class="kpi-card-val" style="color:#15803d;">${gate.passedBarrier || 0}</span>
+              <span class="kpi-card-badge" style="background:#dcfce7; color:#15803d;">Authorized</span>
+            </div>
+            <div class="kpi-card-foot">${gate.uniqueEmployees || 0} registered personnel verified</div>
+          </div>
+
+          <!-- Card 4: Denied / Exceptions -->
+          <div class="kpi-stat-card">
+            <div class="kpi-card-header">
+              <div class="kpi-icon-box" style="background:#fee2e2; color:#b91c1c;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              </div>
+            </div>
+            <div class="kpi-card-title">Denied Access</div>
+            <div class="kpi-card-val-row">
+              <span class="kpi-card-val" style="color:#b91c1c;">${gate.deniedAccess || 0}</span>
+              <span class="kpi-card-badge" style="background:#fee2e2; color:#b91c1c;">Exceptions</span>
+            </div>
+            <div class="kpi-card-foot">Unregistered PINs or invalid barrier attempts</div>
+          </div>
+        </section>
+
+        <!-- Latest Gate Passage Highlight Strip -->
+        ${gate.latestPassage ? html`
+          <div class="latest-passage-strip">
+            <div class="lps-label">
+              <span class="pulse-dot purple"></span>
+              <strong>Latest Gate Passage:</strong>
+            </div>
+            <div class="lps-person">
+              <span class="lps-avatar">${(gate.latestPassage.name || 'G').slice(0, 2).toUpperCase()}</span>
+              <span class="lps-name">${gate.latestPassage.name}</span>
+              <span class="lps-pin">PIN: ${gate.latestPassage.pin}</span>
+            </div>
+            <div class="lps-meta">
+              <span class="gate-dir-pill ${gate.latestPassage.direction === 'OUT' ? 'out' : 'in'}">${gate.latestPassage.direction === 'OUT' ? '− GATE OUT' : '+ GATE IN'}</span>
+              <span class="lps-time">${gate.latestPassage.time_12h || gate.latestPassage.at}</span>
+              <span class="lps-status ${gate.latestPassage.denied ? 'denied' : 'passed'}">${gate.latestPassage.denied ? '❌ Access Denied' : '✔ Barrier Passed'}</span>
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Section B 2-Column Grid: Gate Access Logs & Gate Employee History -->
+        <div class="dashboard-grid-eq">
+          <!-- Left: Live Gate Access Logs (SenseFace 7A) -->
+          <div class="analytics-chart-panel" style="padding:0; overflow:hidden;">
+            <div class="feed-header">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="pulse-dot purple"></span>
+                <div>
+                  <h2 style="font-size:14.5px; font-weight:750; margin:0; color:#0f172a;">Live Gate Access Logs (SenseFace 7A)</h2>
+                  <span class="small muted">Real-time turnstile barrier entry and exit telemetry</span>
+                </div>
+              </div>
+              <span class="msb-pill gate-pill" style="font-size:11px;">SN: VDE2251500160</span>
+            </div>
+            <div class="body flush feed-scroll-body">
+              ${gate.logs && gate.logs.length ? gate.logs.map((gl) => html`
+                <div class="stream-item">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <div class="emp-avatar" style="background:#7e22ce; color:#fff;">
+                      ${(gl.name || 'G').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <div class="stream-emp-name">${gl.name}</div>
+                      <div class="stream-subtext">
+                        <span class="stream-device-dot" style="background:#a855f7;"></span>
+                        <span>SenseFace 7A Barrier</span>
+                        <span>•</span>
+                        <span>PIN: ${gl.pin}</span>
+                        ${gl.department ? html`<span>•</span><span>${gl.department}</span>` : ''}
+                      </div>
+                    </div>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <span class="stream-time">${gl.time_12h || gl.at.slice(11, 19)}</span>
+                    <span class="gate-dir-pill ${gl.direction === 'OUT' ? 'out' : 'in'}">
+                      ${gl.direction === 'OUT' ? '− GATE OUT' : '+ GATE IN'}
+                    </span>
+                    ${gl.denied ? html`<span class="pill-badge" style="background:#fee2e2; color:#b91c1c; font-size:11px;">Denied</span>` : ''}
+                  </div>
+                </div>
+              `) : html`<div class="empty" style="padding:28px;">No gate swipe records logged yet today.</div>`}
+            </div>
+          </div>
+
+          <!-- Right: Employee Gate Access History Today -->
+          <div class="analytics-chart-panel" style="padding:0; overflow:hidden;">
+            <div class="feed-header">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div class="feed-icon-box" style="background:#f3e8ff; color:#7e22ce;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div>
+                  <h2 style="font-size:14.5px; font-weight:750; margin:0; color:#0f172a;">Employee Gate Access History</h2>
+                  <span class="small muted">Personnel passing through factory barrier today</span>
+                </div>
+              </div>
+              <span class="pill-badge" style="background:#f3e8ff; color:#6b21a8; font-weight:700;">
+                ${gate.employeeHistory ? gate.employeeHistory.length : 0} Personnel
+              </span>
+            </div>
+            <div class="body flush feed-scroll-body" style="padding:0;">
+              ${gate.employeeHistory && gate.employeeHistory.length ? html`
+                <table class="roster-table" style="font-size:12px;">
+                  <thead>
+                    <tr>
+                      <th style="padding:8px 12px;">Personnel</th>
+                      <th style="padding:8px 12px;">First Pass</th>
+                      <th style="padding:8px 12px;">Last Pass</th>
+                      <th style="padding:8px 12px;">Total</th>
+                      <th style="padding:8px 12px;">Current</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${gate.employeeHistory.map((eh) => html`
+                      <tr>
+                        <td style="padding:8px 12px;">
+                          <div style="font-weight:700; color:var(--text);">${eh.name}</div>
+                          <span class="muted" style="font-size:11px;">${eh.department || 'General'}</span>
+                        </td>
+                        <td style="padding:8px 12px; font-family:monospace; color:#16a34a;">${eh.first_passage || '—'}</td>
+                        <td style="padding:8px 12px; font-family:monospace; color:#0369a1;">${eh.last_passage || '—'}</td>
+                        <td style="padding:8px 12px; font-weight:700;">${eh.total_passes}</td>
+                        <td style="padding:8px 12px;">
+                          <span class="gate-dir-pill ${eh.latest_direction === 'OUT' ? 'out' : 'in'}" style="font-size:10.5px; padding:2px 7px;">
+                            ${eh.latest_direction === 'OUT' ? 'OUTSIDE' : 'INSIDE'}
+                          </span>
+                        </td>
+                      </tr>
+                    `)}
+                  </tbody>
+                </table>
+              ` : html`<div class="empty" style="padding:28px;">No employee barrier activity logged today.</div>`}
+            </div>
+          </div>
+        </div>
       </div>
     `);
 

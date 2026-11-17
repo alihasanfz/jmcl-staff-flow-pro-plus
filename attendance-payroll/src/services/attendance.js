@@ -44,6 +44,12 @@ async function rebuildRange(from, to, { userId = null } = {}) {
               AND punched_at >= ($2::date::timestamp AT TIME ZONE $1)
               AND punched_at <  (($3::date + 1)::timestamp AT TIME ZONE $1)
               AND ($4::int IS NULL OR user_id = $4)
+              AND UPPER(TRIM(COALESCE(device_sn, ''))) NOT IN ('VDE2251500160')
+              AND NOT EXISTS (
+                SELECT 1 FROM devices d
+                 WHERE (d.id = punch_logs.device_id OR UPPER(TRIM(d.serial_number)) = UPPER(TRIM(punch_logs.device_sn)))
+                   AND (UPPER(TRIM(d.serial_number)) = 'VDE2251500160' OR LOWER(d.model) LIKE '%gate%' OR LOWER(d.name) LIKE '%gate%')
+              )
             ORDER BY punched_at`, [tz, from, last, userId]),
   ]);
 
@@ -197,7 +203,15 @@ async function ingestPunches({ device, records, source = 'device' }) {
     else unknownPins.add(r.pin);
   }
 
-  for (const { userId, date } of touched.values()) await rebuildRange(date, date, { userId });
+  const isGate = device && (
+    String(device.serial_number || '').trim().toUpperCase() === 'VDE2251500160' ||
+    (device.model && device.model.toLowerCase().includes('gate')) ||
+    (device.name && device.name.toLowerCase().includes('gate'))
+  );
+
+  if (!isGate) {
+    for (const { userId, date } of touched.values()) await rebuildRange(date, date, { userId });
+  }
   return { inserted, duplicates: records.length - inserted, unknownPins: [...unknownPins], touched: [...touched.values()], insertedPunches };
 }
 

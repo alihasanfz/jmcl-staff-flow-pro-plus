@@ -16,7 +16,7 @@ router.use((req, res, next) => {
 });
 
 router.get(['/', '/overview'], wrap(async (req, res) => {
-  const [today, trend, departments, punches, devices, hourly, terminals] = await Promise.all([
+  const [today, trend, departments, punches, devices, hourly, terminals, gateMonitoring] = await Promise.all([
     dash.today(),
     dash.trend(Math.min(Math.max(toInt(req.query.days, 14), 7), 60)),
     dash.departments(),
@@ -24,8 +24,9 @@ router.get(['/', '/overview'], wrap(async (req, res) => {
     dash.deviceStatus(),
     dash.hourlyFlow(),
     dash.terminalMetrics(),
+    dash.gateMonitoring(),
   ]);
-  res.json({ today, trend, departments, punches, devices, hourly, terminals });
+  res.json({ today, trend, departments, punches, devices, hourly, terminals, gateMonitoring });
 }));
 
 module.exports = router;

@@ -123,6 +123,7 @@ async function recentPunches(limit = 12) {
             COALESCE(d.name, p.device_sn) AS device,
             p.device_sn
        FROM punch_logs p LEFT JOIN users u ON u.id = p.user_id LEFT JOIN devices d ON d.id = p.device_id
+      WHERE UPPER(TRIM(COALESCE(p.device_sn, ''))) <> 'VDE2251500160'
       ORDER BY p.punched_at DESC LIMIT $2`, [tz, limit]);
   return rows;
 }
@@ -203,20 +204,102 @@ async function terminalMetrics() {
   const { timezone: tz } = await getSettings();
   const date = todayIn(tz);
   const { rows } = await query(
-    `SELECT UPPER(device_sn) AS sn,
+    `SELECT UPPER(TRIM(device_sn)) AS sn,
             COUNT(*)::int AS total_punches,
             COUNT(DISTINCT user_id)::int AS unique_users,
             to_char(MIN(punched_at) AT TIME ZONE $1, 'HH12:MI AM') AS first_punch,
             to_char(MAX(punched_at) AT TIME ZONE $1, 'HH12:MI AM') AS last_punch
        FROM punch_logs
       WHERE to_char(punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = $2
-      GROUP BY UPPER(device_sn)`, [tz, date]);
+      GROUP BY UPPER(TRIM(device_sn))`, [tz, date]);
 
   const stats = new Map(rows.map((r) => [r.sn, r]));
   return {
-    uface: stats.get('RKQ4262500336') || { sn: 'RKQ4262500336', total_punches: 0, unique_users: 0, first_punch: '—', last_punch: '—' },
+    uface: stats.get('RKQ4262500336') || stats.get('ZK-UFACE800-01') || { sn: 'ZK-UFACE800-01', total_punches: 0, unique_users: 0, first_punch: '—', last_punch: '—' },
     gate: stats.get('VDE2251500160') || { sn: 'VDE2251500160', total_punches: 0, unique_users: 0, first_punch: '—', last_punch: '—' },
   };
 }
 
-module.exports = { today, trend, departments, recentPunches, deviceStatus, hourlyFlow, terminalMetrics, mine };
+/** Factory Gate Access Monitoring (SenseFace 7A — VDE2251500160) */
+async function gateMonitoring() {
+  const { timezone: tz } = await getSettings();
+  const date = todayIn(tz);
+
+  const [aggRes, logsRes, deviceRes, historyRes] = await Promise.all([
+    query(
+      `SELECT COUNT(*)::int AS total_swipes,
+              COUNT(*) FILTER (WHERE p.state = 0 OR to_char(p.punched_at AT TIME ZONE $1, 'HH24:MI:SS') < '16:00:00')::int AS gate_in,
+              COUNT(*) FILTER (WHERE p.state = 1 OR to_char(p.punched_at AT TIME ZONE $1, 'HH24:MI:SS') >= '16:00:00')::int AS gate_out,
+              COUNT(*) FILTER (WHERE p.user_id IS NOT NULL AND p.pin <> '0')::int AS passed_barrier,
+              COUNT(*) FILTER (WHERE p.user_id IS NULL OR p.pin = '0')::int AS denied_access,
+              COUNT(DISTINCT p.user_id)::int AS unique_employees
+         FROM punch_logs p
+        WHERE UPPER(TRIM(COALESCE(p.device_sn, ''))) = 'VDE2251500160'
+          AND to_char(p.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = $2`, [tz, date]),
+    query(
+      `SELECT p.id, COALESCE(u.name, 'Unregistered PIN ' || p.pin) AS name,
+              u.employee_code, u.department, p.pin,
+              (p.user_id IS NULL OR p.pin = '0') AS denied,
+              p.state,
+              to_char(p.punched_at AT TIME ZONE $1, 'YYYY-MM-DD HH24:MI:SS') AS at,
+              to_char(p.punched_at AT TIME ZONE $1, 'HH12:MI:SS AM') AS time_12h,
+              CASE WHEN p.state = 1 OR to_char(p.punched_at AT TIME ZONE $1, 'HH24:MI:SS') >= '16:00:00' THEN 'OUT' ELSE 'IN' END AS direction,
+              COALESCE(d.name, 'SenseFace 7A') AS device_name,
+              p.device_sn
+         FROM punch_logs p
+         LEFT JOIN users u ON u.id = p.user_id
+         LEFT JOIN devices d ON (d.id = p.device_id OR UPPER(d.serial_number) = UPPER(p.device_sn))
+        WHERE UPPER(TRIM(COALESCE(p.device_sn, ''))) = 'VDE2251500160'
+          AND to_char(p.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = $2
+        ORDER BY p.punched_at DESC
+        LIMIT 25`, [tz, date]),
+    query(
+      `SELECT id, name, serial_number, model, location, online, last_seen, last_ip,
+              ROUND(EXTRACT(EPOCH FROM (now() - last_seen)))::int AS diff_sec
+         FROM devices
+        WHERE UPPER(TRIM(serial_number)) = 'VDE2251500160'
+        ORDER BY id DESC LIMIT 1`),
+    query(
+      `SELECT u.id, u.name, u.employee_code, u.department,
+              COUNT(*)::int AS total_passes,
+              to_char(MIN(p.punched_at) AT TIME ZONE $1, 'HH12:MI AM') AS first_passage,
+              to_char(MAX(p.punched_at) AT TIME ZONE $1, 'HH12:MI AM') AS last_passage,
+              CASE WHEN MAX(p.punched_at) = MAX(CASE WHEN p.state = 1 OR to_char(p.punched_at AT TIME ZONE $1, 'HH24:MI:SS') >= '16:00:00' THEN p.punched_at END)
+                   THEN 'OUT' ELSE 'IN' END AS latest_direction
+         FROM punch_logs p
+         JOIN users u ON u.id = p.user_id
+        WHERE UPPER(TRIM(COALESCE(p.device_sn, ''))) = 'VDE2251500160'
+          AND to_char(p.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') = $2
+        GROUP BY u.id, u.name, u.employee_code, u.department
+        ORDER BY MAX(p.punched_at) DESC
+        LIMIT 50`, [tz, date]),
+  ]);
+
+  const agg = aggRes.rows[0] || {};
+  const logs = logsRes.rows || [];
+  const gateDevice = deviceRes.rows[0] || null;
+  const isOnline = gateDevice ? (gateDevice.diff_sec !== null && gateDevice.diff_sec < 900) : true;
+
+  return {
+    totalSwipes: agg.total_swipes || 0,
+    gateIn: agg.gate_in || 0,
+    gateOut: agg.gate_out || 0,
+    passedBarrier: agg.passed_barrier || 0,
+    deniedAccess: agg.denied_access || 0,
+    uniqueEmployees: agg.unique_employees || 0,
+    latestPassage: logs[0] || null,
+    device: {
+      name: gateDevice?.name || 'SenseFace 7A',
+      serialNumber: 'VDE2251500160',
+      model: gateDevice?.model || 'SenseFace 7A (Barrier Gate)',
+      location: gateDevice?.location || 'Factory Main Entrance Barrier',
+      online: isOnline,
+      lastSeen: gateDevice?.last_seen || null,
+      lastIp: gateDevice?.last_ip || '192.168.0.202',
+    },
+    logs,
+    employeeHistory: historyRes.rows || [],
+  };
+}
+
+module.exports = { today, trend, departments, recentPunches, deviceStatus, hourlyFlow, terminalMetrics, mine, gateMonitoring };
