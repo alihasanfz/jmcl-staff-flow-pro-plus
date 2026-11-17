@@ -151,7 +151,7 @@ async function identify(req, res) {
 
 const usable = (d) => d && d.active !== false;
 
-const CLOUD_SYNC_TARGET = (process.env.CLOUD_SYNC_TARGET || 'https://jmcl-staff-flow-pro-plus-2846.onrender.com').replace(/\/$/, '');
+const CLOUD_SYNC_TARGET = (process.env.CLOUD_SYNC_TARGET || 'https://jmcl-staff-flow-pro-plus-qmt0.onrender.com').replace(/\/$/, '');
 const lastCloudForward = new Map();
 
 function forwardToCloud(req, rawBody = null) {
