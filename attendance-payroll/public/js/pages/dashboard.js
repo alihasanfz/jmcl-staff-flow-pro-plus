@@ -50,6 +50,7 @@ async function renderManager(view, state) {
     const gate = d.gateMonitoring || {};
     const ufacePunches = term.uface?.total_punches || 0;
     const gatePunches = term.gate?.total_punches || gate.totalSwipes || 0;
+    const otCount = k.overtimeCount ?? (t.ribbon || []).filter((r) => (r.overtimeMinutes || 0) > 0).length;
 
     // Filter employees for the roster
     const filteredRibbon = (t.ribbon || []).filter((r) => {
@@ -59,9 +60,9 @@ async function renderManager(view, state) {
         (r.shiftStart && r.shiftStart.includes(searchTerm));
       if (!matchSearch) return false;
       if (activeTab === 'present') return ['present', 'late'].includes(r.state) || r.checkIn;
-      if (activeTab === 'waiting') return r.state === 'waiting';
       if (activeTab === 'late') return r.lateMinutes > 0;
       if (activeTab === 'absent') return r.state === 'absent';
+      if (activeTab === 'overtime') return (r.overtimeMinutes || 0) > 0;
       return true;
     });
 
@@ -211,28 +212,30 @@ async function renderManager(view, state) {
           <!-- Card 5: Absent -->
           <div class="kpi-stat-card">
             <div class="kpi-card-header">
-              <div class="kpi-icon-box" style="background:#e0f2fe; color:#0891b2;">
+              <div class="kpi-icon-box" style="background:#fee2e2; color:#b91c1c;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/></svg>
               </div>
             </div>
             <div class="kpi-card-title">Absent</div>
             <div class="kpi-card-val-row">
-              <span class="kpi-card-val">${k.absent}</span>
-              <span class="kpi-card-badge" style="background:#e0f2fe; color:#0891b2;">+ 0.0%</span>
+              <span class="kpi-card-val" style="color:#b91c1c;">${k.absent}</span>
+              <span class="kpi-card-badge" style="background:#fee2e2; color:#b91c1c;">${k.absentRate ?? (k.expected ? Math.round((k.absent / k.expected) * 100) : 0)}%</span>
             </div>
             <div class="kpi-sparkline">
               <svg viewBox="0 0 100 24" preserveAspectRatio="none">
                 <defs>
                   <linearGradient id="gradAbs" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#0891b2" stop-opacity="0.25"/>
-                    <stop offset="100%" stop-color="#0891b2" stop-opacity="0.0"/>
+                    <stop offset="0%" stop-color="#b91c1c" stop-opacity="0.25"/>
+                    <stop offset="100%" stop-color="#b91c1c" stop-opacity="0.0"/>
                   </linearGradient>
                 </defs>
                 <path d="M 0,18 Q 40,16 70,19 T 100,15 L 100,24 L 0,24 Z" fill="url(#gradAbs)"/>
-                <path d="M 0,18 Q 40,16 70,19 T 100,15" fill="none" stroke="#0891b2" stroke-width="2.2" stroke-linecap="round"/>
+                <path d="M 0,18 Q 40,16 70,19 T 100,15" fill="none" stroke="#b91c1c" stroke-width="2.2" stroke-linecap="round"/>
               </svg>
             </div>
-            <div class="kpi-card-foot">Zero unreported absences</div>
+            <div class="kpi-card-foot" style="color:${k.absent > 0 ? '#b91c1c' : 'var(--muted)'}; font-weight:600;">
+              ${k.absent > 0 ? `${k.absent} unpunched on uFace 800` : 'Zero unpunched absences'}
+            </div>
           </div>
 
           <!-- Card 6: Overtime Hours -->
@@ -245,7 +248,7 @@ async function renderManager(view, state) {
             <div class="kpi-card-title">Overtime Hours</div>
             <div class="kpi-card-val-row">
               <span class="kpi-card-val" style="color:#db2777;">${(k.overtimeMinutes / 60).toFixed(1)} <span style="font-size:15px; font-weight:600;">hrs</span></span>
-              <span class="kpi-card-badge" style="background:#fce7f3; color:#db2777;">Regular Shift</span>
+              <span class="kpi-card-badge" style="background:#fce7f3; color:#db2777;">${otCount} Staff</span>
             </div>
             <div class="kpi-sparkline">
               <svg viewBox="0 0 100 24" preserveAspectRatio="none">
@@ -259,7 +262,9 @@ async function renderManager(view, state) {
                 <path d="M 0,20 Q 35,21 70,14 T 100,9" fill="none" stroke="#db2777" stroke-width="2.2" stroke-linecap="round"/>
               </svg>
             </div>
-            <div class="kpi-card-foot">Shift ends at 07:00 PM</div>
+            <div class="kpi-card-foot" style="color:#db2777; font-weight:600;">
+              ${otCount} employee(s) worked OT
+            </div>
           </div>
         </section>
 
@@ -316,7 +321,7 @@ async function renderManager(view, state) {
             <div class="donut-legend-grid">
               <div class="legend-item"><span class="legend-dot" style="background:#10b981;"></span> On-time: <b>${onTimeCount}</b></div>
               <div class="legend-item"><span class="legend-dot" style="background:#f59e0b;"></span> Late: <b>${k.late}</b></div>
-              <div class="legend-item"><span class="legend-dot" style="background:#38bdf8;"></span> Waiting: <b>${k.notYet}</b></div>
+              <div class="legend-item"><span class="legend-dot" style="background:#db2777;"></span> Overtime: <b>${otCount}</b></div>
               <div class="legend-item"><span class="legend-dot" style="background:#ef4444;"></span> Absent: <b>${k.absent}</b></div>
             </div>
           </div>
@@ -450,8 +455,8 @@ async function renderManager(view, state) {
                 <button type="button" data-roster-tab="all" class="roster-pill ${activeTab === 'all' ? 'active' : ''}">All (${t.ribbon.length})</button>
                 <button type="button" data-roster-tab="present" class="roster-pill ${activeTab === 'present' ? 'active' : ''}">Present (${k.present})</button>
                 <button type="button" data-roster-tab="late" class="roster-pill ${activeTab === 'late' ? 'active' : ''}">Late (${k.late})</button>
-                <button type="button" data-roster-tab="waiting" class="roster-pill ${activeTab === 'waiting' ? 'active' : ''}">Waiting (${k.notYet})</button>
                 <button type="button" data-roster-tab="absent" class="roster-pill ${activeTab === 'absent' ? 'active' : ''}">Absent (${k.absent})</button>
+                <button type="button" data-roster-tab="overtime" class="roster-pill ${activeTab === 'overtime' ? 'active' : ''}">Overtime (${otCount})</button>
               </div>
 
               <!-- View Switcher -->
@@ -481,6 +486,7 @@ async function renderManager(view, state) {
                       <th>Terminal / Machine</th>
                       <th>Check-In (IN)</th>
                       <th>Check-Out (OUT)</th>
+                      <th>Overtime</th>
                       <th>Status</th>
                     </tr>
                   </thead>
@@ -519,12 +525,19 @@ async function renderManager(view, state) {
                           ` : html`<span class="muted small font-mono">—</span>`}
                         </td>
                         <td>
-                          ${r.state === 'waiting' ? html`
-                            <span class="status-pill waiting">◆ Waiting</span>
-                          ` : r.state === 'late' ? html`
+                          ${(r.overtimeMinutes || 0) > 0 ? html`
+                            <span class="ot-pill">
+                              +${((r.overtimeMinutes || 0) / 60).toFixed(1)} hrs
+                            </span>
+                          ` : html`<span class="muted small font-mono">—</span>`}
+                        </td>
+                        <td>
+                          ${r.state === 'late' ? html`
                             <span class="status-pill late">◆ Late</span>
                           ` : r.state === 'absent' ? html`
                             <span class="status-pill absent">◆ Absent</span>
+                          ` : r.state === 'leave' ? html`
+                            <span class="status-pill leave">◆ Leave</span>
                           ` : html`
                             <span class="status-pill present">◆ Present</span>
                           `}
@@ -863,15 +876,15 @@ async function renderManager(view, state) {
         charts.push(new Chart(donutCanvas, {
           type: 'doughnut',
           data: {
-            labels: ['On-time Present', 'Late Arrivals', 'Waiting to Check-in', 'Absent'],
+            labels: ['On-time Present', 'Late Arrivals', 'Overtime Staff', 'Absent'],
             datasets: [{
               data: [
                 onTimeCount,
                 k.late || 0,
-                k.notYet || 0,
+                otCount || 0,
                 k.absent || 0,
               ],
-              backgroundColor: ['#10b981', '#f59e0b', '#38bdf8', '#ef4444'],
+              backgroundColor: ['#10b981', '#f59e0b', '#db2777', '#ef4444'],
               borderWidth: 0,
               hoverOffset: 4,
             }],

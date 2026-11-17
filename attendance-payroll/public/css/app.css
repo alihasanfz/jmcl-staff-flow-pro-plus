@@ -2786,4 +2786,25 @@ svg {
   border: 1px solid #fbcfe8;
 }
 
+/* Overtime Pill & Leave Status */
+.ot-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 14px;
+  font-size: 11.5px;
+  font-weight: 750;
+  background: #fce7f3;
+  color: #db2777;
+  border: 1px solid #fbcfe8;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+.status-pill.leave {
+  background: #f3e8ff;
+  color: #7e22ce;
+  border: 1px solid #e9d5ff;
+}
+
+
 

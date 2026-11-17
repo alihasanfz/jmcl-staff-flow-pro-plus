@@ -3,6 +3,9 @@ const router = require('express').Router();
 const { wrap, toInt, forbidden } = require('../utils/http');
 const { requireRole, canView } = require('../middleware/auth');
 const dash = require('../services/dashboard');
+const { rebuildRange } = require('../services/attendance');
+const { getSettings } = require('../services/settings');
+const { todayIn } = require('../utils/time');
 
 // Personal summary for any signed-in user.
 router.get('/mine', wrap(async (req, res) => res.json(await dash.mine(req.user.id))));
@@ -16,6 +19,14 @@ router.use((req, res, next) => {
 });
 
 router.get(['/', '/overview'], wrap(async (req, res) => {
+  try {
+    const { timezone: tz } = await getSettings();
+    const date = todayIn(tz);
+    await rebuildRange(date, date);
+  } catch (err) {
+    // Non-blocking: proceed with dashboard render even if rebuildRange encounters a transient issue
+  }
+
   const [today, trend, departments, punches, devices, hourly, terminals, gateMonitoring] = await Promise.all([
     dash.today(),
     dash.trend(Math.min(Math.max(toInt(req.query.days, 14), 7), 60)),

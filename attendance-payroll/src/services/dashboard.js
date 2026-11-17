@@ -28,7 +28,7 @@ async function today() {
 
   const expected = people.rows.filter((p) => !holiday && !isOff(p));
   const offDayWorkers = people.rows.filter((p) => (holiday || isOff(p)));
-  const kpi = { expected: expected.length, present: 0, late: 0, absent: 0, onLeave: 0, notYet: 0, overtimeMinutes: 0 };
+  const kpi = { expected: expected.length, present: 0, late: 0, absent: 0, onLeave: 0, notYet: 0, overtimeMinutes: 0, overtimeCount: 0 };
   const ribbon = [];
 
   for (const p of expected) {
@@ -37,14 +37,18 @@ async function today() {
     if (r && ['present', 'late', 'half_day'].includes(r.status)) {
       kpi.present++;
       if (r.late_minutes > 0) kpi.late++;
-      kpi.overtimeMinutes += r.overtime_minutes || 0;
+      if ((r.overtime_minutes || 0) > 0) {
+        kpi.overtimeMinutes += r.overtime_minutes;
+        kpi.overtimeCount++;
+      }
       state = r.late_minutes > 0 ? 'late' : r.status;
     } else if (onLeave.has(p.id) || (r && ['leave', 'unpaid_leave'].includes(r.status))) {
-      kpi.onLeave++; state = 'leave';
-    } else if (r && r.status === 'absent') {
-      kpi.absent++; state = 'absent';
+      kpi.onLeave++;
+      state = 'leave';
     } else {
-      kpi.notYet++; state = 'waiting';
+      // Anyone who did not punch on ZK-UFACE800-01 terminal is marked ABSENT
+      kpi.absent++;
+      state = 'absent';
     }
     ribbon.push({
       id: p.id, name: p.name, department: p.department, state,
@@ -59,7 +63,10 @@ async function today() {
     const r = byUser.get(p.id);
     if (r && ['present', 'late', 'half_day'].includes(r.status)) {
       kpi.present++;
-      kpi.overtimeMinutes += r.overtime_minutes || 0;
+      if ((r.overtime_minutes || 0) > 0) {
+        kpi.overtimeMinutes += r.overtime_minutes;
+        kpi.overtimeCount++;
+      }
       ribbon.unshift({
         id: p.id, name: p.name, department: p.department, state: 'present',
         shiftStart: (p.st || '09:00:00').slice(0, 5), shiftEnd: (p.et || '18:00:00').slice(0, 5),
