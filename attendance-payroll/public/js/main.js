@@ -4,6 +4,7 @@ import { html, setHTML, $, $$, esc, icon, toast, modal, ago } from './ui.js';
 import { pushState, enablePush, disablePush } from './push.js';
 import { t, getLang, setLang } from './i18n.js';
 import { canView, canEdit, getUserPermission } from './permissions.js';
+import { initThemeEngine, showAppearanceModal, updateTopbarThemeBtn, applyTheme } from './theme.js';
 
 const app = $('#app');
 export const state = { user: null, meta: null };
@@ -58,26 +59,15 @@ const PAGES = {
 let cleanup = null;
 let pollTimer = null;
 
-// Theme Initialization
-const savedTheme = localStorage.getItem('jmcl_theme') || 'light';
-document.documentElement.setAttribute('data-theme', savedTheme);
+// Theme Initialization & Appearance Engine
+initThemeEngine();
 
 export function toggleTheme() {
   const current = document.documentElement.getAttribute('data-theme') || 'light';
   const next = current === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', next);
-  localStorage.setItem('jmcl_theme', next);
-  updateThemeIcon();
+  applyTheme(next, localStorage.getItem('jmcl_accent') || 'blue');
 }
-
-function updateThemeIcon() {
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  const btn = $('#theme-toggle');
-  if (btn) {
-    setHTML(btn, isDark ? icon('sun') : icon('moon'));
-    btn.setAttribute('title', isDark ? t('lightMode') : t('darkMode'));
-  }
-}
+export { applyTheme, showAppearanceModal };
 
 /* ---------- routing ---------- */
 export function navigate(path, replace = false) {
@@ -202,6 +192,11 @@ function buildShell(nav) {
               ${icon('globe')}
               <span>${getLang() === 'en' ? 'বাংলা ⌵' : 'English ⌵'}</span>
             </button>
+            <button class="pill-btn theme-pill" id="theme-settings-btn" title="${t('appearanceSettings') || 'Appearance & Theme Settings'}">
+              <span class="theme-swatch-dot" id="theme-swatch-dot"></span>
+              <span class="theme-icon-holder" id="theme-top-icon"></span>
+              <span id="theme-top-label">Theme ⌵</span>
+            </button>
             <button class="bell circular-btn" id="bell" aria-label="Notifications" aria-haspopup="dialog">
               ${icon('bell')}
               <span class="count" id="bell-count" hidden></span>
@@ -233,8 +228,8 @@ function buildShell(nav) {
     }
   });
 
-  $('#theme-toggle')?.addEventListener('click', toggleTheme);
-  updateThemeIcon();
+  $('#theme-settings-btn')?.addEventListener('click', showAppearanceModal);
+  updateTopbarThemeBtn();
 
   $('#lang-toggle').addEventListener('click', () => {
     const nextLang = getLang() === 'en' ? 'bn' : 'en';

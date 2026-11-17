@@ -15,7 +15,25 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <link rel="stylesheet" href="/css/app.css?v=7.0">
+  <link rel="stylesheet" href="/css/app.css?v=7.1">
+  <script>
+    (function() {
+      try {
+        var mode = localStorage.getItem('jmcl_theme_mode') || localStorage.getItem('jmcl_theme') || 'light';
+        var accent = localStorage.getItem('jmcl_accent') || 'blue';
+        var effective = mode;
+        if (mode === 'system') {
+          effective = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        } else if (mode === 'auto') {
+          var h = new Date().getHours();
+          effective = (h >= 6 && h < 18) ? 'light' : 'dark';
+        }
+        document.documentElement.setAttribute('data-theme', effective);
+        document.documentElement.setAttribute('data-mode-pref', mode);
+        document.documentElement.setAttribute('data-accent', accent);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 
 <body>
@@ -25,7 +43,7 @@
   <div id="toasts" role="status" aria-live="polite"></div>
   <noscript>This application needs JavaScript.</noscript>
   <script src="/vendor/chart.js"></script>
-  <script type="module" src="/js/main.js?v=7.0"></script>
+  <script type="module" src="/js/main.js?v=7.1"></script>
 </body>
 
 </html>

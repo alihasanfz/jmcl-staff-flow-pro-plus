@@ -567,8 +567,11 @@ async function renderManager(view, state) {
     // Render All Analytics Charts
     if (window.Chart) {
       Chart.defaults.font.family = getComputedStyle(document.body).fontFamily || 'Inter, sans-serif';
-      Chart.defaults.color = css('--muted') || '#64748b';
       const anim = reduceMotion() ? false : { duration: 400 };
+      const gridColor = css('--line') || 'rgba(226, 232, 240, 0.6)';
+      const tickColor = css('--muted') || '#64748b';
+      const primaryColor = css('--primary') || '#2563eb';
+      Chart.defaults.color = tickColor;
 
       // 1. Hourly Biometric Flow Curve (Line/Area Chart)
       const hourlyCanvas = $('#hourly-chart');
@@ -581,13 +584,13 @@ async function renderManager(view, state) {
               {
                 label: 'uFace 800 (Attendance Punches)',
                 data: d.hourly.map((h) => h.uface),
-                borderColor: '#2563eb',
+                borderColor: primaryColor,
                 backgroundColor: 'rgba(37, 99, 235, 0.12)',
                 borderWidth: 2.5,
                 fill: true,
                 tension: 0.45,
                 pointRadius: 3,
-                pointBackgroundColor: '#2563eb',
+                pointBackgroundColor: primaryColor,
                 pointHoverRadius: 6,
               },
               {
@@ -618,8 +621,8 @@ async function renderManager(view, state) {
               },
             },
             scales: {
-              x: { grid: { display: false } },
-              y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: 'rgba(226, 232, 240, 0.6)' } },
+              x: { ticks: { color: tickColor }, grid: { display: false } },
+              y: { beginAtZero: true, ticks: { color: tickColor, precision: 0 }, grid: { color: gridColor } },
             },
           },
         }));
@@ -690,10 +693,10 @@ async function renderManager(view, state) {
               maintainAspectRatio: false,
               animation: anim,
               scales: {
-                x: { stacked: true, grid: { display: false } },
-                y: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: { color: 'rgba(226, 232, 240, 0.6)' } },
+                x: { stacked: true, ticks: { color: tickColor }, grid: { display: false } },
+                y: { stacked: true, beginAtZero: true, ticks: { color: tickColor, precision: 0 }, grid: { color: gridColor } },
               },
-              plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11.5, weight: '600' } } } },
+              plugins: { legend: { position: 'bottom', labels: { color: tickColor, boxWidth: 10, boxHeight: 10, font: { size: 11.5, weight: '600' } } } },
             },
           }));
         }
@@ -710,7 +713,7 @@ async function renderManager(view, state) {
               datasets: [{
                 label: 'Attendance Rate (%)',
                 data: d.departments.map((x) => x.rate),
-                backgroundColor: '#2563eb',
+                backgroundColor: primaryColor,
                 borderRadius: 6,
                 barThickness: 11,
               }],
@@ -720,8 +723,8 @@ async function renderManager(view, state) {
               maintainAspectRatio: false,
               animation: anim,
               scales: {
-                x: { min: 0, max: 100, ticks: { callback: (v) => v + '%' }, grid: { color: 'rgba(226, 232, 240, 0.6)' } },
-                y: { grid: { display: false } },
+                x: { min: 0, max: 100, ticks: { color: tickColor, callback: (v) => v + '%' }, grid: { color: gridColor } },
+                y: { ticks: { color: tickColor }, grid: { display: false } },
               },
               plugins: {
                 legend: { display: false },
@@ -733,6 +736,11 @@ async function renderManager(view, state) {
       }
     }
   };
+
+  const onThemeChange = () => {
+    if (cachedData) draw(cachedData);
+  };
+  window.addEventListener('themechange', onThemeChange);
 
   const load = async () => {
     try {
@@ -750,6 +758,7 @@ async function renderManager(view, state) {
   return () => {
     clearInterval(pollTimer);
     clearInterval(clockTimer);
+    window.removeEventListener('themechange', onThemeChange);
     charts.forEach((c) => c.destroy());
   };
 }

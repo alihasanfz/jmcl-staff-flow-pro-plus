@@ -1,5 +1,6 @@
 import { get, post, put, del } from '../api.js';
 import { html, setHTML, $, $$, toast, modal, formValues, confirmDialog, fmtDateLong, ago } from '../ui.js';
+import { MODES, ACCENTS, getThemeSettings, applyTheme } from '../theme.js';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -10,10 +11,10 @@ export async function render(view, state) {
 
   const frame = () => {
     setHTML(view, html`<div class="stack"><div class="tabs" role="tablist">
-      ${[['rules', 'Company & rules'], ['shifts', 'Shifts'], ['holidays', 'Holidays'], ['leave', 'Leave types'], ...(isAdmin ? [['audit', 'Audit log']] : [])].map(([k, l]) => html`<button role="tab" data-tab="${k}" aria-selected="${tab === k}">${l}</button>`)}
+      ${[['rules', 'Company & rules'], ['shifts', 'Shifts'], ['holidays', 'Holidays'], ['leave', 'Leave types'], ['appearance', 'Appearance & Theme'], ...(isAdmin ? [['audit', 'Audit log']] : [])].map(([k, l]) => html`<button role="tab" data-tab="${k}" aria-selected="${tab === k}">${l}</button>`)}
     </div><div id="tab"></div></div>`);
     $$('[data-tab]', view).forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab; frame(); }));
-    ({ rules, shifts, holidays, leave, audit }[tab])();
+    ({ rules, shifts, holidays, leave, appearance, audit }[tab])();
   };
 
   /* ---- company & rules ---- */
@@ -128,6 +129,124 @@ export async function render(view, state) {
       close(); toast('Leave type saved'); leave();
     },
   });
+
+  /* ---- appearance & theme ---- */
+  const appearance = () => {
+    let { mode: curMode, accent: curAccent } = getThemeSettings();
+    setHTML($('#tab'), html`
+      <div class="stack" style="max-width: 860px;">
+        <section class="panel">
+          <header><h2>Display Mode</h2></header>
+          <div class="body">
+            <p class="muted small" style="margin-bottom: 14px;">Select how the dashboard workspace presents across all screens. Automatically saved.</p>
+            <div class="appearance-mode-grid" id="settings-mode-grid">
+              ${MODES.map((m) => html`
+                <div class="mode-card ${m.id === curMode ? 'active' : ''}" data-mode="${m.id}" role="button" tabindex="0">
+                  <div class="mode-card-header">
+                    <span class="mode-card-icon">${raw(m.iconSvg)}</span>
+                    <span class="mode-card-badge">${m.badge}</span>
+                  </div>
+                  <div class="mode-card-body">
+                    <div class="mode-card-title">${m.name}</div>
+                    <div class="mode-card-desc">${m.desc}</div>
+                  </div>
+                  <div class="mode-card-radio">
+                    <div class="radio-indicator"></div>
+                  </div>
+                </div>
+              `)}
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <header><h2>Primary Accent Color</h2></header>
+          <div class="body">
+            <p class="muted small" style="margin-bottom: 14px;">Choose the primary brand hue for active indicators, primary buttons, and visual focus highlights.</p>
+            <div class="appearance-accent-grid" id="settings-accent-grid">
+              ${ACCENTS.map((a) => html`
+                <button type="button" class="accent-card ${a.id === curAccent ? 'active' : ''}" data-accent="${a.id}">
+                  <span class="accent-swatch" style="background-color: ${a.hex};">
+                    <svg class="accent-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </span>
+                  <span class="accent-info">
+                    <strong class="accent-name">${a.name}</strong>
+                    <span class="accent-desc">${a.desc}</span>
+                  </span>
+                </button>
+              `)}
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <header><h2>Live Theme Preview</h2></header>
+          <div class="body">
+            <div class="appearance-preview-panel">
+              <div class="preview-kpi-box">
+                <div class="preview-kpi-top">
+                  <div class="preview-kpi-iconbox">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  </div>
+                  <span class="preview-pct-pill">90% PRESENT</span>
+                </div>
+                <div class="preview-kpi-lbl">Active Workforce</div>
+                <div class="preview-kpi-metric">61 <span class="preview-kpi-total">/ 68 Staff</span></div>
+              </div>
+              <div class="preview-elements-col">
+                <div class="preview-btn-row">
+                  <button type="button" class="btn btn-primary sm preview-accent-demo-btn">
+                    <span>Primary Action</span>
+                  </button>
+                  <button type="button" class="btn sm preview-secondary-btn">
+                    <span>Secondary</span>
+                  </button>
+                </div>
+                <div class="preview-tag-row">
+                  <span class="status-pill present"><span class="pill-dot"></span> On Time</span>
+                  <span class="device-tag uface-tag"><span class="device-dot blue"></span> uFace 800</span>
+                  <span class="status-pill late"><span class="pill-dot"></span> Late (18m)</span>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+              <button type="button" class="btn sm" id="settings-reset-theme">Reset to Light Mode & Blue Accent</button>
+              <span class="small" style="color: var(--ok); font-weight: 600;">✓ Synced with Local Storage</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    `);
+
+    $$('#settings-mode-grid .mode-card').forEach((c) => {
+      c.addEventListener('click', () => {
+        curMode = c.dataset.mode;
+        $$('#settings-mode-grid .mode-card').forEach((m) => m.classList.remove('active'));
+        c.classList.add('active');
+        applyTheme(curMode, curAccent, true);
+        toast(`Applied ${curMode} mode`, 'ok');
+      });
+    });
+
+    $$('#settings-accent-grid .accent-card').forEach((c) => {
+      c.addEventListener('click', () => {
+        curAccent = c.dataset.accent;
+        $$('#settings-accent-grid .accent-card').forEach((a) => a.classList.remove('active'));
+        c.classList.add('active');
+        applyTheme(curMode, curAccent, true);
+        toast(`Applied ${curAccent} accent`, 'ok');
+      });
+    });
+
+    $('#settings-reset-theme')?.addEventListener('click', () => {
+      curMode = 'light';
+      curAccent = 'blue';
+      applyTheme('light', 'blue', true);
+      $$('#settings-mode-grid .mode-card').forEach((m) => m.classList.toggle('active', m.dataset.mode === 'light'));
+      $$('#settings-accent-grid .accent-card').forEach((a) => a.classList.toggle('active', a.dataset.accent === 'blue'));
+      toast('Reset to default Light Mode & Blue Accent', 'ok');
+    });
+  };
 
   /* ---- audit ---- */
   const audit = async () => {
