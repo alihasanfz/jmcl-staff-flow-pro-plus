@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const { query, tx } = require('../db');
 const { getSettings } = require('./settings');
 const { computeDay } = require('../logic/attendanceRules');
-const { addDays, eachDay, todayIn, nowMinIn } = require('../utils/time');
+const { addDays, eachDay, todayIn, nowMinIn, dow, monthRange, isDate, isMonth } = require('../utils/time');
 
 const CHUNK = 2000;
 
@@ -374,4 +374,301 @@ async function fixMorningPunches(targetDate) {
   return { shiftedPunches: 0, updatedCount, date: d };
 }
 
-module.exports = { rebuildRange, ingestPunches, backfillPin, listAttendance, addDays, fixMorningPunches };
+/**
+ * Detailed Employee Attendance Analytics & Profile.
+ * Strictly uses ONLY ZKTeco uFace800 (ZK-UFACE800-01 / RKQ4262500336) data.
+ * Gate controller (SenseFace 7A / VDE2251500160) punches are strictly excluded.
+ */
+async function getEmployeeAttendanceProfile(userId, { filterType = 'monthly', date, month, from, to, year } = {}) {
+  const { timezone: tz } = await getSettings();
+  const today = todayIn(tz);
+
+  // 1. Fetch user details
+  const { rows: userRows } = await query(
+    `SELECT u.id, u.name, u.employee_code, u.email, u.phone, u.department, u.designation,
+            u.active, u.join_date::text AS join_date, u.device_pin, u.shift_id, u.overtime_eligible,
+            u.photo,
+            s.name AS shift_name, s.start_time::text AS shift_start, s.end_time::text AS shift_end,
+            s.grace_minutes, s.early_out_grace_minutes, s.overtime_after_minutes, s.weekly_off
+       FROM users u
+       LEFT JOIN shifts s ON s.id = COALESCE(u.shift_id, (SELECT id FROM shifts ORDER BY id LIMIT 1))
+      WHERE u.id = $1`, [userId]);
+
+  if (!userRows.length) {
+    const err = new Error('Employee not found');
+    err.status = 404;
+    throw err;
+  }
+  const employee = userRows[0];
+
+  // 2. Resolve date range
+  let rangeFrom = today;
+  let rangeTo = today;
+
+  if (filterType === 'daily') {
+    rangeFrom = (date && isDate(date)) ? date : today;
+    rangeTo = rangeFrom;
+  } else if (filterType === 'yearly') {
+    const y = year || today.slice(0, 4);
+    rangeFrom = `${y}-01-01`;
+    rangeTo = `${y}-12-31`;
+  } else if (filterType === 'custom') {
+    rangeFrom = (from && isDate(from)) ? from : addDays(today, -30);
+    rangeTo = (to && isDate(to)) ? to : today;
+    if (rangeFrom > rangeTo) [rangeFrom, rangeTo] = [rangeTo, rangeFrom];
+  } else {
+    // default: monthly
+    filterType = 'monthly';
+    const m = (month && isMonth(month)) ? month : today.slice(0, 7);
+    const mr = monthRange(m);
+    rangeFrom = mr.from;
+    rangeTo = mr.to;
+  }
+
+  // 3. Ensure attendance records are fresh up to today
+  const lastRebuildDate = rangeTo < today ? rangeTo : today;
+  if (rangeFrom <= lastRebuildDate) {
+    await rebuildRange(rangeFrom, lastRebuildDate, { userId }).catch(() => {});
+  }
+
+  // 4. Fetch holidays, leaves, attendance records, and raw uFace 800 punches
+  const [holidaysRes, leavesRes, attRes, punchesRes] = await Promise.all([
+    query(`SELECT date::text AS date, name FROM holidays WHERE date BETWEEN $1 AND $2`, [rangeFrom, rangeTo]),
+    query(`SELECT lr.start_date::text AS s, lr.end_date::text AS e, lt.name AS leave_type, lt.paid
+             FROM leave_requests lr
+             JOIN leave_types lt ON lt.id = lr.leave_type_id
+            WHERE lr.user_id = $1 AND lr.status = 'approved' AND lr.start_date <= $2 AND lr.end_date >= $3`,
+      [userId, rangeTo, rangeFrom]),
+    query(`SELECT a.id, a.work_date::text AS work_date,
+                  to_char(a.check_in AT TIME ZONE $1, 'HH24:MI') AS cin,
+                  to_char(a.check_out AT TIME ZONE $1, 'HH24:MI') AS cout,
+                  to_char(a.check_in AT TIME ZONE $1, 'HH12:MI AM') AS cin_12h,
+                  to_char(a.check_out AT TIME ZONE $1, 'HH12:MI AM') AS cout_12h,
+                  a.worked_minutes, a.late_minutes, a.early_out_minutes, a.overtime_minutes,
+                  a.status, a.missing_checkout, a.off_day_work, a.punch_count,
+                  COALESCE(a.device_sn, a.check_in_device_sn, 'ZK-UFACE800-01') AS device_sn
+             FROM attendance a
+            WHERE a.user_id = $2 AND a.work_date BETWEEN $3 AND $4
+            ORDER BY a.work_date ASC`, [tz, userId, rangeFrom, rangeTo]),
+    query(`SELECT p.id, p.pin,
+                  to_char(p.punched_at AT TIME ZONE $1, 'YYYY-MM-DD') AS punch_date,
+                  to_char(p.punched_at AT TIME ZONE $1, 'HH24:MI:SS') AS punch_time,
+                  to_char(p.punched_at AT TIME ZONE $1, 'HH12:MI:SS AM') AS punch_time_12h,
+                  p.state, p.source, p.verify,
+                  COALESCE(d.name, p.device_sn, 'ZK-uFace 800') AS device_name,
+                  p.device_sn
+             FROM punch_logs p
+             LEFT JOIN devices d ON (d.id = p.device_id OR UPPER(d.serial_number) = UPPER(p.device_sn))
+            WHERE p.user_id = $2
+              AND p.punched_at >= ($3::date::timestamp AT TIME ZONE $1)
+              AND p.punched_at < (($4::date + 1)::timestamp AT TIME ZONE $1)
+              AND UPPER(TRIM(COALESCE(p.device_sn, ''))) <> 'VDE2251500160'
+              AND NOT EXISTS (
+                SELECT 1 FROM devices dev
+                 WHERE (dev.id = p.device_id OR UPPER(TRIM(dev.serial_number)) = UPPER(TRIM(p.device_sn)))
+                   AND (UPPER(TRIM(dev.serial_number)) = 'VDE2251500160' OR LOWER(dev.model) LIKE '%gate%' OR LOWER(dev.name) LIKE '%gate%')
+              )
+            ORDER BY p.punched_at ASC`, [tz, userId, rangeFrom, rangeTo]),
+  ]);
+
+  const holidaysMap = new Map(holidaysRes.rows.map((h) => [h.date, h.name]));
+  const leaves = leavesRes.rows;
+  const attMap = new Map(attRes.rows.map((a) => [a.work_date, a]));
+  const punchesByDate = new Map();
+  for (const p of punchesRes.rows) {
+    if (!punchesByDate.has(p.punch_date)) punchesByDate.set(p.punch_date, []);
+    punchesByDate.get(p.punch_date).push(p);
+  }
+
+  const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const allDates = eachDay(rangeFrom, rangeTo);
+
+  let totalWorkingDays = 0;
+  let presentDays = 0;
+  let onTimeDays = 0;
+  let lateDays = 0;
+  let absentDays = 0;
+  let leaveDays = 0;
+  let weekendDays = 0;
+  let holidayDays = 0;
+  let totalWorkedMinutes = 0;
+  let totalLateMinutes = 0;
+  let totalEarlyOutMinutes = 0;
+  let totalOvertimeMinutes = 0;
+
+  const dailyHistory = [];
+  const calendarMap = {};
+  const chartLabels = [];
+  const chartWorkingHours = [];
+  const chartLateMinutes = [];
+  const chartOvertimeHours = [];
+
+  for (const d of allDates) {
+    const dayOfWeek = dow(d);
+    const dayName = DAY_NAMES[dayOfWeek];
+    const isWeeklyOff = (employee.weekly_off || []).includes(dayOfWeek) || dayOfWeek === 5;
+    const holidayName = holidaysMap.get(d) || null;
+    const leave = leaves.find((l) => l.s <= d && l.e >= d) || null;
+    const att = attMap.get(d) || null;
+    const rawPunches = punchesByDate.get(d) || [];
+    const isPastOrToday = d <= today;
+
+    let status = 'scheduled';
+    let checkIn = att?.cin_12h || (rawPunches[0] ? rawPunches[0].punch_time_12h : null);
+    let checkOut = att?.cout_12h || (rawPunches.length >= 2 ? rawPunches[rawPunches.length - 1].punch_time_12h : null);
+    let workedMinutes = att?.worked_minutes || 0;
+    let lateMinutes = att?.late_minutes || 0;
+    let earlyOutMinutes = att?.early_out_minutes || 0;
+    let overtimeMinutes = att?.overtime_minutes || 0;
+
+    if (att && ['present', 'late', 'half_day'].includes(att.status)) {
+      status = att.late_minutes > 0 ? 'late' : att.status;
+    } else if (rawPunches.length > 0) {
+      status = 'present';
+    } else if (leave) {
+      status = 'leave';
+    } else if (holidayName) {
+      status = 'holiday';
+    } else if (isWeeklyOff) {
+      status = 'weekend';
+    } else if (isPastOrToday) {
+      status = 'absent';
+    } else {
+      status = 'scheduled';
+    }
+
+    // Accumulate summary metrics for past/current days
+    if (isPastOrToday) {
+      if (status === 'weekend') {
+        weekendDays++;
+      } else if (status === 'holiday') {
+        holidayDays++;
+      } else if (status === 'leave') {
+        leaveDays++;
+      } else {
+        totalWorkingDays++;
+        if (['present', 'late', 'half_day'].includes(status)) {
+          presentDays++;
+          if (lateMinutes > 0) lateDays++;
+          else onTimeDays++;
+          totalWorkedMinutes += workedMinutes;
+          totalLateMinutes += lateMinutes;
+          totalEarlyOutMinutes += earlyOutMinutes;
+          totalOvertimeMinutes += overtimeMinutes;
+        } else if (status === 'absent') {
+          absentDays++;
+        }
+      }
+    }
+
+    const rowItem = {
+      date: d,
+      dayName,
+      dayOfMonth: parseInt(d.slice(8, 10), 10),
+      shiftName: employee.shift_name || 'General Shift',
+      scheduledStart: (employee.shift_start || '09:00:00').slice(0, 5),
+      scheduledEnd: (employee.shift_end || '18:00:00').slice(0, 5),
+      checkIn: checkIn || '—',
+      checkOut: checkOut || '—',
+      workedMinutes,
+      workedHours: Number((workedMinutes / 60).toFixed(1)),
+      lateMinutes,
+      earlyOutMinutes,
+      overtimeMinutes,
+      overtimeHours: Number((overtimeMinutes / 60).toFixed(1)),
+      status,
+      device: 'ZK-uFace 800',
+      deviceSn: 'ZK-UFACE800-01',
+      holidayName,
+      leaveType: leave?.leave_type || null,
+      punchCount: rawPunches.length,
+      punches: rawPunches.map((p) => ({
+        id: p.id,
+        time: p.punch_time_12h || p.punch_time,
+        rawTime: p.punch_time,
+        state: p.state === 1 ? 'OUT' : 'IN',
+        verify: p.verify || 'Face/Biometric',
+        device: 'uFace 800',
+      })),
+    };
+
+    dailyHistory.push(rowItem);
+    calendarMap[d] = rowItem;
+
+    // For charts, plot up to today (or all if in the past)
+    if (isPastOrToday) {
+      const label = `${d.slice(8, 10)} ${new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short' })}`;
+      chartLabels.push(label);
+      chartWorkingHours.push(Number((workedMinutes / 60).toFixed(1)));
+      chartLateMinutes.push(lateMinutes);
+      chartOvertimeHours.push(Number((overtimeMinutes / 60).toFixed(1)));
+    }
+  }
+
+  const totalWorkingHours = Number((totalWorkedMinutes / 60).toFixed(1));
+  const avgDailyWorkingHours = presentDays > 0 ? Number((totalWorkingHours / presentDays).toFixed(1)) : 0;
+  const totalOvertimeHours = Number((totalOvertimeMinutes / 60).toFixed(1));
+  const attendancePercentage = totalWorkingDays > 0 ? Math.round((presentDays / totalWorkingDays) * 100) : 0;
+
+  return {
+    employee: {
+      id: employee.id,
+      name: employee.name,
+      employeeCode: employee.employee_code || `EMP${employee.id}`,
+      email: employee.email,
+      phone: employee.phone || '—',
+      department: employee.department || 'General',
+      designation: employee.designation || 'Staff',
+      shiftName: employee.shift_name || 'General Shift',
+      shiftStart: (employee.shift_start || '09:00:00').slice(0, 5),
+      shiftEnd: (employee.shift_end || '18:00:00').slice(0, 5),
+      graceMinutes: employee.grace_minutes || 0,
+      active: employee.active,
+      joinDate: employee.join_date,
+      biometricPin: employee.device_pin || '—',
+      primaryDevice: 'ZK-uFace 800',
+      primaryDeviceSn: 'ZK-UFACE800-01 (SN: RKQ4262500336)',
+    },
+    period: {
+      filterType,
+      from: rangeFrom,
+      to: rangeTo,
+      date: date || today,
+      month: month || today.slice(0, 7),
+      year: year || today.slice(0, 4),
+    },
+    summary: {
+      totalWorkingDays,
+      presentDays,
+      onTimeDays,
+      lateDays,
+      absentDays,
+      leaveDays,
+      weekendDays,
+      holidayDays,
+      totalWorkingHours,
+      avgDailyWorkingHours,
+      totalLateMinutes,
+      totalEarlyLeaveMinutes: totalEarlyOutMinutes,
+      totalOvertimeHours,
+      attendancePercentage,
+    },
+    dailyHistory: [...dailyHistory].reverse(), // most recent date first for table display
+    calendar: calendarMap,
+    analytics: {
+      labels: chartLabels,
+      workingHours: chartWorkingHours,
+      lateMinutes: chartLateMinutes,
+      overtimeHours: chartOvertimeHours,
+      statusBreakdown: {
+        present: onTimeDays,
+        late: lateDays,
+        absent: absentDays,
+        leave: leaveDays,
+        weekend: weekendDays + holidayDays,
+      },
+    },
+  };
+}
+
+module.exports = { rebuildRange, ingestPunches, backfillPin, listAttendance, addDays, fixMorningPunches, getEmployeeAttendanceProfile };

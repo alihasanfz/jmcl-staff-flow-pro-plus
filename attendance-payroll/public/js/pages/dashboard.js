@@ -1,6 +1,7 @@
 import { get } from '../api.js';
 import { html, setHTML, $, $$, fmtHours, fmtDate, fmtMoney, fmtMonth, badge, ago, icon } from '../ui.js';
 import { navigate } from '../main.js';
+import { showEmployeeAttendanceProfile } from '../components/employeeAttendanceProfile.js';
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -494,11 +495,11 @@ async function renderManager(view, state) {
                     ${filteredRibbon.map((r) => html`
                       <tr>
                         <td>
-                          <div class="roster-emp-cell">
+                          <div class="roster-emp-cell" style="cursor:pointer;" data-profile="${r.id}" title="Click to view full attendance analytics">
                             <div class="roster-avatar">
                               ${(r.name || 'E').slice(0, 2).toUpperCase()}
                             </div>
-                            <span class="roster-emp-name">${r.name}</span>
+                            <span class="roster-emp-name" style="color:#0284c7;">${r.name}</span>
                           </div>
                         </td>
                         <td><span class="muted small">${r.department || 'General'}</span></td>
@@ -745,8 +746,8 @@ async function renderManager(view, state) {
                   <tbody>
                     ${gate.employeeHistory.map((eh) => html`
                       <tr>
-                        <td style="padding:8px 12px;">
-                          <div style="font-weight:700; color:var(--text);">${eh.name}</div>
+                        <td style="padding:8px 12px; cursor:pointer;" data-profile="${eh.id}" title="Click to view full attendance analytics">
+                          <div style="font-weight:700; color:#0284c7;">${eh.name}</div>
                           <span class="muted" style="font-size:11px;">${eh.department || 'General'}</span>
                         </td>
                         <td style="padding:8px 12px; font-family:monospace; color:#16a34a;">${eh.first_passage || '—'}</td>
@@ -799,6 +800,16 @@ async function renderManager(view, state) {
     $('#btn-mode-timeline')?.addEventListener('click', () => {
       viewMode = 'timeline';
       draw(cachedData);
+    });
+
+    // Profile click handlers
+    $$('[data-profile]', view).forEach((el) => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const uid = el.dataset.profile;
+        if (uid) showEmployeeAttendanceProfile(uid);
+      });
     });
 
     $('#btn-toggle-roster')?.addEventListener('click', () => {

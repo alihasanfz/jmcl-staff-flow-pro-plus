@@ -34,7 +34,7 @@ const NAV = [
   { path: '/backup', key: 'backup', label: 'Backup & Restore', icon: 'database', roles: ADMIN_ONLY },
 ];
 
-const V = '7.2';
+const V = '7.3';
 const PAGES = {
   '/': () => import(`./pages/dashboard.js?v=${V}`),
   '/attendance': () => import(`./pages/attendance.js?v=${V}`),

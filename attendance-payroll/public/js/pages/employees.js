@@ -2,6 +2,7 @@ import { get, post, patch, put, del, qs } from '../api.js';
 import { html, setHTML, $, $$, esc, fmtMoney, fmtDateLong, badge, toast, modal, formValues, confirmDialog, icon } from '../ui.js';
 import { t } from '../i18n.js';
 import { canEdit } from '../permissions.js';
+import { showEmployeeAttendanceProfile } from '../components/employeeAttendanceProfile.js';
 
 export async function render(view, state) {
   // Master administrators can perform destructive actions like delete and reset password
@@ -87,8 +88,8 @@ export async function render(view, state) {
         <tbody id="emp-tbody">
           ${currentUsers.map((u) => html`
             <tr>
-              <td class="nameCell">
-                <b>${u.name}</b>
+              <td class="nameCell" style="cursor:pointer;" data-view="${u.id}" title="Click to view full attendance analytics">
+                <b style="color:var(--primary);">${u.name}</b>
                 <span>${u.employee_code || u.employee_id || '—'} · ${u.email}</span>
               </td>
               <td>
@@ -104,7 +105,8 @@ export async function render(view, state) {
               <td>${badge(u.active !== false && u.status !== 'inactive' ? 'active' : 'inactive')}</td>
               <td class="r">
                 <div class="action-btns">
-                  <button type="button" class="action-btn" data-view="${u.id}">${t('view')}</button>
+                  <button type="button" class="action-btn primary" data-view="${u.id}">📊 Analytics</button>
+                  <button type="button" class="action-btn" data-info="${u.id}">Profile</button>
                   ${canEditEmployees ? html`
                     <button type="button" class="action-btn" data-edit="${u.id}">${icon('edit')} ${t('edit')}</button>
                   ` : ''}
@@ -127,7 +129,15 @@ export async function render(view, state) {
       b.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const emp = currentUsers.find((u) => String(u.id) === b.dataset.view);
+        showEmployeeAttendanceProfile(b.dataset.view);
+      };
+    });
+
+    $$('[data-info]', tbody).forEach((b) => {
+      b.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const emp = currentUsers.find((u) => String(u.id) === b.dataset.info);
         if (emp) viewProfile(emp);
       };
     });

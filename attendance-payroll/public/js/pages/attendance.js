@@ -3,6 +3,7 @@ import { get, post, put, del, qs } from '../api.js';
 import { html, setHTML, $, $$, fmtDate, fmtHours, fmtMin, badge, toast, modal, formValues, confirmDialog, addDays, icon } from '../ui.js';
 import { t } from '../i18n.js';
 import { canEdit, canView } from '../permissions.js';
+import { showEmployeeAttendanceProfile } from '../components/employeeAttendanceProfile.js';
 
 export async function render(view, state) {
   const isMgr = ['admin', 'company_admin', 'super_admin', 'hr_manager', 'hr_executive', 'hr', 'accounts_manager', 'dept_manager'].includes(state.user.role) || canView(state.user, 'attendance');
@@ -408,8 +409,8 @@ export async function render(view, state) {
               <tr>
                 <td><b>${fmtDate(r.work_date)}</b></td>
                 ${isMgr ? html`
-                  <td class="nameCell">
-                    <b>${r.name}</b>
+                  <td class="nameCell" style="cursor:pointer;" data-profile="${r.user_id}" title="Click to view employee attendance analytics">
+                    <b style="color:var(--primary);">${r.name}</b>
                     <span>${r.department || 'General'}</span>
                   </td>
                 ` : ''}
@@ -489,6 +490,13 @@ export async function render(view, state) {
           const url = `/api/reports/attendance?format=pdf&from=${encodeURIComponent(targetFrom)}&to=${encodeURIComponent(targetTo)}&userId=${encodeURIComponent(uId)}`
             + (f.deviceSn ? `&deviceSn=${encodeURIComponent(f.deviceSn)}` : '');
           window.open(url, '_blank');
+        });
+      });
+
+      $$('[data-profile]', box).forEach((el) => {
+        el.addEventListener('click', () => {
+          const uId = el.dataset.profile;
+          if (uId) showEmployeeAttendanceProfile(uId);
         });
       });
 

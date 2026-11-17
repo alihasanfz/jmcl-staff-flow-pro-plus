@@ -1,9 +1,9 @@
 'use strict';
 const router = require('express').Router();
 const { query, tx } = require('../db');
-const { wrap, parse, bad, notFound } = require('../utils/http');
+const { wrap, parse, bad, notFound, forbidden } = require('../utils/http');
 const { requireRole, isManager, requirePermission, canView } = require('../middleware/auth');
-const { listAttendance, rebuildRange } = require('../services/attendance');
+const { listAttendance, rebuildRange, getEmployeeAttendanceProfile } = require('../services/attendance');
 const { getSettings } = require('../services/settings');
 const { addDays, todayIn, diffDays, monthRange, isMonth } = require('../utils/time');
 const { z, date, time, id } = require('./schemas');
@@ -112,6 +112,18 @@ router.get('/summary', wrap(async (req, res) => {
             COALESCE(SUM(overtime_minutes), 0)::int AS overtime_minutes
        FROM attendance WHERE work_date BETWEEN $1 AND $2 AND ($3::int IS NULL OR user_id = $3)`, [from, to, uid]);
   res.json({ month, summary: s });
+}));
+
+/** Detailed Employee Attendance Profile & Analytics (strictly uFace800 data) */
+router.get('/employee-analytics/:userId', wrap(async (req, res) => {
+  const targetId = parse(id, req.params.userId);
+  if (!isManager(req.user) && !canView(req.user, 'attendance') && req.user.id !== targetId) {
+    throw forbidden('You are not authorized to view this employee attendance profile');
+  }
+
+  const { filterType, date, month, from, to, year } = req.query;
+  const data = await getEmployeeAttendanceProfile(targetId, { filterType, date, month, from, to, year });
+  res.json(data);
 }));
 
 /** Raw device punches (audit trail). */
