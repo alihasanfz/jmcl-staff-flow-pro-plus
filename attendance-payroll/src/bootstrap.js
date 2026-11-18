@@ -295,30 +295,17 @@ async function firstRun() {
   // Match punch_logs to users by device_pin or employee_code
   await query(`UPDATE punch_logs p SET user_id = u.id FROM users u WHERE p.user_id IS NULL AND (u.device_pin = p.pin OR u.employee_code = p.pin)`).catch(() => { });
 
-  // Auto-provision employee records for any unassigned device PINs so their punches are tracked immediately
+  // Permanently purge any legacy placeholder 'Employee #...' dummy accounts
   try {
-    const { rows: unmatchedPins } = await query(`SELECT DISTINCT pin FROM punch_logs WHERE user_id IS NULL AND pin IS NOT NULL AND pin != '' AND pin != '0'`);
-    if (unmatchedPins.length) {
-      const defaultShift = (await query('SELECT id FROM shifts ORDER BY id LIMIT 1')).rows[0]?.id || 1;
-      const dummyHash = await bcrypt.hash('Employee@123', 10);
-      for (const { pin } of unmatchedPins) {
-        const code = `EMP${String(pin).padStart(4, '0')}`;
-        const name = `Employee #${pin}`;
-        const { rows: [newEmp] } = await query(
-          `INSERT INTO users (employee_code, device_pin, name, email, password_hash, role, department, designation, shift_id, active, must_change_password, join_date)
-           VALUES ($1, $2, $3, $4, $5, 'employee', 'General', 'Staff', $6, true, false, '2020-01-01')
-           ON CONFLICT DO NOTHING
-           RETURNING id`,
-          [code, String(pin), name, `emp${pin}@company.local`, dummyHash, defaultShift]
-        );
-        const empId = newEmp?.id || (await query('SELECT id FROM users WHERE device_pin = $1', [String(pin)])).rows[0]?.id;
-        if (empId) {
-          await query('UPDATE punch_logs SET user_id = $1 WHERE pin = $2 AND user_id IS NULL', [empId, String(pin)]);
-        }
-      }
-    }
+    await query(`
+      DELETE FROM attendance WHERE user_id IN (SELECT id FROM users WHERE name LIKE 'Employee #%' OR (device_pin ~ '^[0-9]+$' AND device_pin::int > 68));
+      DELETE FROM leave_balances WHERE user_id IN (SELECT id FROM users WHERE name LIKE 'Employee #%' OR (device_pin ~ '^[0-9]+$' AND device_pin::int > 68));
+      DELETE FROM notifications WHERE user_id IN (SELECT id FROM users WHERE name LIKE 'Employee #%' OR (device_pin ~ '^[0-9]+$' AND device_pin::int > 68));
+      UPDATE punch_logs SET user_id = NULL WHERE user_id IN (SELECT id FROM users WHERE name LIKE 'Employee #%' OR (device_pin ~ '^[0-9]+$' AND device_pin::int > 68));
+      DELETE FROM users WHERE name LIKE 'Employee #%' OR (device_pin ~ '^[0-9]+$' AND device_pin::int > 68);
+    `);
   } catch (err) {
-    console.warn('[bootstrap] auto-provision PINs error:', err.message);
+    console.warn('[bootstrap] dummy user purge error:', err.message);
   }
 
   // Rebuild attendance for the last 30 days so dashboard charts and stats are immediately live

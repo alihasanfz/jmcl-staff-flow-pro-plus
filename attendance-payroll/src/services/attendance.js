@@ -165,32 +165,6 @@ async function ingestPunches({ device, records, source = 'device' }) {
     inserted++;
     let uid = res.rows[0].user_id;
 
-    // Auto-create employee record for new biometric PIN so attendance is tracked immediately
-    if (!uid && r.pin && r.pin !== '0') {
-      try {
-        const defaultShift = (await query('SELECT id FROM shifts ORDER BY id LIMIT 1')).rows[0]?.id || 1;
-        const code = `EMP${String(r.pin).padStart(4, '0')}`;
-        const empName = `Employee #${r.pin}`;
-        const dummyHash = await bcrypt.hash('Employee@123', 10);
-        const autoUser = await query(
-          `INSERT INTO users (employee_code, device_pin, name, email, password_hash, role, department, designation, shift_id, active, must_change_password, join_date)
-           VALUES ($1, $2, $3, $4, $5, 'employee', 'General', 'Staff', $6, true, false, '2020-01-01')
-           ON CONFLICT DO NOTHING
-           RETURNING id`,
-          [code, String(r.pin), empName, `emp${r.pin}@company.local`, dummyHash, defaultShift]
-        );
-        if (autoUser.rows.length) {
-          uid = autoUser.rows[0].id;
-          await query('UPDATE punch_logs SET user_id = $1 WHERE pin = $2 AND user_id IS NULL', [uid, String(r.pin)]);
-        } else {
-          const existing = await query('SELECT id FROM users WHERE device_pin = $1 OR employee_code = $2', [String(r.pin), code]);
-          if (existing.rows.length) uid = existing.rows[0].id;
-        }
-      } catch (e) {
-        console.warn(`[adms] auto-create user for pin ${r.pin}:`, e.message);
-      }
-    }
-
     insertedPunches.push({
       userId: uid,
       pin: r.pin,
