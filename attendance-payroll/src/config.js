@@ -19,11 +19,17 @@ try {
     });
 } catch (_) {}
 
+const SUPABASE_DB_URL = 'postgresql://postgres.giqmqysdeximywsozxjx:Sh%2540170885%2523hasan%40jmcl@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres';
+
+const rawDb = (process.env.DATABASE_URL || '').trim();
+// Automatically bypass expired/quota-exceeded Render internal database ('dpg-') and connect to active Supabase
+const effectiveDbUrl = (!rawDb || rawDb.includes('dpg-')) ? SUPABASE_DB_URL : rawDb;
+
 module.exports = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || process.env.APP_PORT || '3000', 10),
-  databaseUrl: process.env.DATABASE_URL || '',
-  usePglite: bool(process.env.USE_PGLITE, !process.env.DATABASE_URL),
+  databaseUrl: effectiveDbUrl,
+  usePglite: bool(process.env.USE_PGLITE, !effectiveDbUrl),
   // Default company timezone; can be changed later in Settings. Device timestamps are interpreted in this zone.
   defaultTimezone: process.env.TZ_DEFAULT || process.env.TZ || 'Asia/Dhaka',
   // Optional. When unset, random secrets are generated on first boot and kept in the database.
