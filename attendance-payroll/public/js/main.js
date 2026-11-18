@@ -34,7 +34,7 @@ const NAV = [
   { path: '/backup', key: 'backup', label: 'Backup & Restore', icon: 'database', roles: ADMIN_ONLY },
 ];
 
-const V = '7.4';
+const V = '7.5';
 const PAGES = {
   '/': () => import(`./pages/dashboard.js?v=${V}`),
   '/attendance': () => import(`./pages/attendance.js?v=${V}`),
@@ -168,15 +168,17 @@ function buildShell(nav) {
             <button id="logout" class="side-btn sm">${t('signOut') || 'Sign Out'}</button>
           </div>
         </div>
-        <div class="side-grow-banner">
+        <div class="side-grow-banner side-dev-banner" title="Developer: Md. Ali Hasan Sheikh (01775743148)">
           <div class="grow-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M4 19h4V9H4v10zm6 0h4V5h-4v14zm6 0h4v-7h-4v7z"/>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="16 18 22 12 16 6"/>
+              <polyline points="8 6 2 12 8 18"/>
             </svg>
           </div>
-          <div class="grow-text">
-            <span>Work Smart</span>
-            <strong>Grow Together</strong>
+          <div class="grow-text dev-text">
+            <span class="dev-label">Developer</span>
+            <strong class="dev-name">Md. Ali Hasan Sheikh</strong>
+            <a href="tel:01775743148" class="dev-phone">01775743148</a>
           </div>
         </div>
       </aside>
