@@ -34,7 +34,7 @@ const NAV = [
   { path: '/backup', key: 'backup', label: 'Backup & Restore', icon: 'database', roles: ADMIN_ONLY },
 ];
 
-const V = '7.3';
+const V = '7.4';
 const PAGES = {
   '/': () => import(`./pages/dashboard.js?v=${V}`),
   '/attendance': () => import(`./pages/attendance.js?v=${V}`),
@@ -58,6 +58,7 @@ const PAGES = {
 
 let cleanup = null;
 let pollTimer = null;
+let navSeq = 0;
 
 // Theme Initialization & Appearance Engine
 initThemeEngine();
@@ -84,6 +85,7 @@ document.addEventListener('click', (e) => {
 });
 
 async function render() {
+  const currentSeq = ++navSeq;
   if (!state.user) return showLogin();
 
   const uRole = state.user.role;
@@ -111,9 +113,15 @@ async function render() {
   setHTML(view, html`<p class="muted">${t('loading')}</p>`);
   try {
     const mod = await PAGES[path]();
-    if ((location.pathname.replace(/\/$/, '') || '/') !== path) return; // navigated away
-    cleanup = (await mod.render(view, state)) || null;
+    if (currentSeq !== navSeq || (location.pathname.replace(/\/$/, '') || '/') !== path) return; // navigated away
+    const pageCleanup = await mod.render(view, state);
+    if (currentSeq !== navSeq || (location.pathname.replace(/\/$/, '') || '/') !== path) {
+      if (pageCleanup) { try { pageCleanup(); } catch { /* ignore */ } }
+      return;
+    }
+    cleanup = pageCleanup || null;
   } catch (err) {
+    if (currentSeq !== navSeq) return;
     setHTML(view, html`<div class="notice bad">${err.message || 'This page could not be loaded.'}</div>`);
   }
   view.focus?.({ preventScroll: true });

@@ -15,9 +15,10 @@ export async function render(view, state) {
 
 /* ======================= Admin / HR Manager Analytics Dashboard ======================= */
 async function renderManager(view, state) {
+  let isMounted = true;
   let charts = [];
-  let pollTimer;
-  let clockTimer;
+  let pollTimer = null;
+  let clockTimer = null;
   let activeTab = 'all';
   let searchTerm = '';
   let viewMode = 'table'; // 'table' or 'timeline'
@@ -25,6 +26,7 @@ async function renderManager(view, state) {
   let rosterCollapsed = false;
 
   const updateLiveClocks = () => {
+    if (!isMounted || (location.pathname.replace(/\/$/, '') || '/') !== '/') return;
     const dhakaNow = new Date();
     const timeStr = dhakaNow.toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
     const dateStr = dhakaNow.toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka', day: '2-digit', month: 'short', year: 'numeric' });
@@ -42,6 +44,7 @@ async function renderManager(view, state) {
   };
 
   const draw = (d) => {
+    if (!isMounted || (location.pathname.replace(/\/$/, '') || '/') !== '/') return;
     cachedData = d;
     charts.forEach((c) => c.destroy());
     charts = [];
@@ -991,28 +994,46 @@ async function renderManager(view, state) {
   };
 
   const onThemeChange = () => {
+    if (!isMounted || (location.pathname.replace(/\/$/, '') || '/') !== '/') return;
     if (cachedData) draw(cachedData);
   };
   window.addEventListener('themechange', onThemeChange);
 
   const load = async () => {
+    if (!isMounted || (location.pathname.replace(/\/$/, '') || '/') !== '/') return;
     try {
       const data = await get('/dashboard/overview');
+      if (!isMounted || (location.pathname.replace(/\/$/, '') || '/') !== '/') return;
       draw(data);
     } catch (e) {
+      if (!isMounted || (location.pathname.replace(/\/$/, '') || '/') !== '/') return;
       setHTML(view, html`<div class="notice bad">${e.message}</div>`);
     }
   };
 
   await load();
+  if (!isMounted || (location.pathname.replace(/\/$/, '') || '/') !== '/') {
+    return () => {
+      isMounted = false;
+      window.removeEventListener('themechange', onThemeChange);
+      charts.forEach((c) => { try { c.destroy(); } catch (_) {} });
+      charts = [];
+    };
+  }
   pollTimer = setInterval(load, 15_000);
   clockTimer = setInterval(updateLiveClocks, 1000);
 
   return () => {
-    clearInterval(pollTimer);
-    clearInterval(clockTimer);
+    isMounted = false;
+    if (pollTimer) clearInterval(pollTimer);
+    if (clockTimer) clearInterval(clockTimer);
+    pollTimer = null;
+    clockTimer = null;
     window.removeEventListener('themechange', onThemeChange);
-    charts.forEach((c) => c.destroy());
+    charts.forEach((c) => {
+      try { c.destroy(); } catch (_) {}
+    });
+    charts = [];
   };
 }
 

@@ -6,6 +6,7 @@ import { canEdit, canView } from '../permissions.js';
 import { showEmployeeAttendanceProfile } from '../components/employeeAttendanceProfile.js';
 
 export async function render(view, state) {
+  let isMounted = true;
   const isMgr = ['admin', 'company_admin', 'super_admin', 'hr_manager', 'hr_executive', 'hr', 'accounts_manager', 'dept_manager'].includes(state.user.role) || canView(state.user, 'attendance');
   const canEditAttendance = canEdit(state.user, 'attendance');
   const today = state.meta.today;
@@ -289,10 +290,12 @@ export async function render(view, state) {
   };
 
   const load = async () => {
+    if (!isMounted) return;
     const box = $('#results');
     try {
       if (tab === 'punches') {
         const { rows } = await get(`/attendance/punches${qs({ from: f.from, to: f.to, userId: f.userId, deviceSn: f.deviceSn })}`);
+        if (!isMounted) return;
         if (!rows.length) {
           setHTML(box, html`<p class="empty">No punches recorded for this terminal/filter.</p>`);
           return;
@@ -698,4 +701,10 @@ export async function render(view, state) {
 
   shell();
   await load();
+
+  return () => {
+    isMounted = false;
+    if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  };
 }
