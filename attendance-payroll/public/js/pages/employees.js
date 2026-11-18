@@ -89,8 +89,17 @@ export async function render(view, state) {
           ${currentUsers.map((u) => html`
             <tr>
               <td class="nameCell" style="cursor:pointer;" data-view="${u.id}" title="Click to view full attendance analytics">
-                <b style="color:var(--primary);">${u.name}</b>
-                <span>${u.employee_code || u.employee_id || '—'} · ${u.email}</span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <div class="emp-table-avatar">
+                    ${u.photo ? html`
+                      <img src="${u.photo}" alt="${u.name}" class="emp-table-avatar-img" />
+                    ` : (u.name || 'E').slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <b style="color:var(--primary); font-size:13.5px; display:block;">${u.name}</b>
+                    <span style="font-size:11.5px; color:var(--text-muted); display:block; margin-top:2px;">${u.employee_code || u.employee_id || '—'} · ${u.email}</span>
+                  </div>
+                </div>
               </td>
               <td>
                 <span class="badge waiting">${u.department || 'General'}</span>
@@ -257,11 +266,18 @@ export async function render(view, state) {
         } : undefined,
         body: html`
           <div class="stack">
-            <div class="row between" style="border-bottom: 1px solid var(--line); padding-bottom: 14px;">
-              <div>
-                <h2 style="margin-bottom: 4px;">${u.name}</h2>
-                <span class="badge ${u.active ? 'active' : 'inactive'}">${u.active ? 'Active Employee' : 'Inactive'}</span>
-                <span class="badge waiting" style="margin-left: 6px;">${u.department || 'General'}</span>
+            <div class="row between" style="border-bottom: 1px solid var(--line); padding-bottom: 14px; align-items:center;">
+              <div style="display:flex; align-items:center; gap:16px;">
+                <div class="profile-modal-avatar">
+                  ${u.photo ? html`
+                    <img src="${u.photo}" alt="${u.name}" class="profile-modal-avatar-img" />
+                  ` : (u.name || 'E').slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h2 style="margin-bottom: 4px;">${u.name}</h2>
+                  <span class="badge ${u.active ? 'active' : 'inactive'}">${u.active ? 'Active Employee' : 'Inactive'}</span>
+                  <span class="badge waiting" style="margin-left: 6px;">${u.department || 'General'}</span>
+                </div>
               </div>
               <div style="text-align: right;">
                 <span class="small muted">Employee ID</span>
@@ -346,6 +362,26 @@ export async function render(view, state) {
         wide: true,
         body: html`
           <div class="stack" style="gap:16px;">
+            <!-- Employee Photo Card -->
+            <div style="background:var(--paper-2); border:1px solid var(--border); border-radius:10px; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;">
+              <div style="display:flex; align-items:center; gap:14px;">
+                <div id="emp-photo-circle" style="position:relative; width:64px; height:64px; border-radius:50%; overflow:hidden; border:2px solid #0284c7; background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color:#fff; display:grid; place-items:center; cursor:pointer; flex-shrink:0;" title="Click to upload/change photo">
+                  ${u?.photo ? html`<img src="${u.photo}" id="emp-photo-preview-img" style="width:100%; height:100%; object-fit:cover;" />` : html`<span id="emp-photo-preview-text" style="font-size:20px; font-weight:750;">${(u?.name || 'E').slice(0, 2).toUpperCase()}</span>`}
+                  <div style="position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.6); color:#fff; font-size:9px; text-align:center; padding:1px 0;">📷 Edit</div>
+                </div>
+                <div>
+                  <div style="font-weight:700; font-size:13px; color:var(--text);">Employee Photo / Portrait (কর্মীর ছবি)</div>
+                  <div class="small muted">Upload JPG, PNG or WebP. Auto-optimized for crisp display.</div>
+                  <div style="display:flex; gap:8px; margin-top:6px;">
+                    <button type="button" class="btn sm" id="btn-choose-emp-photo" style="padding:2px 10px; font-size:11.5px; font-weight:600;">📁 Choose Photo</button>
+                    <button type="button" class="btn sm danger" id="btn-remove-emp-photo" style="padding:2px 8px; font-size:11.5px; ${u?.photo ? '' : 'display:none;'}">🗑️ Remove</button>
+                  </div>
+                </div>
+              </div>
+              <input type="file" id="input-emp-file-upload" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;">
+              <input type="hidden" name="photo" id="input-emp-photo-val" value="${u?.photo || ''}">
+            </div>
+
             <!-- Primary Quick Register Box: Name and ID -->
             <div style="background:var(--paper-2); border:2px solid #2563eb; border-radius:10px; padding:16px; box-shadow:0 2px 8px rgba(37,99,235,0.08);">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -482,9 +518,11 @@ export async function render(view, state) {
         const pin = String(v.devicePin || v.employeeCode || '').trim();
         const code = String(v.employeeCode || (pin ? 'EMP' + pin.padStart(4, '0') : '')).trim();
         const email = String(v.email || (pin ? `emp${pin}@company.local` : '')).trim();
+        const photoVal = (form.querySelector('input[name="photo"]')?.value || '').trim();
 
         const body = {
           name: v.name.trim(),
+          photo: photoVal,
           email: email || undefined,
           phone: v.phone ? v.phone.trim() : '',
           employeeCode: code || undefined,
@@ -556,6 +594,82 @@ export async function render(view, state) {
             empText.textContent = 'Show';
             empToggleBtn.title = 'Click to show password';
           }
+        });
+      }
+
+      // Employee Photo picker and auto-compression (max 320x320 JPEG)
+      const photoCircle = $('#emp-photo-circle');
+      const choosePhotoBtn = $('#btn-choose-emp-photo');
+      const removePhotoBtn = $('#btn-remove-emp-photo');
+      const fileInput = $('#input-emp-file-upload');
+      const photoHiddenInput = $('#input-emp-photo-val');
+
+      const handleFilePick = (file) => {
+        if (!file || !file.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const maxDim = 320;
+            let w = img.width;
+            let h = img.height;
+            if (w > h) {
+              if (w > maxDim) {
+                h = Math.round((h * maxDim) / w);
+                w = maxDim;
+              }
+            } else {
+              if (h > maxDim) {
+                w = Math.round((w * maxDim) / h);
+                h = maxDim;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+
+            if (photoHiddenInput) photoHiddenInput.value = dataUrl;
+            if (photoCircle) {
+              photoCircle.innerHTML = `
+                <img src="${dataUrl}" id="emp-photo-preview-img" style="width:100%; height:100%; object-fit:cover;" />
+                <div style="position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.6); color:#fff; font-size:9px; text-align:center; padding:1px 0;">📷 Edit</div>
+              `;
+            }
+            if (removePhotoBtn) removePhotoBtn.style.display = 'inline-block';
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      };
+
+      if (choosePhotoBtn && fileInput) {
+        choosePhotoBtn.addEventListener('click', () => fileInput.click());
+      }
+      if (photoCircle && fileInput) {
+        photoCircle.addEventListener('click', () => fileInput.click());
+      }
+      if (fileInput) {
+        fileInput.addEventListener('change', (e) => {
+          if (e.target.files && e.target.files[0]) {
+            handleFilePick(e.target.files[0]);
+          }
+        });
+      }
+      if (removePhotoBtn) {
+        removePhotoBtn.addEventListener('click', () => {
+          if (photoHiddenInput) photoHiddenInput.value = '';
+          if (photoCircle) {
+            const initials = (document.querySelector('input[name="name"]')?.value || 'E').slice(0, 2).toUpperCase();
+            photoCircle.innerHTML = `
+              <span id="emp-photo-preview-text" style="font-size:20px; font-weight:750;">${initials}</span>
+              <div style="position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.6); color:#fff; font-size:9px; text-align:center; padding:1px 0;">📷 Edit</div>
+            `;
+          }
+          removePhotoBtn.style.display = 'none';
+          if (fileInput) fileInput.value = '';
         });
       }
     }, 50);

@@ -1,6 +1,6 @@
 // Employee Attendance Analytics & Detailed Profile Component
 // Strictly uses ONLY ZKTeco uFace 800 (ZK-UFACE800-01 / RKQ4262500336) actual attendance records.
-import { get } from '../api.js';
+import { get, patch } from '../api.js';
 import { html, setHTML, $, $$, esc, icon, toast } from '../ui.js';
 
 let activeProfileOverlay = null;
@@ -125,8 +125,12 @@ export async function showEmployeeAttendanceProfile(userId, initialFilter = {}) 
         <!-- 1. Header Banner -->
         <header class="eap-header">
           <div class="eap-header-left">
-            <div class="eap-avatar">
-              ${(emp.name || 'E').slice(0, 2).toUpperCase()}
+            <div class="eap-avatar-wrap" id="eap-avatar-wrap" title="Click to upload or update employee photo">
+              <div class="eap-avatar" id="eap-avatar-box">
+                ${emp.photo ? html`<img src="${emp.photo}" alt="${emp.name}" class="eap-avatar-img" />` : (emp.name || 'E').slice(0, 2).toUpperCase()}
+              </div>
+              <div class="eap-avatar-camera-btn" title="Upload/Change Photo">📷</div>
+              <input type="file" id="eap-photo-input" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;" />
             </div>
             <div>
               <div class="eap-name-row">
@@ -719,6 +723,50 @@ export async function showEmployeeAttendanceProfile(userId, initialFilter = {}) 
 
   const attachEvents = (data) => {
     $('#eap-btn-close', overlay)?.addEventListener('click', closeProfile);
+
+    // Interactive Employee Photo Upload from Attendance Profile
+    const avatarWrap = $('#eap-avatar-wrap', overlay);
+    const photoInput = $('#eap-photo-input', overlay);
+    const avatarBox = $('#eap-avatar-box', overlay);
+
+    if (avatarWrap && photoInput) {
+      avatarWrap.addEventListener('click', () => {
+        photoInput.click();
+      });
+      photoInput.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 10 * 1024 * 1024) {
+          toast('Photo file must be under 10MB', 'bad');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (re) => {
+          const img = new Image();
+          img.onload = async () => {
+            const canvas = document.createElement('canvas');
+            const MAX = 320;
+            let w = img.width, h = img.height;
+            if (w > h) { if (w > MAX) { h = Math.round((h * MAX) / w); w = MAX; } }
+            else { if (h > MAX) { w = Math.round((w * MAX) / h); h = MAX; } }
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+            try {
+              await patch(`/users/${data.employee.id}`, { photo: dataUrl });
+              data.employee.photo = dataUrl;
+              setHTML(avatarBox, html`<img src="${dataUrl}" alt="${data.employee.name}" class="eap-avatar-img" />`);
+              toast('Employee photo updated successfully!', 'ok');
+            } catch (err) {
+              toast(err.message || 'Failed to update employee photo', 'bad');
+            }
+          };
+          img.src = re.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
 
     // Print
     $('#eap-btn-print', overlay)?.addEventListener('click', () => {

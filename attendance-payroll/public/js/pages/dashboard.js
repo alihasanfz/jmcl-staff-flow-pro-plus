@@ -389,7 +389,7 @@ async function renderManager(view, state) {
                 <div class="stream-item">
                   <div style="display:flex; align-items:center; gap:10px;">
                     <div class="emp-avatar">
-                      ${(p.name || 'E').slice(0, 2).toUpperCase()}
+                      ${p.photo ? html`<img src="${p.photo}" alt="${p.name}" class="emp-avatar-img" />` : (p.name || 'E').slice(0, 2).toUpperCase()}
                     </div>
                     <div>
                       <div class="stream-emp-name">${p.name}</div>
@@ -500,7 +500,7 @@ async function renderManager(view, state) {
                         <td>
                           <div class="roster-emp-cell" style="cursor:pointer;" data-profile="${r.id}" title="Click to view full attendance analytics">
                             <div class="roster-avatar">
-                              ${(r.name || 'E').slice(0, 2).toUpperCase()}
+                              ${r.photo ? html`<img src="${r.photo}" alt="${r.name}" class="roster-avatar-img" />` : (r.name || 'E').slice(0, 2).toUpperCase()}
                             </div>
                             <span class="roster-emp-name" style="color:#0284c7;">${r.name}</span>
                           </div>

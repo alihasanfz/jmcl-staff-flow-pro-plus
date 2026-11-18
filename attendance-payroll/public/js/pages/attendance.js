@@ -413,8 +413,17 @@ export async function render(view, state) {
                 <td><b>${fmtDate(r.work_date)}</b></td>
                 ${isMgr ? html`
                   <td class="nameCell" style="cursor:pointer;" data-profile="${r.user_id}" title="Click to view employee attendance analytics">
-                    <b style="color:var(--primary);">${r.name}</b>
-                    <span>${r.department || 'General'}</span>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                      <div class="emp-table-avatar">
+                        ${r.photo ? html`
+                          <img src="${r.photo}" alt="${r.name}" class="emp-table-avatar-img" />
+                        ` : (r.name || 'E').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <b style="color:var(--primary); font-size:13.5px; display:block;">${r.name}</b>
+                        <span style="font-size:11.5px; color:var(--text-muted); display:block; margin-top:2px;">${r.department || 'General'}</span>
+                      </div>
+                    </div>
                   </td>
                 ` : ''}
                 <td>

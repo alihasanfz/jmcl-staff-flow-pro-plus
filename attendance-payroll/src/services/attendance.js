@@ -245,7 +245,7 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
     // Select punch times specifically for THIS device so device attendance is strictly evaluated:
     // If an employee did NOT punch on this device (e.g. ZK-uFace 800), their status on this machine is 'absent'!
     const { rows } = await query(
-      `SELECT a.id, a.user_id, u.name, u.employee_code, u.department, a.work_date::text AS work_date,
+      `SELECT a.id, a.user_id, u.name, u.employee_code, u.department, u.photo, a.work_date::text AS work_date,
               (SELECT to_char(MIN(pl.punched_at) AT TIME ZONE $1, 'HH24:MI')
                  FROM punch_logs pl
                 WHERE pl.user_id = a.user_id
@@ -347,7 +347,7 @@ async function listAttendance({ from, to, userId, department, status, deviceSn, 
 
   params.push(limit);
   const { rows } = await query(
-    `SELECT a.id, a.user_id, u.name, u.employee_code, u.department, a.work_date::text AS work_date, a.status,
+    `SELECT a.id, a.user_id, u.name, u.employee_code, u.department, u.photo, a.work_date::text AS work_date, a.status,
             to_char(a.check_in AT TIME ZONE $1, 'HH24:MI') AS check_in_local,
             to_char(a.check_out AT TIME ZONE $1, 'HH24:MI') AS check_out_local,
             a.worked_minutes, a.late_minutes, a.early_out_minutes, a.overtime_minutes,
@@ -625,6 +625,7 @@ async function getEmployeeAttendanceProfile(userId, { filterType = 'monthly', da
       graceMinutes: employee.grace_minutes || 0,
       active: employee.active,
       joinDate: employee.join_date,
+      photo: employee.photo || '',
       biometricPin: employee.device_pin || '—',
       primaryDevice: 'ZK-uFace 800',
       primaryDeviceSn: 'ZK-UFACE800-01 (SN: RKQ4262500336)',

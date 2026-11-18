@@ -10,7 +10,7 @@ async function today() {
   const nowMin = nowMinIn(tz);
 
   const [people, rows, hol, leave] = await Promise.all([
-    query(`SELECT u.id, u.name, u.department, s.start_time::text AS st, s.end_time::text AS et, s.weekly_off
+    query(`SELECT u.id, u.name, u.department, u.photo, s.start_time::text AS st, s.end_time::text AS et, s.weekly_off
              FROM users u
              LEFT JOIN shifts s ON s.id = COALESCE(u.shift_id, (SELECT id FROM shifts ORDER BY id LIMIT 1))
             WHERE u.active AND u.join_date <= $1 ORDER BY u.name`, [date]),
@@ -51,7 +51,7 @@ async function today() {
       state = 'absent';
     }
     ribbon.push({
-      id: p.id, name: p.name, department: p.department, state,
+      id: p.id, name: p.name, department: p.department, photo: p.photo || '', state,
       shiftStart: (p.st || '09:00:00').slice(0, 5), shiftEnd: (p.et || '18:00:00').slice(0, 5),
       checkIn: r?.cin || null, checkOut: r?.cout || null,
       lateMinutes: r?.late_minutes || 0, earlyOutMinutes: r?.early_out_minutes || 0, overtimeMinutes: r?.overtime_minutes || 0,
@@ -68,7 +68,7 @@ async function today() {
         kpi.overtimeCount++;
       }
       ribbon.unshift({
-        id: p.id, name: p.name, department: p.department, state: 'present',
+        id: p.id, name: p.name, department: p.department, photo: p.photo || '', state: 'present',
         shiftStart: (p.st || '09:00:00').slice(0, 5), shiftEnd: (p.et || '18:00:00').slice(0, 5),
         checkIn: r?.cin || null, checkOut: r?.cout || null,
         lateMinutes: 0, earlyOutMinutes: 0, overtimeMinutes: r?.overtime_minutes || 0,
@@ -123,7 +123,7 @@ async function recentPunches(limit = 12) {
   const { timezone: tz } = await getSettings();
   const { rows } = await query(
     `SELECT p.id, COALESCE(u.name, 'Unknown PIN ' || p.pin) AS name, p.pin, (p.user_id IS NULL) AS unknown, p.source,
-            p.state,
+            p.state, u.photo,
             to_char(p.punched_at AT TIME ZONE $1, 'YYYY-MM-DD HH24:MI:SS') AS at,
             to_char(p.punched_at AT TIME ZONE $1, 'HH12:MI:SS AM') AS time_12h,
             CASE WHEN to_char(p.punched_at AT TIME ZONE $1, 'HH24:MI:SS') < '16:00:00' THEN 'IN' ELSE 'OUT' END AS punch_type,
