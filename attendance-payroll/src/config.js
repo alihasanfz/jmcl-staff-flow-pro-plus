@@ -19,7 +19,7 @@ try {
     });
 } catch (_) {}
 
-const SUPABASE_DB_URL = 'postgresql://postgres.giqmqysdeximywsozxjx:Sh%2540170885%2523hasan%40jmcl@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres';
+const SUPABASE_DB_URL = 'postgresql://postgres.giqmqysdeximywsozxjx:Sh%2540170885%2523hasan%40jmcl@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres';
 
 const rawDb = (process.env.DATABASE_URL || '').trim();
 // Automatically switch to the active, quota-free Supabase database if DATABASE_URL is empty, expired Neon, or Render internal DB

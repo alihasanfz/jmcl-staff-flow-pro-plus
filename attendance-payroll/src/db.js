@@ -96,7 +96,7 @@ if (config.usePglite) {
   types.setTypeParser(1082, (v) => v);
   types.setTypeParser(20, (v) => (v === null ? null : parseInt(v, 10)));
 
-  pool = new Pool({ connectionString: config.databaseUrl || 'postgres://payroll:payroll@localhost:5432/payroll', max: 10 });
+  pool = new Pool({ connectionString: config.databaseUrl || 'postgres://payroll:payroll@localhost:5432/payroll', max: 5 });
   pool.on('error', (err) => console.error('[db] idle client error', err.message));
 
   query = (text, params) => pool.query(text, params);

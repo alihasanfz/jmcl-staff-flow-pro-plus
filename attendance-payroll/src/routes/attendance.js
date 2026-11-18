@@ -84,6 +84,14 @@ router.get('/', wrap(async (req, res) => {
   const from = req.query.from ? parse(date, req.query.from) : addDays(to, -13);
   if (from > to) throw bad('"from" must not be after "to"');
   if (diffDays(from, to) > 366) throw bad('Choose a range of up to one year');
+
+  const today = todayIn(timezone);
+  if (from <= today && to >= today) {
+    try {
+      await rebuildRange(today, today);
+    } catch { /* non-blocking */ }
+  }
+
   const rows = await listAttendance({
     from, to, userId: scopeUser(req),
     department: isManager(req.user) ? req.query.department : undefined,

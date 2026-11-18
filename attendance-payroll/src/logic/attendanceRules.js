@@ -37,8 +37,9 @@ function computeDay({ date, today, nowMin, user, shift, punches, holiday, leave,
   if (punches.length === 0) {
     if (isOffDay) return { ...base, status: holiday ? 'holiday' : 'weekend' };
     if (leave) return { ...base, status: leave.paid ? 'leave' : 'unpaid_leave' };
-    if (dayOver) return { ...base, status: 'absent' };
-    return null;                                  // shift/day not over yet
+    const shiftStarted = date < today || nowMin >= startMin;
+    if (shiftStarted) return { ...base, status: 'absent' };
+    return null;                                  // shift/day not started yet
   }
 
   // Case 2: Employee punched on this day

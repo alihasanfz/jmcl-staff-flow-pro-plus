@@ -181,9 +181,10 @@ test('half day when worked time below threshold', () => {
   assert.equal(mk('2026-10-26', ['09:30:00', '13:00:00']).status, 'half_day');
 });
 
-test('absent only after the day/shift is over', () => {
+test('absent once shift has started with no punches', () => {
   assert.equal(mk('2026-10-26', []).status, 'absent');
-  assert.equal(mk('2026-11-02', [], { nowMin: 10 * 60 }), null);
+  assert.equal(mk('2026-11-02', [], { nowMin: 8 * 60 }), null);
+  assert.equal(mk('2026-11-02', [], { nowMin: 10 * 60 }).status, 'absent');
   assert.equal(mk('2026-11-02', [], { nowMin: 18 * 60 + 1 }).status, 'absent');
 });
 
