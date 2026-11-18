@@ -22,8 +22,10 @@ try {
 const SUPABASE_DB_URL = 'postgresql://postgres.giqmqysdeximywsozxjx:Sh%2540170885%2523hasan%40jmcl@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres';
 
 const rawDb = (process.env.DATABASE_URL || '').trim();
-// Automatically bypass expired/quota-exceeded Render internal database ('dpg-') and connect to active Supabase
-const effectiveDbUrl = (!rawDb || rawDb.includes('dpg-')) ? SUPABASE_DB_URL : rawDb;
+// Automatically switch to the active, quota-free Supabase database if DATABASE_URL is empty, expired Neon, or Render internal DB
+const effectiveDbUrl = (rawDb && (rawDb.includes('supabase.co') || rawDb.includes('supabase.com')))
+  ? rawDb
+  : SUPABASE_DB_URL;
 
 module.exports = {
   env: process.env.NODE_ENV || 'development',
