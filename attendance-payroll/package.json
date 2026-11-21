@@ -14,7 +14,7 @@
     "gateway": "node scripts/zkteco-gateway.js",
     "test": "node tests/unit.test.js",
     "test:smoke": "node tests/smoke.test.js",
-    "build": "echo Build completed successfully"
+    "build": "node -e \"const fs=require('fs'); if(!fs.existsSync('public/vendor')) fs.mkdirSync('public/vendor', {recursive:true}); fs.copyFileSync('node_modules/chart.js/dist/chart.umd.js', 'public/vendor/chart.js'); console.log('Vendor assets prepared successfully');\""
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.14",
