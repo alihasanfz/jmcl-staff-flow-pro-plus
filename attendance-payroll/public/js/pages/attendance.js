@@ -18,18 +18,33 @@ export async function render(view, state) {
   let devices = [];
   let autoRefreshTimer = null;
 
-  if (isMgr) {
+  const loadMeta = async () => {
+    if (!isMgr) return;
     try {
       const [uRes, dRes, devRes] = await Promise.all([
-        get('/users?active=true'),
+        get('/users?active=true&brief=true'),
         get('/departments').catch(() => get('/users/departments').then((r) => ({ departments: (r.departments || []).map((name) => ({ name })) }))),
         get('/devices').catch(() => ({ devices: [] })),
       ]);
+      if (!isMounted) return;
       users = uRes.users || [];
       departments = dRes.departments || [];
       devices = devRes.devices || [];
+
+      const uSelect = view.querySelector('select[name="userId"]');
+      if (uSelect && users.length) {
+        const curVal = f.userId;
+        uSelect.innerHTML = `<option value="">All Employees</option>` +
+          users.map((u) => `<option value="${u.id}" ${String(u.id) === curVal ? 'selected' : ''}>${u.name}</option>`).join('');
+      }
+      const dSelect = view.querySelector('select[name="department"]');
+      if (dSelect && departments.length) {
+        const curVal = f.department;
+        dSelect.innerHTML = `<option value="">All Departments</option>` +
+          departments.map((d) => `<option value="${d.name || d}" ${(d.name || d) === curVal ? 'selected' : ''}>${d.name || d}</option>`).join('');
+      }
     } catch { /* ignore */ }
-  }
+  };
 
   const shell = () => {
     setHTML(view, html`
@@ -170,7 +185,11 @@ export async function render(view, state) {
 
         <section class="panel">
           <div class="body flush table-wrap" id="results">
-            <p class="empty">${t('loading')}</p>
+            <div class="empty" style="padding:40px 16px; display:flex; flex-direction:column; align-items:center; gap:10px;">
+              <div style="width:26px; height:26px; border:3px solid #e2e8f0; border-top-color:#0284c7; border-radius:50%; animation:att-spin 0.8s linear infinite;"></div>
+              <span style="font-weight:600; color:var(--text-muted, #64748b); font-size:13px;">Loading attendance records...</span>
+              <style>@keyframes att-spin { to { transform: rotate(360deg); } }</style>
+            </div>
           </div>
         </section>
       </div>
@@ -709,6 +728,7 @@ export async function render(view, state) {
   }
 
   shell();
+  loadMeta();
   await load();
 
   return () => {

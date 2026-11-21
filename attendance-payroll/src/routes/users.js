@@ -121,11 +121,14 @@ router.get('/', wrap(async (req, res) => {
     params.push(req.query.active === 'true');
     where += ` AND u.active = $${params.length}`;
   }
+  const isBrief = req.query.brief === 'true' || req.query.light === 'true';
+  const selectCols = isBrief
+    ? 'u.id, u.employee_code, u.device_pin, u.name, u.email, u.department, u.role, u.active'
+    : COLS;
   const { rows } = await query(`
-    SELECT ${COLS}
+    SELECT ${selectCols}
       FROM users u
-      LEFT JOIN shifts s ON s.id = u.shift_id
-      LEFT JOIN salary_structures ss ON ss.user_id = u.id
+      ${isBrief ? '' : 'LEFT JOIN shifts s ON s.id = u.shift_id LEFT JOIN salary_structures ss ON ss.user_id = u.id'}
      WHERE ${where}
      ORDER BY u.name
   `, params);
