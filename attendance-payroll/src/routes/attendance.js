@@ -86,11 +86,6 @@ router.get('/', wrap(async (req, res) => {
   if (diffDays(from, to) > 366) throw bad('Choose a range of up to one year');
 
   const today = todayIn(timezone);
-  if (from <= today && to >= today) {
-    try {
-      await rebuildRange(today, today);
-    } catch { /* non-blocking */ }
-  }
 
   const rows = await listAttendance({
     from, to, userId: scopeUser(req),

@@ -19,14 +19,6 @@ router.use((req, res, next) => {
 });
 
 router.get(['/', '/overview'], wrap(async (req, res) => {
-  try {
-    const { timezone: tz } = await getSettings();
-    const date = todayIn(tz);
-    await rebuildRange(date, date);
-  } catch (err) {
-    // Non-blocking: proceed with dashboard render even if rebuildRange encounters a transient issue
-  }
-
   const [today, trend, departments, punches, devices, hourly, terminals, gateMonitoring] = await Promise.all([
     dash.today(),
     dash.trend(Math.min(Math.max(toInt(req.query.days, 14), 7), 60)),
