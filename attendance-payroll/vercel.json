@@ -3,12 +3,12 @@
   "framework": null,
   "outputDirectory": "public",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/index.js" },
-    { "source": "/iclock/:path*", "destination": "/api/index.js" },
-    { "source": "/cdata:path*", "destination": "/api/index.js" },
-    { "source": "/getrequest:path*", "destination": "/api/index.js" },
-    { "source": "/devicecmd:path*", "destination": "/api/index.js" },
-    { "source": "/ping", "destination": "/api/index.js" },
+    { "source": "/api/:path*", "destination": "/api" },
+    { "source": "/iclock/:path*", "destination": "/api" },
+    { "source": "/cdata:path*", "destination": "/api" },
+    { "source": "/getrequest:path*", "destination": "/api" },
+    { "source": "/devicecmd:path*", "destination": "/api" },
+    { "source": "/ping", "destination": "/api" },
     { "source": "/:path*", "destination": "/index.html" }
   ],
   "env": {
