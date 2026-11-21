@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "TZ_DEFAULT": "Asia/Dhaka",
+    "DATABASE_URL": "postgresql://postgres.giqmqysdeximywsozxjx:Sh%2540170885%2523hasan%40jmcl@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres"
+  }
+}
