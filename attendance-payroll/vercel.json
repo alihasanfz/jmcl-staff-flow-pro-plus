@@ -1,47 +1,12 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "public/**",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "api/index.js",
-      "use": "@vercel/node"
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "public/**"
     }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "api/index.js"
-    },
-    {
-      "src": "/iclock/(.*)",
-      "dest": "api/index.js"
-    },
-    {
-      "src": "/cdata(.*)",
-      "dest": "api/index.js"
-    },
-    {
-      "src": "/getrequest(.*)",
-      "dest": "api/index.js"
-    },
-    {
-      "src": "/devicecmd(.*)",
-      "dest": "api/index.js"
-    },
-    {
-      "src": "/ping",
-      "dest": "api/index.js"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index.js" }
   ],
   "env": {
     "NODE_ENV": "production",

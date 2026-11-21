@@ -1,47 +1,12 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "attendance-payroll/public/**",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "attendance-payroll/api/index.js",
-      "use": "@vercel/node"
+  "functions": {
+    "attendance-payroll/api/index.js": {
+      "includeFiles": "attendance-payroll/public/**"
     }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "attendance-payroll/api/index.js"
-    },
-    {
-      "src": "/iclock/(.*)",
-      "dest": "attendance-payroll/api/index.js"
-    },
-    {
-      "src": "/cdata(.*)",
-      "dest": "attendance-payroll/api/index.js"
-    },
-    {
-      "src": "/getrequest(.*)",
-      "dest": "attendance-payroll/api/index.js"
-    },
-    {
-      "src": "/devicecmd(.*)",
-      "dest": "attendance-payroll/api/index.js"
-    },
-    {
-      "src": "/ping",
-      "dest": "attendance-payroll/api/index.js"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/attendance-payroll/api/index.js" }
   ],
   "env": {
     "NODE_ENV": "production",
