@@ -9,7 +9,7 @@ const config = require('../config');
 // Public: just enough for the login screen and the PWA shell.
 router.get('/meta', wrap(async (req, res) => {
   const s = await getSettings();
-  res.json({ company: s.company_name, timezone: s.timezone, currency: s.currency, today: todayIn(s.timezone), demo: config.seedDemo });
+  res.json({ company: s.company_name, timezone: s.timezone, currency: s.currency, today: todayIn(s.timezone), demo: config.seedDemo, v: 'a8a3d2c' });
 }));
 
 router.get('/health', wrap(async (req, res) => {
