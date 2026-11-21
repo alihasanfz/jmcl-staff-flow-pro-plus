@@ -1,15 +1,15 @@
 {
   "version": 2,
-  "framework": null,
   "outputDirectory": "attendance-payroll/public",
-  "rewrites": [
-    { "source": "/api/:path*", "destination": "/api" },
-    { "source": "/iclock/:path*", "destination": "/api" },
-    { "source": "/cdata:path*", "destination": "/api" },
-    { "source": "/getrequest:path*", "destination": "/api" },
-    { "source": "/devicecmd:path*", "destination": "/api" },
-    { "source": "/ping", "destination": "/api" },
-    { "source": "/:path*", "destination": "/index.html" }
+  "routes": [
+    { "src": "/api/(.*)", "dest": "attendance-payroll/api/index.js" },
+    { "src": "/iclock/(.*)", "dest": "attendance-payroll/api/index.js" },
+    { "src": "/cdata(.*)", "dest": "attendance-payroll/api/index.js" },
+    { "src": "/getrequest(.*)", "dest": "attendance-payroll/api/index.js" },
+    { "src": "/devicecmd(.*)", "dest": "attendance-payroll/api/index.js" },
+    { "src": "/ping", "dest": "attendance-payroll/api/index.js" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ],
   "env": {
     "NODE_ENV": "production",
