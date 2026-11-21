@@ -13,7 +13,8 @@
     "simulate": "node scripts/simulate-punch.js",
     "gateway": "node scripts/zkteco-gateway.js",
     "test": "node tests/unit.test.js",
-    "test:smoke": "node tests/smoke.test.js"
+    "test:smoke": "node tests/smoke.test.js",
+    "build": "echo Build completed successfully"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.14",
