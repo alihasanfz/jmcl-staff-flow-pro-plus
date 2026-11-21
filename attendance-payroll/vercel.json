@@ -3,13 +3,13 @@
   "framework": null,
   "outputDirectory": "public",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index.js" },
-    { "source": "/iclock/(.*)", "destination": "/api/index.js" },
-    { "source": "/cdata(.*)", "destination": "/api/index.js" },
-    { "source": "/getrequest(.*)", "destination": "/api/index.js" },
-    { "source": "/devicecmd(.*)", "destination": "/api/index.js" },
+    { "source": "/api/:path*", "destination": "/api/index.js" },
+    { "source": "/iclock/:path*", "destination": "/api/index.js" },
+    { "source": "/cdata:path*", "destination": "/api/index.js" },
+    { "source": "/getrequest:path*", "destination": "/api/index.js" },
+    { "source": "/devicecmd:path*", "destination": "/api/index.js" },
     { "source": "/ping", "destination": "/api/index.js" },
-    { "source": "/((?!api/|iclock/|cdata|getrequest|devicecmd|ping|css/|js/|icons/|vendor/|manifest).*)/?", "destination": "/index.html" }
+    { "source": "/:path*", "destination": "/index.html" }
   ],
   "env": {
     "NODE_ENV": "production",
