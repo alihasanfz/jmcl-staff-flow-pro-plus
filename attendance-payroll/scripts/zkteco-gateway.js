@@ -19,7 +19,37 @@ const net = require('net');
 const http = require('http');
 const https = require('https');
 const os = require('os');
+const fs = require('fs');
+const path = require('path');
 const readline = require('readline');
+
+// Prevent unexpected crashes from killing the background gateway
+const logFile = path.join(__dirname, 'gateway.log');
+const origLog = console.log;
+const origErr = console.error;
+const origWarn = console.warn;
+function fileLog(...args) {
+  const line = `[${new Date().toLocaleTimeString('en-US')}] ${args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')}\n`;
+  try {
+    if (fs.existsSync(logFile) && fs.statSync(logFile).size > 5 * 1024 * 1024) {
+      fs.writeFileSync(logFile, line);
+    } else {
+      fs.appendFileSync(logFile, line);
+    }
+  } catch (_) {}
+}
+console.log = (...args) => { origLog(...args); fileLog(...args); };
+console.error = (...args) => { origErr(...args); fileLog(...args); };
+console.warn = (...args) => { origWarn(...args); fileLog(...args); };
+
+process.on('uncaughtException', (err) => {
+  const line = `[CRASH PREVENTED] UncaughtException: ${err.stack || err.message}`;
+  console.error(line);
+});
+process.on('unhandledRejection', (reason) => {
+  const line = `[CRASH PREVENTED] UnhandledRejection: ${reason}`;
+  console.error(line);
+});
 
 const args = process.argv.slice(2);
 const opt = (name, def) => {
