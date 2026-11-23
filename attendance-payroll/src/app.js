@@ -48,6 +48,7 @@ function createApp() {
   app.use('/api/audit-logs', require('./routes/audit'));
   app.use('/api/org', require('./routes/org'));
   app.use('/api/attendance', require('./routes/attendance'));
+  app.use('/api/off-days', require('./routes/offDays'));
   app.use('/api/leave', require('./routes/leave'));
   app.use('/api/payroll', require('./routes/payroll'));
   app.use('/api/reports', require('./routes/reports'));

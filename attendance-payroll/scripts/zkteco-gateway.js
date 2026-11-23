@@ -50,6 +50,11 @@ process.on('unhandledRejection', (reason) => {
   const line = `[CRASH PREVENTED] UnhandledRejection: ${reason}`;
   console.error(line);
 });
+process.on('exit', (code) => {
+  console.log(`[GATEWAY PROCESS EXIT] Code: ${code}`);
+});
+// Continuous keepalive to ensure event loop never drains
+setInterval(() => {}, 1000 * 60 * 60);
 
 const args = process.argv.slice(2);
 const opt = (name, def) => {
@@ -59,7 +64,7 @@ const opt = (name, def) => {
   return v === undefined || v.startsWith('--') ? true : v;
 };
 
-const DEVICE_IP = String(opt('device-ip', process.env.DEVICE_IP || '192.168.0.201'));
+const DEVICE_IP = String(opt('device-ip', process.env.DEVICE_IP || '192.168.3.69'));
 const DEVICE_PORT = parseInt(opt('device-port', process.env.DEVICE_PORT || '4370'), 10);
 const PROXY_PORT = parseInt(opt('proxy-port', process.env.PROXY_PORT || '8080'), 10);
 const SERVER_URL = String(opt('server-url', process.env.SERVER_URL || 'https://attendance-payroll-ten.vercel.app')).replace(/\/$/, '');
@@ -282,18 +287,12 @@ function startProxyServer(port) {
 
 /** Probing loop */
 async function cycle() {
-  const probe = await checkDeviceReachable(DEVICE_IP, DEVICE_PORT);
-  if (probe.ok) {
-    console.log(`[${new Date().toLocaleTimeString()}] Local Terminal (${DEVICE_IP}:${DEVICE_PORT}) is REACHABLE on LAN.`);
-  } else {
-    // Check if discovered devices are reachable
-    if (discoveredDeviceIps.length > 0) {
-      console.log(`[${new Date().toLocaleTimeString()}] Default IP (${DEVICE_IP}) offline, but terminal found at: ${discoveredDeviceIps.join(', ')}:4370`);
-    } else {
-      // Trigger background scan
-      scanSubnetForTerminals().catch(() => {});
+  try {
+    const probe = await checkDeviceReachable(DEVICE_IP, DEVICE_PORT);
+    if (probe.ok) {
+      console.log(`[${new Date().toLocaleTimeString()}] Local Terminal (${DEVICE_IP}:${DEVICE_PORT}) is REACHABLE on LAN.`);
     }
-  }
+  } catch (_) {}
 }
 
 cycle();

@@ -101,6 +101,23 @@ CREATE TABLE IF NOT EXISTS holidays (
   name  text NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS off_day_assignments (
+  id              bigserial PRIMARY KEY,
+  user_id         int NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date            date NOT NULL,
+  department      text,
+  assignment_type text NOT NULL CHECK (assignment_type IN ('individual', 'department', 'bulk', 'excel_import')),
+  reason          text NOT NULL DEFAULT '',
+  assigned_by     int REFERENCES users(id) ON DELETE SET NULL,
+  updated_by     int REFERENCES users(id) ON DELETE SET NULL,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, date)
+);
+CREATE INDEX IF NOT EXISTS off_day_assignments_date_idx ON off_day_assignments (date);
+CREATE INDEX IF NOT EXISTS off_day_assignments_user_idx ON off_day_assignments (user_id, date);
+CREATE INDEX IF NOT EXISTS off_day_assignments_dept_idx ON off_day_assignments (department);
+
 CREATE TABLE IF NOT EXISTS attendance (
   id                 bigserial PRIMARY KEY,
   user_id            int  NOT NULL REFERENCES users(id) ON DELETE CASCADE,

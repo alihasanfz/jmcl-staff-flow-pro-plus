@@ -20,7 +20,7 @@ async function rebuildRange(from, to, { userId = null } = {}) {
   const last = to < today ? to : today;
   if (from > last) return 0;
 
-  const [users, shiftsRes, holidaysRes, leavesRes, punchesRes] = await Promise.all([
+  const [users, shiftsRes, holidaysRes, leavesRes, punchesRes, offDaysRes] = await Promise.all([
     query(`SELECT id, join_date::text AS join_date, COALESCE(shift_id, (SELECT id FROM shifts ORDER BY id LIMIT 1)) AS shift_id,
                   COALESCE(overtime_eligible, true) AS overtime_eligible
              FROM users
@@ -51,10 +51,12 @@ async function rebuildRange(from, to, { userId = null } = {}) {
                    AND (UPPER(TRIM(d.serial_number)) = 'VDE2251500160' OR LOWER(d.model) LIKE '%gate%' OR LOWER(d.name) LIKE '%gate%')
               )
             ORDER BY punched_at`, [tz, from, last, userId]),
+    query(`SELECT user_id, date::text AS date FROM off_day_assignments WHERE date BETWEEN $1 AND $2 AND ($3::int IS NULL OR user_id = $3)`, [from, last, userId]).catch(() => ({ rows: [] })),
   ]);
 
   const shifts = new Map(shiftsRes.rows.map((s) => [s.id, s]));
   const holidays = new Set(holidaysRes.rows.map((h) => h.date));
+  const userOffDays = new Set((offDaysRes?.rows || []).map((o) => `${o.user_id}|${o.date}`));
   const leavesByUser = new Map();
   for (const l of leavesRes.rows) {
     if (!leavesByUser.has(l.user_id)) leavesByUser.set(l.user_id, []);
@@ -75,9 +77,10 @@ async function rebuildRange(from, to, { userId = null } = {}) {
     for (const date of eachDay(from, last)) {
       const leave = leaves.find((l) => l.s <= date && l.e >= date) || null;
       const dayPunches = punchMap.get(`${u.id}|${date}`) || [];
+      const isCustomOffDay = userOffDays.has(`${u.id}|${date}`);
       const row = computeDay({
         date, today, nowMin, user: u, shift, holiday: holidays.has(date), leave,
-        punches: dayPunches, rules: settings.attendance,
+        punches: dayPunches, rules: settings.attendance, isCustomOffDay,
       });
       if (row) {
         const inDev = dayPunches[0]?.device_sn || null;

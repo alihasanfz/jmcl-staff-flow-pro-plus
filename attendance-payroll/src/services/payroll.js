@@ -23,7 +23,7 @@ async function generateRun(month, actor) {
 
   await rebuildRange(from, to); // materialise absences etc. so numbers reflect the latest punches
 
-  const [users, hol, stats, adj] = await Promise.all([
+  const [users, hol, stats, adj, offDaysRes] = await Promise.all([
     query(`SELECT u.id, u.name, u.base_salary, u.allowances, u.join_date::text AS join_date,
                   s.start_time::text AS st, s.end_time::text AS et, s.break_minutes, s.weekly_off
              FROM users u JOIN shifts s ON s.id = u.shift_id
@@ -37,9 +37,15 @@ async function generateRun(month, actor) {
                   COALESCE(SUM(overtime_minutes) FILTER (WHERE off_day_work), 0)::int AS ot_off
              FROM attendance WHERE work_date BETWEEN $1 AND $2 GROUP BY user_id`, [from, to]),
     query(`SELECT user_id, kind, SUM(amount) AS total FROM adjustments WHERE month = $1 GROUP BY user_id, kind`, [month]),
+    query(`SELECT user_id, date::text AS date FROM off_day_assignments WHERE date BETWEEN $1 AND $2`, [from, to]).catch(() => ({ rows: [] })),
   ]);
 
   const holidays = new Set(hol.rows.map((h) => h.date));
+  const userOffDaysMap = new Map();
+  for (const o of (offDaysRes?.rows || [])) {
+    if (!userOffDaysMap.has(o.user_id)) userOffDaysMap.set(o.user_id, new Set());
+    userOffDaysMap.get(o.user_id).add(o.date);
+  }
   const statsBy = new Map(stats.rows.map((s) => [s.user_id, s]));
   const adjBy = new Map();
   for (const a of adj.rows) {
@@ -49,7 +55,8 @@ async function generateRun(month, actor) {
 
   const slips = [];
   for (const u of users.rows) {
-    const days = eachDay(from, to).filter((d) => !u.weekly_off.includes(dow(d)) && !holidays.has(d));
+    const userOffDays = userOffDaysMap.get(u.id) || new Set();
+    const days = eachDay(from, to).filter((d) => !u.weekly_off.includes(dow(d)) && !holidays.has(d) && !userOffDays.has(d));
     const workingDaysFull = days.length;
     const workingDaysActual = days.filter((d) => d >= u.join_date).length;
 

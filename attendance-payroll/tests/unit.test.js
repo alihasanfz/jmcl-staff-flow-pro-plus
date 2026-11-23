@@ -202,6 +202,21 @@ test('working on an off day counts all time as overtime', () => {
   assert.equal(r.late_minutes, 0);
 });
 
+test('custom assigned off day: marks weekend when no punches, present and overtime when punched', () => {
+  // 2026-10-26 is a regular Monday
+  // Without punches, custom off day is marked as weekend (Off Day), never absent!
+  const noPunch = mk('2026-10-26', [], { isCustomOffDay: true });
+  assert.equal(noPunch.status, 'weekend');
+  assert.notEqual(noPunch.status, 'absent');
+
+  // With punches on a custom off day, employee is present, off_day_work is true, and worked time is overtime
+  const punched = mk('2026-10-26', ['09:00:00', '17:00:00'], { isCustomOffDay: true });
+  assert.equal(punched.status, 'present');
+  assert.equal(punched.off_day_work, true);
+  assert.equal(punched.worked_minutes, 480);
+  assert.equal(punched.overtime_minutes, 480);
+});
+
 test('future dates and pre-join dates produce no row', () => {
   assert.equal(mk('2026-11-03', []), null);
   assert.equal(mk('2026-10-26', [], { user: { join_date: '2026-10-27' } }), null);

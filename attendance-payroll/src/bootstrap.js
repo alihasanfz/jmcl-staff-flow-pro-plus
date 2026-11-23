@@ -147,6 +147,12 @@ async function firstRun() {
          AND punch_count > 0
     `).catch(() => { });
 
+    // Initialize off_day_assignments table
+    try {
+      const { initOffDaysTable } = require('./services/offDays');
+      await initOffDaysTable();
+    } catch (_) { }
+
     // Ensure Casual Leave (CL) 10 days, Sick Leave (SL) 14 days, and Earned Leave (EL) 15 days exist
     try {
       await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS section text DEFAULT ''`).catch(() => { });

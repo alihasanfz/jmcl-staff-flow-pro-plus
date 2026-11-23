@@ -14,7 +14,7 @@ const { dow, toMin } = require('../utils/time');
 
 const DEFAULT_RULES = { min_punch_gap_minutes: 5, half_day_minutes: 240, ot_max_minutes: 240 };
 
-function computeDay({ date, today, nowMin, user, shift, punches, holiday, leave, rules }) {
+function computeDay({ date, today, nowMin, user, shift, punches, holiday, leave, rules, isCustomOffDay }) {
   const r = { ...DEFAULT_RULES, ...(rules || {}) };
   if (!shift) return null;                       // employees without a shift are not tracked
   if (user.join_date && date < user.join_date) return null;
@@ -25,7 +25,7 @@ function computeDay({ date, today, nowMin, user, shift, punches, holiday, leave,
   const dayOfWeek = dow(date);
   // Friday (day 5) is the company-wide weekly off day in Bangladesh
   const isWeeklyOff = (shift.weekly_off || []).includes(dayOfWeek) || dayOfWeek === 5;
-  const isOffDay = isWeeklyOff || !!holiday;
+  const isOffDay = isWeeklyOff || !!holiday || !!isCustomOffDay;
   const dayOver = date < today || nowMin >= endMin;
 
   const base = {
