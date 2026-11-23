@@ -653,6 +653,28 @@ export async function render(view, state) {
     let selectedEmployees = new Set();
     let excludedEmployees = new Set();
 
+    function resolveSelectedDates(modalEl) {
+      const f = modalEl || document;
+      if (dateMode === 'range') {
+        const from = $('#input-range-from', f)?.value;
+        const to = $('#input-range-to', f)?.value;
+        if (!from || !to || from > to) return [];
+        const result = [];
+        let cur = new Date(from);
+        const end = new Date(to);
+        while (cur <= end) {
+          result.push(cur.toISOString().slice(0, 10));
+          cur.setDate(cur.getDate() + 1);
+        }
+        return result;
+      }
+
+      const single = $('#input-single-date', f)?.value;
+      const extra = ($('#input-extra-dates', f)?.value || '').split(/[\s,;]+/).filter(Boolean);
+      const allDates = [single, ...extra].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+      return [...new Set(allDates)].sort();
+    }
+
     modal({
       title: 'Assign Off Days',
       wide: true,
@@ -993,7 +1015,7 @@ export async function render(view, state) {
         $('#modal-bulk-ids-text', f)?.addEventListener('input', () => triggerConflictCheck());
 
         async function triggerConflictCheck() {
-          const dates = resolveSelectedDates();
+          const dates = resolveSelectedDates(f);
           $('#preview-date-count', f).textContent = dates.length;
 
           const payload = { dates, excludeUserIds: Array.from(excludedEmployees) };
@@ -1047,30 +1069,9 @@ export async function render(view, state) {
             console.error('[offDays] Preview check error:', err);
           }
         }
-
-        function resolveSelectedDates() {
-          if (dateMode === 'range') {
-            const from = $('#input-range-from', f).value;
-            const to = $('#input-range-to', f).value;
-            if (!from || !to || from > to) return [];
-            const result = [];
-            let cur = new Date(from);
-            const end = new Date(to);
-            while (cur <= end) {
-              result.push(cur.toISOString().slice(0, 10));
-              cur.setDate(cur.getDate() + 1);
-            }
-            return result;
-          }
-
-          const single = $('#input-single-date', f).value;
-          const extra = ($('#input-extra-dates', f).value || '').split(/[\s,;]+/).filter(Boolean);
-          const allDates = [single, ...extra].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
-          return [...new Set(allDates)].sort();
-        }
       },
       onSubmit: async (f, close) => {
-        const dates = resolveSelectedDates();
+        const dates = resolveSelectedDates(f);
         if (!dates.length) throw new Error('Please select at least one valid date');
 
         const reason = $('#modal-assign-reason', f).value.trim() || 'Off Day';
@@ -1104,243 +1105,6 @@ export async function render(view, state) {
         refreshView();
       },
     });
-
-    function resolveSelectedDates() {
-      const mode = document.querySelector('input[name="dateMode"]:checked')?.value || 'single';
-      if (mode === 'range') {
-        const from = $('#input-range-from')?.value;
-        const to = $('#input-range-to')?.value;
-        if (!from || !to || from > to) return [];
-        const result = [];
-        let cur = new Date(from);
-        const end = new Date(to);
-        while (cur <= end) {
-          result.push(cur.toISOString().slice(0, 10));
-          cur.setDate(cur.getDate() + 1);
-        }
-        return result;
-      }
-      const single = $('#input-single-date')?.value;
-      const extra = ($('#input-extra-dates')?.value || '').split(/[\s,;]+/).filter(Boolean);
-      return [...new Set([single, ...extra].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
-    }
-  }
-
-        // Employee Search & Multi-Select Logic
-        const empSearchInput = $('#modal-emp-search', f);
-        const searchDropdown = $('#emp-search-dropdown', f);
-
-        empSearchInput?.addEventListener('input', () => {
-          const q = empSearchInput.value.toLowerCase().trim();
-          if (!q) {
-            searchDropdown.style.display = 'none';
-            return;
-          }
-
-          const matches = allEmployees.filter((u) => (
-            u.name.toLowerCase().includes(q) ||
-            (u.employee_code && u.employee_code.toLowerCase().includes(q)) ||
-            (u.department && u.department.toLowerCase().includes(q)) ||
-            (u.designation && u.designation.toLowerCase().includes(q))
-          )).slice(0, 8);
-
-          if (!matches.length) {
-            setHTML(searchDropdown, html`<p class="small muted" style="padding:8px;">No matching employees</p>`);
-            searchDropdown.style.display = 'block';
-            return;
-          }
-
-          setHTML(searchDropdown, html`
-            ${matches.map((u) => html`
-              <div class="row between items-center search-match-item" data-uid="${u.id}"
-                   style="padding:8px 10px; cursor:pointer; border-bottom:1px solid var(--line); font-size:12px;">
-                <div>
-                  <b>${esc(u.name)}</b> <span class="small muted">(${esc(u.employee_code || '')})</span>
-                  <div class="small muted">${esc(u.department || '')} · ${esc(u.designation || '')}</div>
-                </div>
-                <button type="button" class="btn small">+ Add</button>
-              </div>
-            `)}
-          `);
-          searchDropdown.style.display = 'block';
-
-          $$('.search-match-item', searchDropdown).forEach((item) => {
-            item.onclick = () => {
-              const uid = Number(item.getAttribute('data-uid'));
-              selectedEmployees.add(uid);
-              empSearchInput.value = '';
-              searchDropdown.style.display = 'none';
-              renderSelectedChips();
-              triggerConflictCheck();
-            };
-          });
-        });
-
-        function renderSelectedChips() {
-          const chipsWrap = $('#selected-emp-chips', f);
-          if (selectedEmployees.size === 0) {
-            chipsWrap.innerHTML = '<span class="small muted" id="chips-placeholder">No employees selected yet. Search above to add.</span>';
-            return;
-          }
-
-          const chips = Array.from(selectedEmployees).map((uid) => {
-            const u = allEmployees.find((e) => e.id === uid);
-            return u ? html`
-              <span class="badge" style="background:#e0f2fe; color:#0369a1; padding:4px 8px; font-size:11.5px; display:inline-flex; align-items:center; gap:6px;">
-                <b>${esc(u.employee_code || '')}</b> ${esc(u.name)}
-                <button type="button" class="btn-remove-chip" data-uid="${u.id}" style="border:none; background:none; cursor:pointer; color:#ef4444; font-weight:800; padding:0 2px;">×</button>
-              </span>
-            ` : '';
-          });
-
-          setHTML(chipsWrap, html`${chips}`);
-
-          $$('.btn-remove-chip', chipsWrap).forEach((btn) => {
-            btn.onclick = () => {
-              const uid = Number(btn.getAttribute('data-uid'));
-              selectedEmployees.delete(uid);
-              renderSelectedChips();
-              triggerConflictCheck();
-            };
-          });
-        }
-
-        // Live conflict detection and preview
-        $('#btn-recheck-conflicts', f)?.addEventListener('click', () => triggerConflictCheck());
-        $('#input-single-date', f)?.addEventListener('change', () => triggerConflictCheck());
-        $('#input-extra-dates', f)?.addEventListener('input', () => triggerConflictCheck());
-        $('#input-range-from', f)?.addEventListener('change', () => triggerConflictCheck());
-        $('#input-range-to', f)?.addEventListener('change', () => triggerConflictCheck());
-        $('#modal-bulk-ids-text', f)?.addEventListener('input', () => triggerConflictCheck());
-
-        async function triggerConflictCheck() {
-          const dates = resolveSelectedDates();
-          $('#preview-date-count', f).textContent = dates.length;
-
-          const payload = { dates, excludeUserIds: Array.from(excludedEmployees) };
-
-          if (targetMode === 'department') {
-            payload.departments = [selectedDepartment];
-          } else if (targetMode === 'employee') {
-            payload.userIds = Array.from(selectedEmployees);
-          } else if (targetMode === 'bulk_ids') {
-            const raw = $('#modal-bulk-ids-text', f).value;
-            const codes = raw.split(/[\s,;\n]+/).filter(Boolean).map((s) => s.toLowerCase());
-            const matched = allEmployees.filter((u) => codes.includes((u.employee_code || '').toLowerCase()) || codes.includes(String(u.id)));
-            payload.userIds = matched.map((u) => u.id);
-          }
-
-          if (!dates.length || (!payload.departments?.length && !payload.userIds?.length)) {
-            $('#preview-emp-count', f).textContent = '0';
-            $('#preview-conflicts-area', f).style.display = 'none';
-            return;
-          }
-
-          try {
-            const preview = await post('/off-days/preview', payload);
-            $('#preview-emp-count', f).textContent = preview.affectedEmployeeCount;
-
-            const conflictsArea = $('#preview-conflicts-area', f);
-            if (preview.conflicts && preview.conflicts.length > 0) {
-              const conflictList = preview.conflicts.slice(0, 5);
-              setHTML(conflictsArea, html`
-                <div style="background:#fffbeb; border:1px solid #fef08a; padding:8px 10px; border-radius:6px; color:#b45309;">
-                  <b>⚠️ Notice: ${preview.conflicts.length} conflict(s) or warnings detected:</b>
-                  <ul style="margin:4px 0 0 16px; padding:0; font-size:11.5px;">
-                    ${conflictList.map((c) => html`
-                      <li>${esc(c.name)} (${esc(c.employeeCode)}): ${esc(c.message)} on ${c.date}</li>
-                    `)}
-                    ${preview.conflicts.length > 5 ? html`<li>... and ${preview.conflicts.length - 5} more</li>` : ''}
-                  </ul>
-                  <span class="small" style="display:block; margin-top:4px;">Assigning will safely update/confirm their Off Day for the selected date(s).</span>
-                </div>
-              `);
-              conflictsArea.style.display = 'block';
-            } else {
-              setHTML(conflictsArea, html`
-                <span class="small text-green" style="font-weight:600;">✓ No conflicts detected. Ready to assign!</span>
-              `);
-              conflictsArea.style.display = 'block';
-            }
-          } catch (err) {
-            console.error('[offDays] Preview check error:', err);
-          }
-        }
-
-        function resolveSelectedDates() {
-          if (dateMode === 'range') {
-            const from = $('#input-range-from', f).value;
-            const to = $('#input-range-to', f).value;
-            if (!from || !to || from > to) return [];
-            const result = [];
-            let cur = new Date(from);
-            const end = new Date(to);
-            while (cur <= end) {
-              result.push(cur.toISOString().slice(0, 10));
-              cur.setDate(cur.getDate() + 1);
-            }
-            return result;
-          }
-
-          const single = $('#input-single-date', f).value;
-          const extra = ($('#input-extra-dates', f).value || '').split(/[\s,;]+/).filter(Boolean);
-          const allDates = [single, ...extra].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
-          return [...new Set(allDates)].sort();
-        }
-      },
-      onSubmit: async (f, close) => {
-        const dates = resolveSelectedDates();
-        if (!dates.length) throw new Error('Please select at least one valid date');
-
-        const reason = $('#modal-assign-reason', f).value.trim() || 'Off Day';
-        const payload = {
-          dates,
-          reason,
-          assignmentType: targetMode === 'department' ? 'department' : (targetMode === 'bulk_ids' ? 'bulk' : 'individual'),
-          excludeUserIds: Array.from(excludedEmployees),
-        };
-
-        if (targetMode === 'department') {
-          payload.departments = [selectedDepartment];
-          payload.department = selectedDepartment;
-        } else if (targetMode === 'employee') {
-          if (selectedEmployees.size === 0) throw new Error('Please select at least one employee');
-          payload.userIds = Array.from(selectedEmployees);
-        } else if (targetMode === 'bulk_ids') {
-          const raw = $('#modal-bulk-ids-text', f).value;
-          const codes = raw.split(/[\s,;\n]+/).filter(Boolean).map((s) => s.toLowerCase());
-          const matched = allEmployees.filter((u) => codes.includes((u.employee_code || '').toLowerCase()) || codes.includes(String(u.id)));
-          if (!matched.length) throw new Error('No valid employee codes matched');
-          payload.userIds = matched.map((u) => u.id);
-        }
-
-        const res = await post('/off-days', payload);
-        toast(`Successfully assigned ${res.assignedCount} off day(s) across ${res.affectedEmployees} staff!`, 'good');
-        close();
-        loadStats();
-        refreshView();
-      },
-    });
-
-    function resolveSelectedDates() {
-      const mode = document.querySelector('input[name="dateMode"]:checked')?.value || 'single';
-      if (mode === 'range') {
-        const from = $('#input-range-from')?.value;
-        const to = $('#input-range-to')?.value;
-        if (!from || !to || from > to) return [];
-        const result = [];
-        let cur = new Date(from);
-        const end = new Date(to);
-        while (cur <= end) {
-          result.push(cur.toISOString().slice(0, 10));
-          cur.setDate(cur.getDate() + 1);
-        }
-        return result;
-      }
-      const single = $('#input-single-date')?.value;
-      const extra = ($('#input-extra-dates')?.value || '').split(/[\s,;]+/).filter(Boolean);
-      return [...new Set([single, ...extra].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
-    }
   }
 
   /* =========================================================================
