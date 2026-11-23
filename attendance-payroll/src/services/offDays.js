@@ -265,13 +265,18 @@ async function previewAssignment({
     `, [userIds.map(Number)]);
     targetUsers = rows;
   } else if (departments && departments.length) {
+    const cleanDeptNames = departments.map((d) => String(d).trim().toLowerCase());
     const { rows } = await query(`
       SELECT u.id, u.employee_code, u.name, u.department, u.designation, s.weekly_off
         FROM users u
         LEFT JOIN shifts s ON s.id = u.shift_id
-       WHERE u.active AND (u.department = ANY($1::text[]) OR u.department_id::text = ANY($1::text[]))
+       WHERE u.active AND (
+         LOWER(TRIM(u.department)) = ANY($1::text[]) OR
+         u.department = ANY($2::text[]) OR
+         u.department_id::text = ANY($2::text[])
+       )
        ORDER BY u.department, u.name
-    `, [departments.map(String)]);
+    `, [cleanDeptNames, departments.map(String)]);
     targetUsers = rows;
   } else {
     throw bad('Specify either departments or employee IDs');
@@ -399,10 +404,15 @@ async function assignOffDays({
   if (userIds && userIds.length) {
     targetUserIds = [...new Set(userIds.map(Number))].filter((id) => !cleanExclude.has(id));
   } else if (departments && departments.length) {
+    const cleanDeptNames = departments.map((d) => String(d).trim().toLowerCase());
     const { rows } = await query(`
       SELECT id, department FROM users
-       WHERE active AND (department = ANY($1::text[]) OR department_id::text = ANY($1::text[]))
-    `, [departments.map(String)]);
+       WHERE active AND (
+         LOWER(TRIM(department)) = ANY($1::text[]) OR
+         department = ANY($2::text[]) OR
+         department_id::text = ANY($2::text[])
+       )
+    `, [cleanDeptNames, departments.map(String)]);
     targetUserIds = rows.map((r) => r.id).filter((id) => !cleanExclude.has(id));
     if (!detectedDept && departments.length === 1) detectedDept = departments[0];
   }
